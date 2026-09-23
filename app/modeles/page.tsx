@@ -17,9 +17,8 @@ export default async function ModelesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation des formations</p>
+            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
             <h1>Modèles de formation</h1>
-            <p>Les trames réutilisables pour créer rapidement une nouvelle session.</p>
           </div>
         </header>
         <CrudTable
