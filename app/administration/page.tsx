@@ -13,11 +13,12 @@ export default async function AdministrationPage() {
         <section className="content">
           <header>
             <div>
-              <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+              <p className="eyebrow">Organisation des formations</p>
               <h1>Administration</h1>
+              <p>Accès réservé aux administrateurs.</p>
             </div>
           </header>
-          <p className="empty">Accès réservé aux administrateurs.</p>
+          <p className="empty">Ton compte n'a pas les droits nécessaires pour cette page.</p>
         </section>
       </main>
     );
@@ -35,13 +36,11 @@ export default async function AdministrationPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+            <p className="eyebrow">Organisation des formations</p>
             <h1>Administration</h1>
+            <p>Gère les comptes utilisateurs et leurs rôles d'accès.</p>
           </div>
         </header>
-        <p style={{ color: 'var(--muted)', marginTop: '-14px', marginBottom: '20px', fontSize: '14px' }}>
-          Gère les comptes utilisateurs et leurs rôles d&apos;accès.
-        </p>
         <AdminUsersTable rows={profiles || []} currentUserId={user?.id || ''} />
       </section>
     </main>
