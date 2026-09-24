@@ -30,6 +30,26 @@ export function weekDayLabels(monday: Date): string[] {
   });
 }
 
+const FULL_DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
+/** Lignes de la grille semaine : un objet par jour ouvré (lundi→vendredi). */
+export function weekDayRows(monday: Date): { iso: string; full: string; short: string; dateLabel: string }[] {
+  return FULL_DAY_NAMES.map((full, i) => {
+    const d = addDays(monday, i);
+    return {
+      iso: isoDate(d),
+      full,
+      short: DAY_LABELS[i],
+      dateLabel: `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 4)}.`,
+    };
+  });
+}
+
+export function fullDateLabel(date: Date): string {
+  const dayName = FULL_DAY_NAMES[(date.getUTCDay() + 6) % 7] ?? '';
+  return `${dayName} ${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
 export function weekRangeLabel(monday: Date): string {
   const friday = addDays(monday, 4);
   const sameMonth = monday.getUTCMonth() === friday.getUTCMonth();
@@ -78,4 +98,40 @@ export function isSameMonth(date: Date, reference: Date): boolean {
 
 export function isSameDate(a: Date, b: Date): boolean {
   return isoDate(a) === isoDate(b);
+}
+
+/** Date (jour) au format court : "29 sept." */
+export function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 4)}.`;
+}
+
+function timeOf(iso: string): string {
+  const d = new Date(iso);
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  return m === '00' ? `${h}h` : `${h}h${m}`;
+}
+
+/** true si le jour `dayIso` (YYYY-MM-DD) est couvert par la session [startAt, endAt]. */
+export function dayIsInRange(dayIso: string, startAt: string, endAt: string): boolean {
+  const startDay = startAt.slice(0, 10);
+  const endDay = endAt.slice(0, 10);
+  return dayIso >= startDay && dayIso <= endDay;
+}
+
+/** true si la session dure plus d'une journée civile. */
+export function isMultiDay(startAt: string, endAt: string): boolean {
+  return startAt.slice(0, 10) !== endAt.slice(0, 10);
+}
+
+/**
+ * Libellé lisible de la période d'une session, adapté selon qu'elle dure
+ * un seul jour (horaires seuls) ou plusieurs jours (dates + heures).
+ */
+export function formatSessionPeriod(startAt: string, endAt: string): string {
+  if (!isMultiDay(startAt, endAt)) {
+    return `${timeOf(startAt)} → ${timeOf(endAt)}`;
+  }
+  return `${shortDate(startAt)} ${timeOf(startAt)} → ${shortDate(endAt)} ${timeOf(endAt)}`;
 }

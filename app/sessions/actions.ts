@@ -9,12 +9,16 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
 
   const title = String(formData.get('title') || '').trim();
+  const reference = String(formData.get('reference') || '').trim() || null;
   const roomId = String(formData.get('room_id') || '');
   const trainerId = String(formData.get('trainer_id') || '') || null;
   const templateId = String(formData.get('template_id') || '') || null;
   const startAt = String(formData.get('start_at') || '');
   const endAt = String(formData.get('end_at') || '');
   const status = String(formData.get('status') || 'planifiee');
+  const maxTraineesRaw = String(formData.get('max_trainees') || '');
+  const maxTrainees = maxTraineesRaw ? Number(maxTraineesRaw) : null;
+  const notes = String(formData.get('notes') || '').trim() || null;
 
   if (!title || !roomId || !startAt || !endAt) {
     return { ok: false, error: 'Titre, salle, début et fin sont obligatoires.' };
@@ -45,12 +49,15 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
 
   const { error } = await supabase.from('sessions').insert({
     title,
+    reference,
     room_id: roomId,
     trainer_id: trainerId,
     template_id: templateId,
     start_at: startAt,
     end_at: endAt,
     status,
+    max_trainees: maxTrainees,
+    notes,
   });
 
   if (error) return { ok: false, error: error.message };

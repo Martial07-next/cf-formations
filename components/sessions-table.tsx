@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { updateSessionStatus, deleteSession } from '@/app/sessions/actions';
 
 type Row = {
@@ -61,7 +62,7 @@ export function SessionsTable({ isAdmin, rows }: { isAdmin: boolean; rows: Row[]
         <tbody>
           {rows.map((s) => (
             <tr key={s.id}>
-              <td>{s.title}</td>
+              <td><Link href={`/sessions/${s.id}`} style={{ fontWeight: 700, color: 'var(--ink)' }}>{s.title}</Link></td>
               <td>{one(s.rooms)?.name || '—'}</td>
               <td>{one(s.trainers)?.full_name || '—'}</td>
               <td>{fmt(s.start_at)}</td>

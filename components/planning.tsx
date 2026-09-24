@@ -7,11 +7,14 @@ import { createSession } from '@/app/sessions/actions';
 import {
   addDays,
   isoDate,
-  weekDayLabels,
+  weekDayRows,
   weekRangeLabel,
   monthWeekGrid,
   monthLabel,
   isSameMonth,
+  dayIsInRange,
+  formatSessionPeriod,
+  fullDateLabel,
 } from '@/lib/week';
 
 type Room = { id: string; name: string; capacity: number };
@@ -25,13 +28,19 @@ type SessionRow = {
   end_at: string;
   room_id: string;
   trainer_id: string | null;
+  max_trainees: number | null;
   trainers: { full_name: string } | { full_name: string }[] | null;
   rooms?: { name: string } | { name: string }[] | null;
+  session_trainees?: { status: string }[] | null;
 };
 
 function one<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null;
   return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+function validatedCount(s: SessionRow): number {
+  return (s.session_trainees || []).filter((t) => t.status === 'validee').length;
 }
 
 const statusLabel: Record<string, string> = { confirmee: 'Confirmée', planifiee: 'Planifiée', brouillon: 'Brouillon' };
@@ -45,8 +54,9 @@ export function Planning({
   sessions,
   mondayIso,
   monthAnchorIso,
+  dayIso,
 }: {
-  view: 'week' | 'month';
+  view: 'day' | 'week' | 'month';
   isAdmin: boolean;
   rooms: Room[];
   trainers: Trainer[];
@@ -54,10 +64,11 @@ export function Planning({
   sessions: SessionRow[];
   mondayIso: string;
   monthAnchorIso: string;
+  dayIso: string;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
-  const days = weekDayLabels(monday);
+  const dayAnchor = new Date(dayIso + 'T00:00:00Z');
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -76,44 +87,48 @@ export function Planning({
     [sessions, filter]
   );
 
-  function dayIndexOf(iso: string) {
-    const d = new Date(iso);
-    return Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - monday.getTime()) / 86400000);
-  }
-  function hourOf(iso: string) {
-    const d = new Date(iso);
-    return d.getUTCHours() + d.getUTCMinutes() / 60;
-  }
-
-  function setParam(key: string, value: string) {
+  function setParams(mut: (p: URLSearchParams) => void) {
     const params = new URLSearchParams(searchParams);
-    params.set(key, value);
+    mut(params);
     router.push(`/?${params.toString()}`);
   }
 
   function goToWeek(offsetDays: number) {
-    setParam('week', isoDate(addDays(monday, offsetDays)));
+    setParams((p) => {
+      p.set('view', 'week');
+      p.set('week', isoDate(addDays(monday, offsetDays)));
+    });
   }
 
-  function switchView(next: 'week' | 'month') {
-    const params = new URLSearchParams(searchParams);
-    params.set('view', next);
-    router.push(`/?${params.toString()}`);
+  function goToDay(offsetDays: number) {
+    let d = addDays(dayAnchor, offsetDays);
+    const weekday = d.getUTCDay(); // 0=dim, 6=sam
+    if (weekday === 6) d = addDays(d, offsetDays > 0 ? 2 : -1);
+    else if (weekday === 0) d = addDays(d, offsetDays > 0 ? 1 : -2);
+    setParams((p) => {
+      p.set('view', 'day');
+      p.set('day', isoDate(d));
+    });
   }
 
   function goToMonth(offsetMonths: number) {
     const d = new Date(Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth() + offsetMonths, 1));
-    const params = new URLSearchParams(searchParams);
-    params.set('view', 'month');
-    params.set('month', isoDate(d).slice(0, 7));
-    router.push(`/?${params.toString()}`);
+    setParams((p) => {
+      p.set('view', 'month');
+      p.set('month', isoDate(d).slice(0, 7));
+    });
+  }
+
+  function switchView(next: 'day' | 'week' | 'month') {
+    setParams((p) => p.set('view', next));
   }
 
   function goToday() {
-    const params = new URLSearchParams(searchParams);
-    params.delete('week');
-    params.delete('month');
-    router.push(`/?${params.toString()}`);
+    setParams((p) => {
+      p.delete('week');
+      p.delete('month');
+      p.delete('day');
+    });
   }
 
   async function handleCreate(formData: FormData) {
@@ -128,8 +143,36 @@ export function Planning({
     });
   }
 
+  const dayRows = view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
   const monthDayLabels = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.'];
+
+  function sessionsFor(dayIso: string, roomId: string) {
+    return shown.filter((s) => s.room_id === roomId && dayIsInRange(dayIso, s.start_at, s.end_at));
+  }
+
+  function SessionCard({ s, dIso }: { s: SessionRow; dIso: string }) {
+    const isStart = s.start_at.slice(0, 10) === dIso;
+    const trainer = one(s.trainers)?.full_name;
+    const count = validatedCount(s);
+    if (!isStart) {
+      return (
+        <Link href={`/sessions/${s.id}`} className={`session-card spanning`}>
+          <span className="sc-title">↳ {s.title}</span>
+        </Link>
+      );
+    }
+    return (
+      <Link href={`/sessions/${s.id}`} className={`session-card ${s.status}`}>
+        <span className="sc-title">{s.title}</span>
+        <span className="sc-meta">
+          <span>{formatSessionPeriod(s.start_at, s.end_at)}</span>
+          {trainer && <span>· {trainer}</span>}
+          <span className="sc-count">{count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}</span>
+        </span>
+      </Link>
+    );
+  }
 
   return (
     <section className="content">
@@ -137,7 +180,7 @@ export function Planning({
         <div>
           <p className="eyebrow">Organisation des formations</p>
           <h1>Planning des salles</h1>
-          <p>Vue {view === 'week' ? 'semaine, salle par salle' : 'mois, compacte'}, avec détection automatique des conflits.</p>
+          <p>Vue {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'} — salles en colonnes, jours en lignes.</p>
         </div>
         {isAdmin && (
           <div className="header-actions">
@@ -156,6 +199,10 @@ export function Planning({
                 <input name="title" required placeholder="Ex. Habilitation électrique B0" />
               </label>
               <label>
+                Référence
+                <input name="reference" placeholder="Ex. HAB-B0-2026" />
+              </label>
+              <label>
                 Salle
                 <select name="room_id" required>
                   {rooms.map((r) => (
@@ -172,6 +219,8 @@ export function Planning({
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="form-row">
               <label>
                 Modèle
                 <select name="template_id">
@@ -181,15 +230,9 @@ export function Planning({
                   ))}
                 </select>
               </label>
-            </div>
-            <div className="form-row">
               <label>
-                Début
-                <input name="start_at" type="datetime-local" required />
-              </label>
-              <label>
-                Fin
-                <input name="end_at" type="datetime-local" required />
+                Max. stagiaires
+                <input name="max_trainees" type="number" min={0} />
               </label>
               <label>
                 Statut
@@ -200,6 +243,19 @@ export function Planning({
                 </select>
               </label>
             </div>
+            <div className="form-row">
+              <label>
+                Début (date + heure)
+                <input name="start_at" type="datetime-local" required />
+              </label>
+              <label>
+                Fin (date + heure)
+                <input name="end_at" type="datetime-local" required />
+              </label>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-6px 0 12px' }}>
+              Pour une formation sur plusieurs jours, choisis simplement une date de fin différente de la date de début.
+            </p>
             <div className="row-actions">
               <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
               <button type="button" onClick={() => setShowForm(false)}>Annuler</button>
@@ -210,13 +266,21 @@ export function Planning({
 
       <div className="toolbar">
         <div className="period">
-          {view === 'week' ? (
+          {view === 'day' && (
+            <>
+              <button onClick={() => goToDay(-1)} aria-label="Jour précédent">‹</button>
+              <strong style={{ textTransform: 'capitalize' }}>{fullDateLabel(dayAnchor)}</strong>
+              <button onClick={() => goToDay(1)} aria-label="Jour suivant">›</button>
+            </>
+          )}
+          {view === 'week' && (
             <>
               <button onClick={() => goToWeek(-7)} aria-label="Semaine précédente">‹</button>
               <strong>{weekRangeLabel(monday)}</strong>
               <button onClick={() => goToWeek(7)} aria-label="Semaine suivante">›</button>
             </>
-          ) : (
+          )}
+          {view === 'month' && (
             <>
               <button onClick={() => goToMonth(-1)} aria-label="Mois précédent">‹</button>
               <strong style={{ textTransform: 'capitalize' }}>{monthLabel(monthAnchor)}</strong>
@@ -232,6 +296,7 @@ export function Planning({
           onChange={(e) => setFilter(e.target.value)}
         />
         <div className="toggle-group">
+          <button className={view === 'day' ? 'active' : ''} onClick={() => switchView('day')}>Jour</button>
           <button className={view === 'week' ? 'active' : ''} onClick={() => switchView('week')}>Semaine</button>
           <button className={view === 'month' ? 'active' : ''} onClick={() => switchView('month')}>Mois</button>
         </div>
@@ -243,55 +308,47 @@ export function Planning({
         </div>
       )}
 
-      <div className="availability">
-        <strong>Salles</strong>
-        <span>{rooms.length} salles actives</span>
-        <Link href="/salles">Consulter</Link>
-      </div>
-
-      {view === 'week' ? (
+      {(view === 'day' || view === 'week') && (
         <>
-          <div className="schedule">
-            <div className="corner">Salles</div>
-            {days.map((d) => (
-              <div className="day" key={d}>{d}</div>
-            ))}
-            {rooms.map((room) => (
-              <div className="row" key={room.id}>
-                <div className="room">
-                  <strong>{room.name}</strong>
-                  <small>{room.capacity} places</small>
-                </div>
-                {days.map((_, dayIdx) => (
-                  <div className="cell" key={dayIdx}>
-                    {shown
-                      .filter((s) => s.room_id === room.id && dayIndexOf(s.start_at) === dayIdx)
-                      .map((s) => {
-                        const start = hourOf(s.start_at);
-                        const end = hourOf(s.end_at);
-                        const trainer = one(s.trainers)?.full_name;
-                        return (
-                          <article
-                            key={s.id}
-                            className={`event ${s.status}`}
-                            style={{ top: `${(start - 8) * 22}px`, height: `${(end - start) * 22}px` }}
-                          >
-                            <strong>{s.title}</strong>
-                            <span>{start}h–{end}h{trainer ? ` · ${trainer}` : ''}</span>
-                            <em>{statusLabel[s.status]}</em>
-                          </article>
-                        );
-                      })}
-                  </div>
-                ))}
+          <div className="grid-scroll">
+            <div className="plan-grid" style={{ gridTemplateColumns: `140px repeat(${rooms.length || 1}, minmax(160px, 1fr))` }}>
+              <div className="plan-head" style={{ background: '#fff', borderLeft: 'none' }}>
+                {view === 'day' ? 'Jour' : 'Jours'}
               </div>
-            ))}
+              {rooms.map((r) => (
+                <div className="plan-head" key={r.id}>{r.name}<br /><small style={{ fontWeight: 500 }}>{r.capacity} places</small></div>
+              ))}
+
+              {dayRows.map((d) => (
+                <div key={d.iso} style={{ display: 'contents' }}>
+                  <div className="plan-day-label">
+                    {view === 'day' ? 'Aujourd’hui' : d.full}
+                    <small>{view === 'day' ? d.iso : d.dateLabel}</small>
+                  </div>
+                  {rooms.map((r) => (
+                    <div className="plan-cell" key={r.id}>
+                      {sessionsFor(d.iso, r.id).map((s) => (
+                        <SessionCard key={s.id} s={s} dIso={d.iso} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {rooms.length === 0 && (
+                <div className="plan-cell" style={{ gridColumn: '2 / -1' }}>
+                  Aucune salle enregistrée — <Link href="/salles">ajoutes-en une</Link>.
+                </div>
+              )}
+            </div>
           </div>
-          <p className="legend">
-            <i className="confirmed" /> Confirmée <i className="planned" /> Planifiée <i className="draft" /> Brouillon · Les chevauchements de salles et de formateurs sont bloqués.
+          <p className="legend" style={{ marginTop: 10 }}>
+            <i className="confirmed" /> Confirmée <i className="planned" /> Planifiée <i className="draft" /> Brouillon · une formation qui se poursuit un jour suivant est marquée ↳
           </p>
         </>
-      ) : (
+      )}
+
+      {view === 'month' && (
         <>
           <div className="month-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: 8 }}>
             {monthDayLabels.map((d) => (
@@ -301,21 +358,24 @@ export function Planning({
           {weeks.map((week, wi) => (
             <div className="month-grid" key={wi} style={{ marginBottom: 10 }}>
               {week.map((day) => {
-                const dayIso = isoDate(day);
-                const daySessions = shown.filter((s) => s.start_at.slice(0, 10) === dayIso);
+                const dIso = isoDate(day);
+                const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at));
                 const visible = daySessions.slice(0, 4);
                 const extra = daySessions.length - visible.length;
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
-                  <div className={`month-cell${muted ? ' muted' : ''}`} key={dayIso} style={muted ? { opacity: 0.45 } : undefined}>
+                  <div className={`month-cell${muted ? ' muted' : ''}`} key={dIso} style={muted ? { opacity: 0.45 } : undefined}>
                     <span className="date-num">{day.getUTCDate()}</span>
                     {visible.map((s) => {
                       const room = one(s.rooms)?.name || '—';
+                      const trainer = one(s.trainers)?.full_name;
+                      const count = validatedCount(s);
                       return (
-                        <div key={s.id} className={`month-chip ${s.status}`}>
-                          <span className="chip-room">{room}</span>
-                          <span className="chip-title">{s.title}</span>
-                        </div>
+                        <Link key={s.id} href={`/sessions/${s.id}`} className={`month-chip ${s.status}`}>
+                          <span className="chip-room">{room} — {s.title}</span>
+                          {trainer && <span className="chip-trainer">{trainer}</span>}
+                          <span className="chip-count">{count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}</span>
+                        </Link>
                       );
                     })}
                     {extra > 0 && <span className="month-more">+{extra} autre{extra > 1 ? 's' : ''}</span>}
