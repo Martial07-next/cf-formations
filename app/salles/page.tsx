@@ -14,8 +14,9 @@ export default async function SallesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+            <p className="eyebrow">Organisation des formations</p>
             <h1>Salles</h1>
+            <p>Capacité et disponibilité de chaque salle utilisée pour les sessions.</p>
           </div>
         </header>
         <CrudTable

@@ -1,14 +1,39 @@
 import Link from 'next/link';
+import {
+  Zap,
+  CalendarDays,
+  ListChecks,
+  GraduationCap,
+  Users,
+  DoorOpen,
+  FileText,
+  Settings,
+  User,
+  LogOut,
+} from 'lucide-react';
 import { logout } from '@/app/login/actions';
 
-const links = [
-  { href: '/', label: 'Planning' },
-  { href: '/sessions', label: 'Sessions' },
-  { href: '/formateurs', label: 'Formateurs' },
-  { href: '/stagiaires', label: 'Stagiaires' },
-  { href: '/salles', label: 'Salles' },
-  { href: '/modeles', label: 'Modèles' },
-  { href: '/administration', label: 'Administration' },
+const groups = [
+  {
+    label: 'Planning',
+    links: [
+      { href: '/', label: 'Planning', icon: CalendarDays },
+      { href: '/sessions', label: 'Sessions', icon: ListChecks },
+    ],
+  },
+  {
+    label: 'Ressources',
+    links: [
+      { href: '/formateurs', label: 'Formateurs', icon: GraduationCap },
+      { href: '/stagiaires', label: 'Stagiaires', icon: Users },
+      { href: '/salles', label: 'Salles', icon: DoorOpen },
+      { href: '/modeles', label: 'Modèles', icon: FileText },
+    ],
+  },
+  {
+    label: 'Administration',
+    links: [{ href: '/administration', label: 'Administration', icon: Settings }],
+  },
 ];
 
 export function Sidebar({
@@ -18,32 +43,50 @@ export function Sidebar({
   active: string;
   profile: { full_name: string; role: string } | null;
 }) {
-  const initials = (profile?.full_name || '?')
-    .split(' ')
-    .map((p) => p[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
   return (
     <aside>
       <div className="brand">
-        <span>CF</span> RÉSEAU
+        <span className="brand-mark">
+          <Zap size={18} fill="currentColor" />
+        </span>
+        <span className="brand-text">
+          CF Réseau
+          <small>FORMATIONS</small>
+        </span>
       </div>
-      <nav>
-        {links.map((l) => (
-          <Link key={l.href} href={l.href} className={l.href === active ? 'active' : ''}>
-            {l.label}
-          </Link>
-        ))}
-      </nav>
-      <div className="profile">
-        {initials}
-        <br />
-        <small>{profile?.role === 'admin' ? 'Administrateur' : 'Formateur'}</small>
-        <form action={logout}>
-          <button className="logout" type="submit">Se déconnecter</button>
-        </form>
+
+      {groups.map((group) => (
+        <div className="nav-group" key={group.label}>
+          <p className="nav-group-label">{group.label}</p>
+          <nav>
+            {group.links.map((l) => {
+              const Icon = l.icon;
+              return (
+                <Link key={l.href} href={l.href} className={l.href === active ? 'active' : ''}>
+                  <Icon size={17} />
+                  {l.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      ))}
+
+      <div className="sidebar-footer">
+        <Link href="/profil">
+          <User size={17} />
+          Mon profil
+        </Link>
+        <div className="profile-block">
+          <strong>{profile?.full_name || '—'}</strong>
+          <small>{profile?.role === 'admin' ? 'Administrateur' : 'Formateur'}</small>
+          <form action={logout}>
+            <button className="logout" type="submit">
+              <LogOut size={14} />
+              Se déconnecter
+            </button>
+          </form>
+        </div>
       </div>
     </aside>
   );

@@ -17,8 +17,9 @@ export default async function SessionsPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+            <p className="eyebrow">Organisation des formations</p>
             <h1>Sessions</h1>
+            <p>Toutes les sessions, passées et à venir, avec leur statut.</p>
           </div>
         </header>
         <SessionsTable isAdmin={profile?.role === 'admin'} rows={(sessions as any) || []} />

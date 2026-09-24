@@ -58,7 +58,7 @@ export function CrudTable({
                 </label>
               ))}
             </div>
-            <button type="submit" disabled={isPending}>{isPending ? 'Ajout…' : 'Ajouter'}</button>
+            <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Ajout…' : 'Ajouter'}</button>
           </form>
         </div>
       )}

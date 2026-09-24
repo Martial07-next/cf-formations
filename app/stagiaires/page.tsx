@@ -17,8 +17,9 @@ export default async function StagiairesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+            <p className="eyebrow">Organisation des formations</p>
             <h1>Stagiaires</h1>
+            <p>L'annuaire des stagiaires inscrits aux formations.</p>
           </div>
         </header>
         <CrudTable

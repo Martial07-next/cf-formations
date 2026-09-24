@@ -17,8 +17,9 @@ export default async function FormateursPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
+            <p className="eyebrow">Organisation des formations</p>
             <h1>Formateurs</h1>
+            <p>Les intervenants disponibles pour animer les sessions.</p>
           </div>
         </header>
         <CrudTable

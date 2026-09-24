@@ -37,3 +37,45 @@ export function weekRangeLabel(monday: Date): string {
   const end = `${friday.getUTCDate()} ${MONTHS[friday.getUTCMonth()]} ${friday.getUTCFullYear()}`;
   return `${start} – ${end}`;
 }
+
+/** Premier jour (00:00 UTC) du mois contenant `date`. */
+export function firstOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/** Dernier jour (00:00 UTC) du mois contenant `date`. */
+export function lastOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+}
+
+export function monthLabel(date: Date): string {
+  return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/**
+ * Grille de semaines (lundi→vendredi) couvrant tout le mois de `date`,
+ * y compris les jours des semaines à cheval sur le mois précédent/suivant.
+ * Renvoie un tableau de semaines, chaque semaine étant un tableau de 5 dates.
+ */
+export function monthWeekGrid(date: Date): Date[][] {
+  const start = mondayOf(firstOfMonth(date));
+  const lastDay = lastOfMonth(date);
+  const end = addDays(mondayOf(lastDay), 4); // vendredi de la dernière semaine
+  const weeks: Date[][] = [];
+  let cursor = start;
+  while (cursor.getTime() <= end.getTime()) {
+    const week: Date[] = [];
+    for (let i = 0; i < 5; i++) week.push(addDays(cursor, i));
+    weeks.push(week);
+    cursor = addDays(cursor, 7);
+  }
+  return weeks;
+}
+
+export function isSameMonth(date: Date, reference: Date): boolean {
+  return date.getUTCFullYear() === reference.getUTCFullYear() && date.getUTCMonth() === reference.getUTCMonth();
+}
+
+export function isSameDate(a: Date, b: Date): boolean {
+  return isoDate(a) === isoDate(b);
+}

@@ -1,4 +1,5 @@
 import { login, signup } from './actions';
+import { Zap } from 'lucide-react';
 
 export default async function LoginPage({
   searchParams,
@@ -10,10 +11,15 @@ export default async function LoginPage({
   return (
     <main className="auth">
       <div className="auth-card">
-        <div className="brand">
-          <span>CF</span> RÉSEAU
+        <div className="brand" style={{ padding: 0, marginBottom: 22 }}>
+          <span className="brand-mark" style={{ color: '#0d3d24' }}>
+            <Zap size={18} fill="currentColor" />
+          </span>
+          <span className="brand-text" style={{ color: 'var(--ink)' }}>
+            CF Réseau
+            <small style={{ color: 'var(--muted)' }}>FORMATIONS</small>
+          </span>
         </div>
-        <p className="eyebrow">ORGANISATION DES FORMATIONS</p>
         <h1>Connexion</h1>
 
         {error && <div role="alert" className="alert alert-error">{error}</div>}
@@ -34,7 +40,7 @@ export default async function LoginPage({
           </label>
           <div className="auth-actions">
             <button formAction={login} className="primary">Se connecter</button>
-            <button formAction={signup} className="secondary">Créer un compte</button>
+            <button formAction={signup}>Créer un compte</button>
           </div>
         </form>
       </div>
