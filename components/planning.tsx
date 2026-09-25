@@ -358,13 +358,11 @@ export function Planning({
               {week.map((day) => {
                 const dIso = isoDate(day);
                 const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at));
-                const visible = daySessions.slice(0, 4);
-                const extra = daySessions.length - visible.length;
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
                   <div className={`month-cell${muted ? ' muted' : ''}`} key={dIso} style={muted ? { opacity: 0.45 } : undefined}>
                     <span className="date-num">{day.getUTCDate()}</span>
-                    {visible.map((s) => {
+                    {daySessions.map((s) => {
                       const room = one(s.rooms)?.name || '—';
                       const trainer = one(s.trainers)?.full_name;
                       const count = validatedCount(s);
@@ -376,7 +374,6 @@ export function Planning({
                         </Link>
                       );
                     })}
-                    {extra > 0 && <span className="month-more">+{extra} autre{extra > 1 ? 's' : ''}</span>}
                   </div>
                 );
               })}

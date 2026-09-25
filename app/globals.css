@@ -78,6 +78,7 @@ table.data tr:last-child td{border-bottom:none}
 /* ---------- Alerts ---------- */
 .alert{background:#fff8e0;border:1px solid #ecd688;border-radius:12px;padding:12px 15px;margin-bottom:16px;font-size:13.5px}
 .alert-error{background:#fdeceb;border-color:#f0aeab;color:var(--cf-red-ink)}
+.alert-warning{background:#fff4e0;border-color:#f0c97a;color:#7a5200}
 .alert-success{background:#dcf5e4;border-color:#a9e0bb;color:#1f6a3d}
 
 /* ---------- Badges ---------- */
@@ -87,6 +88,8 @@ table.data tr:last-child td{border-bottom:none}
 .badge.confirmee{background:#dcf5e4;color:#1f6a3d}
 .badge.planifiee{background:#fff2c2;color:#8a6d00}
 .badge.brouillon{background:#e9edf4;color:#4a5568}
+.badge.validee{background:#dcf5e4;color:#1f6a3d}
+.badge.en_attente{background:#fff2c2;color:#8a6d00}
 
 /* ---------- Planning: toolbar / availability ---------- */
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:18px;flex-wrap:wrap}
@@ -189,6 +192,8 @@ table.data tr:last-child td{border-bottom:none}
 .counter-chip{background:#f5faf5;border:1px solid var(--line);border-radius:12px;padding:10px 18px;text-align:center;min-width:110px}
 .counter-chip strong{display:block;font-size:22px;font-weight:800}
 .counter-chip span{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.counter-chip.over{background:#fff4e0;border-color:#f0c97a}
+.counter-chip.over strong{color:#7a5200}
 .sub-heading{font-size:13.5px;font-weight:800;margin:22px 0 10px}
 textarea{font-family:inherit}
 

@@ -62,7 +62,8 @@ export function SessionDetailView({
   const validated = enrolled.filter((t) => t.status === 'validee');
   const waiting = enrolled.filter((t) => t.status === 'en_attente');
   const capacity = session.max_trainees;
-  const remaining = capacity != null ? Math.max(capacity - validated.length, 0) : null;
+  const remaining = capacity != null ? capacity - validated.length : null;
+  const overCapacity = capacity != null && validated.length > capacity;
   const availableTrainees = allTrainees.filter((t) => !enrolled.some((e) => e.id === t.id));
 
   function handleUpdate(formData: FormData) {
@@ -201,6 +202,11 @@ export function SessionDetailView({
 
       <div className="panel">
         <h2>Stagiaires</h2>
+        {overCapacity && (
+          <div role="alert" className="alert alert-warning">
+            ⚠ Capacité dépassée : {validated.length} stagiaires validés pour {capacity} places prévues.
+          </div>
+        )}
         <div className="counters">
           <div className="counter-chip">
             <strong>{validated.length}{capacity != null ? ` / ${capacity}` : ''}</strong>
@@ -211,7 +217,7 @@ export function SessionDetailView({
             <span>en attente</span>
           </div>
           {remaining != null && (
-            <div className="counter-chip">
+            <div className={`counter-chip${remaining < 0 ? ' over' : ''}`}>
               <strong>{remaining}</strong>
               <span>places restantes</span>
             </div>
