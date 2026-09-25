@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { updateRole } from '@/app/administration/actions';
+import { ROLE_LABELS, type Role } from '@/lib/roles';
 
 type Row = { id: string; full_name: string; role: string; created_at: string };
+
+const ROLE_OPTIONS: Role[] = ['admin', 'responsable_formation', 'formateur', 'consultation'];
 
 export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentUserId: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -11,7 +14,7 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
 
   function handleChange(id: string, role: string) {
     startTransition(async () => {
-      const result = await updateRole(id, role as 'admin' | 'formateur');
+      const result = await updateRole(id, role as Role);
       if (!result.ok) setError(result.error ?? 'Une erreur est survenue.');
     });
   }
@@ -37,8 +40,9 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
                   onChange={(e) => handleChange(u.id, e.target.value)}
                   disabled={isPending || u.id === currentUserId}
                 >
-                  <option value="formateur">Formateur</option>
-                  <option value="admin">Admin</option>
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
                 </select>
               </td>
               <td>{new Date(u.created_at).toLocaleDateString('fr-FR')}</td>

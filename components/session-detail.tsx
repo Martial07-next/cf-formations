@@ -11,7 +11,7 @@ import {
   resetSessionDayTime,
 } from '@/app/sessions/[id]/actions';
 import { deleteSession } from '@/app/sessions/actions';
-import { daysBetween, effectiveDayTime, fullDateLabel, type DayOverride } from '@/lib/week';
+import { weekdaysBetween, effectiveDayTime, fullDateLabel, type DayOverride } from '@/lib/week';
 
 type Room = { id: string; name: string; capacity: number };
 type Trainer = { id: string; full_name: string };
@@ -307,7 +307,7 @@ function DayTimesPanel({
   endAt: string;
   overrides: DayOverride[];
 }) {
-  const days = daysBetween(startAt, endAt);
+  const days = weekdaysBetween(startAt, endAt);
   if (days.length < 2) return null; // session d'un seul jour : rien à personnaliser
 
   return (

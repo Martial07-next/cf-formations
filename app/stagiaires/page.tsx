@@ -1,4 +1,4 @@
-import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee } from './actions';
@@ -30,7 +30,7 @@ export default async function StagiairesPage() {
           </div>
         </header>
         <CrudTable
-          isAdmin={profile?.role === 'admin'}
+          isAdmin={canManage(profile?.role)}
           title="un stagiaire"
           columns={[
             { key: 'full_name', label: 'Nom' },

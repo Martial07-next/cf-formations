@@ -1,4 +1,4 @@
-import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid } from '@/lib/week';
@@ -65,7 +65,7 @@ export default async function Page({
       <Sidebar active="/" profile={profile} />
       <Planning
         view={currentView}
-        isAdmin={profile?.role === 'admin'}
+        isAdmin={canManage(profile?.role)}
         rooms={rooms || []}
         trainers={trainers || []}
         templates={templates || []}

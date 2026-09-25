@@ -170,3 +170,11 @@ export function daysBetween(startAt: string, endAt: string): string[] {
   }
   return days;
 }
+
+/** Comme daysBetween, mais sans les samedis/dimanches (semaine de travail lundi→vendredi). */
+export function weekdaysBetween(startAt: string, endAt: string): string[] {
+  return daysBetween(startAt, endAt).filter((iso) => {
+    const weekday = new Date(iso + 'T00:00:00Z').getUTCDay();
+    return weekday !== 0 && weekday !== 6;
+  });
+}

@@ -40,3 +40,6 @@ export async function getCurrentProfile() {
     .single();
   return profile ? { ...profile, email: user.email } : null;
 }
+
+export type { Role } from '@/lib/roles';
+export { ROLE_LABELS, canManage } from '@/lib/roles';

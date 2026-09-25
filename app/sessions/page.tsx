@@ -1,4 +1,4 @@
-import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { SessionsTable } from '@/components/sessions-table';
 
@@ -22,7 +22,7 @@ export default async function SessionsPage() {
             <p>Toutes les sessions, passées et à venir, avec leur statut.</p>
           </div>
         </header>
-        <SessionsTable isAdmin={profile?.role === 'admin'} rows={(sessions as any) || []} />
+        <SessionsTable isAdmin={canManage(profile?.role)} rows={(sessions as any) || []} />
       </section>
     </main>
   );

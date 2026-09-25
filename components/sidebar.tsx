@@ -12,6 +12,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
+import { ROLE_LABELS, type Role } from '@/lib/roles';
 
 const groups = [
   {
@@ -79,7 +80,7 @@ export function Sidebar({
         </Link>
         <div className="profile-block">
           <strong>{profile?.full_name || '—'}</strong>
-          <small>{profile?.role === 'admin' ? 'Administrateur' : 'Formateur'}</small>
+          <small>{profile?.role ? ROLE_LABELS[profile.role as Role] ?? profile.role : ''}</small>
           <form action={logout}>
             <button className="logout" type="submit">
               <LogOut size={14} />

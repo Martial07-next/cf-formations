@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { AdminUsersTable } from '@/components/admin-users-table';
+import { AdminTabs, AdminResourceLinks } from '@/components/admin-tabs';
 
 export default async function AdministrationPage() {
   const supabase = await createClient();
@@ -38,10 +39,17 @@ export default async function AdministrationPage() {
           <div>
             <p className="eyebrow">Organisation des formations</p>
             <h1>Administration</h1>
-            <p>Gère les comptes utilisateurs et leurs rôles d'accès.</p>
+            <p>Comptes, paramètres et intégrations de la plateforme.</p>
           </div>
         </header>
+
+        <AdminTabs active="/administration" />
+
+        <h2 className="sub-heading" style={{ marginTop: 4 }}>Utilisateurs</h2>
         <AdminUsersTable rows={profiles || []} currentUserId={user?.id || ''} />
+
+        <h2 className="sub-heading">Contenu de la plateforme</h2>
+        <AdminResourceLinks />
       </section>
     </main>
   );

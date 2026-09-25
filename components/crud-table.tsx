@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from 'react';
 
-type Field = { name: string; label: string; type?: string; step?: string; required?: boolean };
+type Field = {
+  name: string;
+  label: string;
+  type?: string;
+  step?: string;
+  required?: boolean;
+  options?: { value: string; label: string }[]; // pour type "select"
+};
 type Column = { key: string; label: string; render?: (row: any) => React.ReactNode };
 type ActionResult = { ok: boolean; error?: string };
 
@@ -15,6 +22,7 @@ export function CrudTable({
   onCreate,
   onDelete,
   emptyLabel,
+  statusField,
 }: {
   isAdmin: boolean;
   title: string;
@@ -24,6 +32,13 @@ export function CrudTable({
   onCreate: (fd: FormData) => Promise<ActionResult>;
   onDelete: (id: string) => Promise<ActionResult>;
   emptyLabel: string;
+  /** Colonne "statut" modifiable directement en liste, sans passer par un formulaire d'édition complet. */
+  statusField?: {
+    key: string;
+    label: string;
+    options: { value: string; label: string }[];
+    onChange: (id: string, value: string) => Promise<ActionResult>;
+  };
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -43,6 +58,14 @@ export function CrudTable({
     });
   }
 
+  function handleStatusChange(id: string, value: string) {
+    if (!statusField) return;
+    startTransition(async () => {
+      const result = await statusField.onChange(id, value);
+      if (!result.ok) setError(result.error || 'Modification impossible.');
+    });
+  }
+
   return (
     <>
       {isAdmin && (
@@ -51,12 +74,23 @@ export function CrudTable({
           {error && <div role="alert" className="alert alert-error">{error}</div>}
           <form action={handleCreate}>
             <div className="form-row">
-              {fields.map((f) => (
-                <label key={f.name}>
-                  {f.label}
-                  <input name={f.name} type={f.type || 'text'} step={f.step} required={f.required} />
-                </label>
-              ))}
+              {fields.map((f) =>
+                f.type === 'select' ? (
+                  <label key={f.name}>
+                    {f.label}
+                    <select name={f.name} required={f.required} defaultValue={f.options?.[0]?.value}>
+                      {(f.options || []).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label key={f.name}>
+                    {f.label}
+                    <input name={f.name} type={f.type || 'text'} step={f.step} required={f.required} />
+                  </label>
+                )
+              )}
             </div>
             <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Ajout…' : 'Ajouter'}</button>
           </form>
@@ -72,6 +106,7 @@ export function CrudTable({
               {columns.map((c) => (
                 <th key={c.key}>{c.label}</th>
               ))}
+              {statusField && <th>{statusField.label}</th>}
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -81,6 +116,25 @@ export function CrudTable({
                 {columns.map((c) => (
                   <td key={c.key}>{c.render ? c.render(row) : (row[c.key] ?? '—')}</td>
                 ))}
+                {statusField && (
+                  <td>
+                    {isAdmin ? (
+                      <select
+                        value={row[statusField.key]}
+                        onChange={(e) => handleStatusChange(row.id, e.target.value)}
+                        disabled={isPending}
+                      >
+                        {statusField.options.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`badge ${row[statusField.key]}`}>
+                        {statusField.options.find((o) => o.value === row[statusField.key])?.label || row[statusField.key]}
+                      </span>
+                    )}
+                  </td>
+                )}
                 {isAdmin && (
                   <td className="row-actions">
                     <button className="danger" onClick={() => handleDelete(row.id)} disabled={isPending}>

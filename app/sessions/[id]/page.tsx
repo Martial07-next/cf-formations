@@ -1,4 +1,4 @@
-import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
 import { formatSessionPeriod } from '@/lib/week';
@@ -59,7 +59,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         </header>
 
         <SessionDetailView
-          isAdmin={profile?.role === 'admin'}
+          isAdmin={canManage(profile?.role)}
           session={session as any}
           rooms={rooms || []}
           trainers={trainers || []}
