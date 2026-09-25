@@ -13,7 +13,8 @@ import {
   monthLabel,
   isSameMonth,
   dayIsInRange,
-  formatSessionPeriod,
+  effectiveDayTime,
+  type DayOverride,
   fullDateLabel,
 } from '@/lib/week';
 
@@ -52,6 +53,7 @@ export function Planning({
   trainers,
   templates,
   sessions,
+  dayOverrides,
   mondayIso,
   monthAnchorIso,
   dayIso,
@@ -62,6 +64,7 @@ export function Planning({
   trainers: Trainer[];
   templates: Template[];
   sessions: SessionRow[];
+  dayOverrides: Record<string, DayOverride[]>;
   mondayIso: string;
   monthAnchorIso: string;
   dayIso: string;
@@ -155,18 +158,13 @@ export function Planning({
     const isStart = s.start_at.slice(0, 10) === dIso;
     const trainer = one(s.trainers)?.full_name;
     const count = validatedCount(s);
-    if (!isStart) {
-      return (
-        <Link href={`/sessions/${s.id}`} className={`session-card spanning`}>
-          <span className="sc-title">↳ {s.title}</span>
-        </Link>
-      );
-    }
+    const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []);
+    const timeLabel = `${start} → ${end}`;
     return (
-      <Link href={`/sessions/${s.id}`} className={`session-card ${s.status}`}>
-        <span className="sc-title">{s.title}</span>
+      <Link href={`/sessions/${s.id}`} className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}>
+        <span className="sc-title">{isStart ? s.title : `↳ ${s.title}`}</span>
         <span className="sc-meta">
-          <span>{formatSessionPeriod(s.start_at, s.end_at)}</span>
+          <span>{timeLabel}</span>
           {trainer && <span>· {trainer}</span>}
           <span className="sc-count">{count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}</span>
         </span>

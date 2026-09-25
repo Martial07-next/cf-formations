@@ -7,8 +7,11 @@ import {
   addTraineeToSession,
   removeTraineeFromSession,
   setTraineeStatus,
+  setSessionDayTime,
+  resetSessionDayTime,
 } from '@/app/sessions/[id]/actions';
 import { deleteSession } from '@/app/sessions/actions';
+import { daysBetween, effectiveDayTime, fullDateLabel, type DayOverride } from '@/lib/week';
 
 type Room = { id: string; name: string; capacity: number };
 type Trainer = { id: string; full_name: string };
@@ -40,6 +43,7 @@ export function SessionDetailView({
   trainers,
   enrolled,
   allTrainees,
+  dayOverrides,
 }: {
   isAdmin: boolean;
   session: SessionDetail;
@@ -47,6 +51,7 @@ export function SessionDetailView({
   trainers: Trainer[];
   enrolled: EnrolledTrainee[];
   allTrainees: Trainee[];
+  dayOverrides: DayOverride[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +191,14 @@ export function SessionDetailView({
         </fieldset>
       </div>
 
+      <DayTimesPanel
+        isAdmin={isAdmin}
+        sessionId={session.id}
+        startAt={session.start_at}
+        endAt={session.end_at}
+        overrides={dayOverrides}
+      />
+
       <div className="panel">
         <h2>Stagiaires</h2>
         <div className="counters">
@@ -272,5 +285,106 @@ export function SessionDetailView({
         )}
       </div>
     </>
+  );
+}
+
+function DayTimesPanel({
+  isAdmin,
+  sessionId,
+  startAt,
+  endAt,
+  overrides,
+}: {
+  isAdmin: boolean;
+  sessionId: string;
+  startAt: string;
+  endAt: string;
+  overrides: DayOverride[];
+}) {
+  const days = daysBetween(startAt, endAt);
+  if (days.length < 2) return null; // session d'un seul jour : rien à personnaliser
+
+  return (
+    <div className="panel">
+      <h2>Horaires par jour</h2>
+      <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-8px 0 14px' }}>
+        Par défaut, chaque jour reprend l'horaire global de la session. Modifie une ligne pour donner un horaire
+        différent à ce jour précis (comme un emploi du temps de cours).
+      </p>
+      <table className="data">
+        <thead>
+          <tr><th>Jour</th><th>Début</th><th>Fin</th>{isAdmin && <th></th>}</tr>
+        </thead>
+        <tbody>
+          {days.map((day) => (
+            <DayTimeRow
+              key={day}
+              sessionId={sessionId}
+              day={day}
+              startAt={startAt}
+              endAt={endAt}
+              overrides={overrides}
+              isAdmin={isAdmin}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DayTimeRow({
+  sessionId,
+  day,
+  startAt,
+  endAt,
+  overrides,
+  isAdmin,
+}: {
+  sessionId: string;
+  day: string;
+  startAt: string;
+  endAt: string;
+  overrides: DayOverride[];
+  isAdmin: boolean;
+}) {
+  const effective = effectiveDayTime(day, startAt, endAt, overrides);
+  const hasOverride = overrides.some((o) => o.day === day);
+  const [start, setStart] = useState(effective.start);
+  const [end, setEnd] = useState(effective.end);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setSessionDayTime(sessionId, day, start, end);
+      if (!result.ok) setError(result.error);
+    });
+  }
+
+  function reset() {
+    startTransition(async () => {
+      await resetSessionDayTime(sessionId, day);
+    });
+  }
+
+  return (
+    <tr>
+      <td style={{ fontWeight: 700, textTransform: 'capitalize' }}>{fullDateLabel(new Date(day + 'T00:00:00Z'))}</td>
+      <td>
+        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} style={{ padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8 }} />
+      </td>
+      <td>
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} style={{ padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8 }} />
+      </td>
+      {isAdmin && (
+        <td className="row-actions">
+          <button onClick={save} disabled={isPending}>{isPending ? '…' : 'Enregistrer'}</button>
+          {hasOverride && <button onClick={reset} disabled={isPending}>Réinitialiser</button>}
+          {error && <span style={{ color: 'var(--cf-red-ink)', fontSize: 12 }}>{error}</span>}
+        </td>
+      )}
+    </tr>
   );
 }

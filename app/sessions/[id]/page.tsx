@@ -15,7 +15,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
-  const [{ data: session }, { data: rooms }, { data: trainers }, { data: allTrainees }, { data: links }] =
+  const [{ data: session }, { data: rooms }, { data: trainers }, { data: allTrainees }, { data: links }, { data: dayRows }] =
     await Promise.all([
       supabase
         .from('sessions')
@@ -29,6 +29,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         .from('session_trainees')
         .select('status, trainees(id, full_name, email, company)')
         .eq('session_id', id),
+      supabase.from('session_days').select('day, start_time, end_time').eq('session_id', id),
     ]);
 
   if (!session) notFound();
@@ -64,6 +65,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           trainers={trainers || []}
           enrolled={enrolled}
           allTrainees={allTrainees || []}
+          dayOverrides={(dayRows as any) || []}
         />
       </section>
     </main>

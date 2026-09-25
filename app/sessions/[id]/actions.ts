@@ -109,3 +109,34 @@ export async function setTraineeStatus(
   revalidatePath(`/sessions/${sessionId}`);
   return { ok: true };
 }
+
+export async function setSessionDayTime(
+  sessionId: string,
+  day: string,
+  startTime: string,
+  endTime: string
+): Promise<ActionResult> {
+  if (!startTime || !endTime) return { ok: false, error: 'Heure de début et de fin requises.' };
+  if (endTime <= startTime) return { ok: false, error: "L'heure de fin doit être après l'heure de début." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('session_days')
+    .upsert(
+      { session_id: sessionId, day, start_time: startTime, end_time: endTime },
+      { onConflict: 'session_id,day' }
+    );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
+export async function resetSessionDayTime(sessionId: string, day: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_days').delete().eq('session_id', sessionId).eq('day', day);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}

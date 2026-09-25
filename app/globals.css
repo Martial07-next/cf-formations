@@ -176,7 +176,8 @@ table.data tr:last-child td{border-bottom:none}
 .session-card.confirmee{background:#dcf5e4;border-left:3px solid #2d9e5a}
 .session-card.planifiee{background:#fff2c2;border-left:3px solid #c99a00}
 .session-card.brouillon{background:#e9edf4;border-left:3px solid #72809a}
-.session-card.spanning{background:#eafaf1;border:1px dashed #2d9e5a;box-shadow:none}
+.session-card.continuation{border-left-style:dashed;opacity:.92}
+.session-card.continuation .sc-title{font-weight:700}
 
 /* Vue mois */
 .month-cell .month-chip{display:block;text-decoration:none;color:var(--ink)}

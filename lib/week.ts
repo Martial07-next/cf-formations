@@ -135,3 +135,38 @@ export function formatSessionPeriod(startAt: string, endAt: string): string {
   }
   return `${shortDate(startAt)} ${timeOf(startAt)} → ${shortDate(endAt)} ${timeOf(endAt)}`;
 }
+
+export type DayOverride = { day: string; start_time: string; end_time: string };
+
+/**
+ * Horaire effectif d'un jour donné d'une session : celui défini spécifiquement
+ * pour ce jour (session_days) s'il existe, sinon l'heure de début/fin de la
+ * session appliquée à chaque jour par défaut.
+ */
+export function effectiveDayTime(
+  dayIso: string,
+  startAt: string,
+  endAt: string,
+  overrides: DayOverride[]
+): { start: string; end: string } {
+  const override = overrides.find((o) => o.day === dayIso);
+  if (override) return { start: override.start_time.slice(0, 5), end: override.end_time.slice(0, 5) };
+  return { start: timeOf(startAt).replace('h', ':').padEnd(5, '0'), end: timeOf(endAt).replace('h', ':').padEnd(5, '0') };
+}
+
+export function formatHHMM(time: string): string {
+  return time.length >= 5 ? time.slice(0, 5).replace(':', 'h') : time;
+}
+
+/** Toutes les dates (YYYY-MM-DD) couvertes par [startAt, endAt], bornes incluses. */
+export function daysBetween(startAt: string, endAt: string): string[] {
+  const start = new Date(startAt.slice(0, 10) + 'T00:00:00Z');
+  const end = new Date(endAt.slice(0, 10) + 'T00:00:00Z');
+  const days: string[] = [];
+  let cursor = start;
+  while (cursor.getTime() <= end.getTime()) {
+    days.push(isoDate(cursor));
+    cursor = addDays(cursor, 1);
+  }
+  return days;
+}

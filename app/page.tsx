@@ -50,6 +50,16 @@ export default async function Page({
     .gt('end_at', isoDate(addDays(rangeStart, -1)))
     .order('start_at');
 
+  const sessionIds = (sessions || []).map((s: any) => s.id);
+  const { data: dayRows } = sessionIds.length
+    ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIds)
+    : { data: [] as any[] };
+
+  const dayOverrides: Record<string, { day: string; start_time: string; end_time: string }[]> = {};
+  for (const row of dayRows || []) {
+    (dayOverrides[row.session_id] ||= []).push({ day: row.day, start_time: row.start_time, end_time: row.end_time });
+  }
+
   return (
     <main>
       <Sidebar active="/" profile={profile} />
@@ -60,6 +70,7 @@ export default async function Page({
         trainers={trainers || []}
         templates={templates || []}
         sessions={(sessions as any) || []}
+        dayOverrides={dayOverrides}
         mondayIso={isoDate(monday)}
         monthAnchorIso={isoDate(monthAnchor)}
         dayIso={isoDate(dayAnchor)}
