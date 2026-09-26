@@ -11,12 +11,33 @@ export default async function StagiairesPage() {
     .select('id, full_name, email, company, session_trainees(status, sessions(id, title, start_at))')
     .order('full_name');
 
-  const rows = (trainees || []).map((t: any) => ({
-    ...t,
-    sessionLinks: (t.session_trainees || [])
+  // Important : on pré-calcule ici le contenu affiché (un élément React, pas
+  // une fonction) car un Server Component ne peut pas passer de fonction à un
+  // Client Component (CrudTable) — seuls des éléments/données sérialisables le peuvent.
+  const rows = (trainees || []).map((t: any) => {
+    const sessionLinks = (t.session_trainees || [])
       .map((l: any) => (l.sessions ? { ...l.sessions, status: l.status } : null))
-      .filter(Boolean),
-  }));
+      .filter(Boolean);
+
+    return {
+      ...t,
+      sessions:
+        sessionLinks.length === 0 ? (
+          <span style={{ color: 'var(--muted)' }}>Aucune</span>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {sessionLinks.map((s: any) => (
+              <a key={s.id} href={`/sessions/${s.id}`} style={{ fontSize: 12.5 }}>
+                {s.title}{' '}
+                <span className={`badge ${s.status}`} style={{ marginLeft: 4 }}>
+                  {s.status === 'validee' ? 'validé' : 'en attente'}
+                </span>
+              </a>
+            ))}
+          </div>
+        ),
+    };
+  });
 
   return (
     <main>
@@ -36,24 +57,7 @@ export default async function StagiairesPage() {
             { key: 'full_name', label: 'Nom' },
             { key: 'email', label: 'E-mail' },
             { key: 'company', label: 'Entreprise' },
-            {
-              key: 'sessions',
-              label: 'Sessions',
-              render: (row) =>
-                row.sessionLinks.length === 0 ? (
-                  <span style={{ color: 'var(--muted)' }}>Aucune</span>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {row.sessionLinks.map((s: any) => (
-                      <a key={s.id} href={`/sessions/${s.id}`} style={{ fontSize: 12.5 }}>
-                        {s.title} <span className={`badge ${s.status}`} style={{ marginLeft: 4 }}>
-                          {s.status === 'validee' ? 'validé' : 'en attente'}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                ),
-            },
+            { key: 'sessions', label: 'Sessions' },
           ]}
           fields={[
             { name: 'full_name', label: 'Nom complet', required: true },
