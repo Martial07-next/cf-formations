@@ -11,6 +11,8 @@ import {
   resetSessionDayTime,
 } from '@/app/sessions/[id]/actions';
 import { deleteSession } from '@/app/sessions/actions';
+import { CsvImportTrainees } from '@/components/csv-import';
+import { DigiformaPanel } from '@/components/digiforma-panel';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, type DayOverride } from '@/lib/week';
 
 type Room = { id: string; name: string; capacity: number };
@@ -29,6 +31,7 @@ type SessionDetail = {
   trainer_id: string | null;
   max_trainees: number | null;
   notes: string | null;
+  digiforma_ref: string | null;
 };
 
 function toLocalInput(iso: string) {
@@ -199,6 +202,9 @@ export function SessionDetailView({
         endAt={session.end_at}
         overrides={dayOverrides}
       />
+
+      {isAdmin && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
+      {isAdmin && <CsvImportTrainees sessionId={session.id} />}
 
       <div className="panel">
         <h2>Stagiaires</h2>

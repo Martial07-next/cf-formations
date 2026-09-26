@@ -1,7 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
-import { createRoom, deleteRoom, updateRoomStatus } from './actions';
+import { createRoom, deleteRoom, updateRoom, updateRoomStatus } from './actions';
 
 export default async function SallesPage() {
   const supabase = await createClient();
@@ -49,6 +49,7 @@ export default async function SallesPage() {
           rows={rooms || []}
           onCreate={createRoom}
           onDelete={deleteRoom}
+          onUpdate={updateRoom}
           emptyLabel="Aucune salle enregistrée."
           statusField={{
             key: 'status',

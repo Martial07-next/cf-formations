@@ -19,7 +19,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     await Promise.all([
       supabase
         .from('sessions')
-        .select('id, title, reference, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name)')
+        .select('id, title, reference, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, digiforma_ref, rooms(name)')
         .eq('id', id)
         .maybeSingle(),
       supabase.from('rooms').select('id, name, capacity').order('name'),

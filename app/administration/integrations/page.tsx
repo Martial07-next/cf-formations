@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { AdminTabs } from '@/components/admin-tabs';
+import { DigiformaTestButton } from '@/components/digiforma-test-button';
 
 export default async function IntegrationsPage() {
   const supabase = await createClient();
@@ -17,8 +18,6 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const { data: settings } = await supabase.from('app_settings').select('digiforma_enabled').eq('id', true).maybeSingle();
-
   return (
     <main>
       <Sidebar active="/administration" profile={profile} />
@@ -32,40 +31,44 @@ export default async function IntegrationsPage() {
         </header>
         <AdminTabs active="/administration/integrations" />
 
-        <div className="panel" style={{ maxWidth: 640 }}>
-          <h2>Digiforma</h2>
-          <div className="counters" style={{ marginBottom: 16 }}>
-            <div className="counter-chip" style={{ minWidth: 160 }}>
-              <strong style={{ fontSize: 15 }}>Non connecté</strong>
-              <span>Statut</span>
-            </div>
-            <div className="counter-chip" style={{ minWidth: 160 }}>
-              <strong style={{ fontSize: 15 }}>—</strong>
-              <span>Dernière synchronisation</span>
-            </div>
-          </div>
-
+        <div className="panel" style={{ maxWidth: 680 }}>
+          <h2>Digiforma — connexion API</h2>
           <p style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-            Digiforma propose une API GraphQL (à activer depuis Digiforma → réglages → Interconnexion → GraphQL),
-            mais <strong>pas de webhooks</strong> : il n'y a pas de notification en temps réel quand quelque chose
-            change côté Digiforma. Une synchronisation automatique fonctionnerait donc par interrogation régulière
-            de l'API (toutes les X minutes/heures), pas de façon instantanée.
+            Une clé API Digiforma (générée depuis Digiforma → réglages → Interconnexion → GraphQL) doit être ajoutée
+            dans les variables d'environnement du serveur sous le nom <code>DIGIFORMA_API_TOKEN</code> — jamais
+            <code> NEXT_PUBLIC_</code>, jamais visible dans cette interface. Une fois fait, teste la connexion :
           </p>
+          <DigiformaTestButton />
+          <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 14, lineHeight: 1.6 }}>
+            Ce test exécute une requête d'introspection réelle (sans effet) sur l'API Digiforma. S'il échoue avec un
+            message du type « Cannot query field... », c'est que les noms de champs utilisés dans le code
+            (actuellement une estimation basée sur leur documentation publique) doivent être ajustés au schéma réel
+            de ton compte — dis-le-moi avec le message d'erreur exact et je corrige la requête.
+          </p>
+        </div>
+
+        <div className="panel" style={{ maxWidth: 680 }}>
+          <h2>Import direct par session</h2>
           <p style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-            Cette synchronisation n'est <strong>pas encore développée</strong> sur cette plateforme. La mettre en
-            place demande : une clé API Digiforma stockée côté serveur (jamais visible dans cette interface), une
-            tâche planifiée qui interroge Digiforma à intervalle régulier, et une logique de correspondance entre
-            les sessions/stagiaires des deux systèmes pour éviter les doublons.
+            Une fois la connexion active, chaque fiche session propose un champ « référence Digiforma » et un bouton
+            « Importer les stagiaires depuis Digiforma » : les stagiaires inscrits côté Digiforma sont alors
+            automatiquement créés/reconnus et ajoutés à la session, sans ressaisie.
           </p>
           <p style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--muted)' }}>
-            En attendant, une alternative réaliste : exporter les sessions/stagiaires de cette plateforme en CSV
-            pour import dans Digiforma (ou l'inverse), le temps de qualifier le besoin exact de synchronisation.
+            Digiforma ne propose pas de webhooks : rien ne se synchronise tout seul en arrière-plan. Il faut relancer
+            l'import depuis la fiche session à chaque fois qu'un stagiaire est ajouté côté Digiforma.
           </p>
+        </div>
 
-          <div style={{ marginTop: 16, padding: '12px 14px', background: '#f5faf5', borderRadius: 10, fontSize: 13 }}>
-            {settings?.digiforma_enabled
-              ? 'Marqué comme "à activer" dans les paramètres — reste à développer la synchronisation elle-même.'
-              : "Non activé pour l'instant."}
+        <div className="panel" style={{ maxWidth: 680 }}>
+          <h2>Export / import CSV</h2>
+          <p style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
+            En complément (ou en attendant la connexion API), les sessions et stagiaires peuvent être exportés en
+            CSV, et des stagiaires peuvent être importés en masse directement depuis une fiche session.
+          </p>
+          <div className="row-actions">
+            <a href="/sessions/export"><button type="button">Exporter les sessions (CSV)</button></a>
+            <a href="/stagiaires/export"><button type="button">Exporter les stagiaires (CSV)</button></a>
           </div>
         </div>
       </section>

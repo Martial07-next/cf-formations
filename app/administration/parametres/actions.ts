@@ -28,3 +28,18 @@ export async function updateSettings(formData: FormData) {
   revalidatePath('/administration/parametres');
   return { ok: true };
 }
+
+export type DigiformaTestResult =
+  | { ok: true; typeCount: number }
+  | { ok: false; error: string };
+
+/** Test réel de connexion à l'API Digiforma (requête d'introspection, sans effet). */
+export async function testDigiformaConnection(): Promise<DigiformaTestResult> {
+  try {
+    const { digiformaIntrospect } = await import('@/lib/digiforma');
+    const types = await digiformaIntrospect();
+    return { ok: true, typeCount: types.length };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}

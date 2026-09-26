@@ -1,7 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
-import { createTrainer, deleteTrainer, updateTrainerStatus } from './actions';
+import { createTrainer, deleteTrainer, updateTrainer, updateTrainerStatus } from './actions';
 
 export default async function FormateursPage() {
   const supabase = await createClient();
@@ -51,6 +51,7 @@ export default async function FormateursPage() {
           rows={trainers || []}
           onCreate={createTrainer}
           onDelete={deleteTrainer}
+          onUpdate={updateTrainer}
           emptyLabel="Aucun formateur enregistré."
           statusField={{
             key: 'status',

@@ -27,6 +27,20 @@ export async function deleteRoom(id: string) {
   return { ok: true };
 }
 
+export async function updateRoom(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const name = String(formData.get('name') || '').trim();
+  const capacity = Number(formData.get('capacity') || 0);
+  const location = String(formData.get('location') || '').trim() || null;
+  const equipment = String(formData.get('equipment') || '').trim() || null;
+  if (!name || capacity <= 0) return { ok: false, error: 'Nom et capacité (> 0) requis.' };
+  const { error } = await supabase.from('rooms').update({ name, capacity, location, equipment }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/salles');
+  revalidatePath('/');
+  return { ok: true };
+}
+
 export async function updateRoomStatus(id: string, status: string) {
   const supabase = await createClient();
   const { error } = await supabase.from('rooms').update({ status }).eq('id', id);
