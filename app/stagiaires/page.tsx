@@ -1,16 +1,18 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
-import { createTrainee, deleteTrainee } from './actions';
+import { createTrainee, deleteTrainee, updateTrainee } from './actions';
+import { QuickImportPanel } from '@/components/quick-import-panel';
 
 export default async function StagiairesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   const { data: trainees } = await supabase
     .from('trainees')
-    .select('id, full_name, email, company, session_trainees(status, sessions(id, title, start_at))')
+    .select('id, full_name, email, company, session_trainees(status)')
     .order('full_name');
 
+<<<<<<< HEAD
   // Important : on pré-calcule ici le contenu affiché (un élément React, pas
   // une fonction) car un Server Component ne peut pas passer de fonction à un
   // Client Component (CrudTable) — seuls des éléments/données sérialisables le peuvent.
@@ -36,6 +38,19 @@ export default async function StagiairesPage() {
             ))}
           </div>
         ),
+=======
+  // Un lien vers une vraie fiche historique, plutôt qu'une liste de sessions
+  // en vrac dans la cellule du tableau.
+  const rows = (trainees || []).map((t: any) => {
+    const count = (t.session_trainees || []).length;
+    return {
+      ...t,
+      history: (
+        <a href={`/stagiaires/${t.id}`} style={{ fontSize: 12.5, fontWeight: 700 }}>
+          Voir l'historique {count > 0 && `(${count})`}
+        </a>
+      ),
+>>>>>>> f9e561d (Mise à jour complète du projet)
     };
   });
 
@@ -50,6 +65,7 @@ export default async function StagiairesPage() {
             <p>L'annuaire des stagiaires inscrits aux formations.</p>
           </div>
         </header>
+        {canManage(profile?.role) && <QuickImportPanel />}
         <CrudTable
           isAdmin={canManage(profile?.role)}
           title="un stagiaire"
@@ -57,7 +73,11 @@ export default async function StagiairesPage() {
             { key: 'full_name', label: 'Nom' },
             { key: 'email', label: 'E-mail' },
             { key: 'company', label: 'Entreprise' },
+<<<<<<< HEAD
             { key: 'sessions', label: 'Sessions' },
+=======
+            { key: 'history', label: 'Historique' },
+>>>>>>> f9e561d (Mise à jour complète du projet)
           ]}
           fields={[
             { name: 'full_name', label: 'Nom complet', required: true },
@@ -67,6 +87,7 @@ export default async function StagiairesPage() {
           rows={rows}
           onCreate={createTrainee}
           onDelete={deleteTrainee}
+          onUpdate={updateTrainee}
           emptyLabel="Aucun stagiaire enregistré."
         />
       </section>

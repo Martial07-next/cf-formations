@@ -49,6 +49,59 @@ export type DigiformaTrainee = {
 };
 
 /**
+ * Liste tous les stagiaires connus de Digiforma (indépendamment de toute session).
+ * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect).
+ */
+export async function digiformaListTrainees(): Promise<DigiformaTrainee[]> {
+  const data = await digiformaFetch(`{ trainees { id firstName lastName email } }`);
+  const trainees = data?.trainees || [];
+  return trainees.map((t: any) => ({
+    id: String(t.id),
+    fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+    email: t.email || null,
+  }));
+}
+
+export type DigiformaSession = {
+  id: string;
+  name: string;
+  startAt: string | null;
+  endAt: string | null;
+  trainees: DigiformaTrainee[];
+};
+
+/**
+ * Liste les sessions de formation Digiforma, avec leurs stagiaires inscrits.
+ * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect) —
+ * en particulier le nom exact des champs de dates, qui varie souvent d'une API à l'autre.
+ */
+export async function digiformaListTrainingSessions(): Promise<DigiformaSession[]> {
+  const data = await digiformaFetch(`
+    {
+      trainingSessions {
+        id
+        name
+        startDate
+        endDate
+        trainees { id firstName lastName email }
+      }
+    }
+  `);
+  const sessions = data?.trainingSessions || [];
+  return sessions.map((s: any) => ({
+    id: String(s.id),
+    name: s.name || 'Session Digiforma',
+    startAt: s.startDate || null,
+    endAt: s.endDate || null,
+    trainees: (s.trainees || []).map((t: any) => ({
+      id: String(t.id),
+      fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+      email: t.email || null,
+    })),
+  }));
+}
+
+/**
  * Récupère les stagiaires inscrits à une session Digiforma donnée (par son id/référence).
  * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect).
  */

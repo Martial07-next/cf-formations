@@ -2,6 +2,7 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { AdminTabs } from '@/components/admin-tabs';
 import { DigiformaTestButton } from '@/components/digiforma-test-button';
+import { DigiformaSyncPanel } from '@/components/digiforma-sync-panel';
 
 export default async function IntegrationsPage() {
   const supabase = await createClient();
@@ -17,6 +18,12 @@ export default async function IntegrationsPage() {
       </main>
     );
   }
+
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('digiforma_last_sync, digiforma_last_sync_status, digiforma_last_sync_log')
+    .eq('id', true)
+    .maybeSingle();
 
   return (
     <main>
@@ -46,6 +53,14 @@ export default async function IntegrationsPage() {
             de ton compte — dis-le-moi avec le message d'erreur exact et je corrige la requête.
           </p>
         </div>
+
+        <DigiformaSyncPanel
+          lastSync={{
+            at: settings?.digiforma_last_sync || null,
+            status: settings?.digiforma_last_sync_status || null,
+            log: settings?.digiforma_last_sync_log || null,
+          }}
+        />
 
         <div className="panel" style={{ maxWidth: 680 }}>
           <h2>Import direct par session</h2>

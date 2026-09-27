@@ -14,7 +14,8 @@ export function DigiformaPanel({ sessionId, digiformaRef }: { sessionId: string;
       await saveDigiformaRef(sessionId, ref);
       const result = await importFromDigiforma(sessionId, ref);
       if (result.ok) {
-        setMessage({ text: `${result.imported} stagiaire(s) importé(s) depuis Digiforma et validé(s).`, error: false });
+        const heldMsg = result.heldBack > 0 ? ` (${result.heldBack} mis en attente pour cause de conflit de créneau)` : '';
+        setMessage({ text: `${result.imported} stagiaire(s) importé(s) depuis Digiforma.${heldMsg}`, error: false });
       } else {
         setMessage({ text: result.error, error: true });
       }

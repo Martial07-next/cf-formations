@@ -5,6 +5,32 @@ import { revalidatePath } from 'next/cache';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+/**
+ * Cherche si `traineeId` est déjà VALIDÉ sur une autre session dont le
+ * créneau chevauche [startAt, endAt]. Un stagiaire ne peut pas suivre deux
+ * formations en même temps.
+ */
+export async function findTraineeConflict(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  traineeId: string,
+  startAt: string,
+  endAt: string,
+  excludeSessionId?: string
+): Promise<{ sessionId: string; title: string } | null> {
+  const { data } = await supabase
+    .from('session_trainees')
+    .select('status, sessions(id, title, start_at, end_at)')
+    .eq('trainee_id', traineeId)
+    .eq('status', 'validee');
+
+  for (const row of data || []) {
+    const s: any = Array.isArray(row.sessions) ? row.sessions[0] : row.sessions;
+    if (!s || s.id === excludeSessionId) continue;
+    if (s.start_at < endAt && s.end_at > startAt) return { sessionId: s.id, title: s.title };
+  }
+  return null;
+}
+
 export async function updateSessionDetails(sessionId: string, formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
 
@@ -71,6 +97,17 @@ export async function addTraineeToSession(
 ): Promise<ActionResult> {
   if (!traineeId) return { ok: false, error: 'Choisis un stagiaire.' };
   const supabase = await createClient();
+
+  if (status === 'validee') {
+    const { data: session } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).single();
+    if (session) {
+      const conflict = await findTraineeConflict(supabase, traineeId, session.start_at, session.end_at, sessionId);
+      if (conflict) {
+        return { ok: false, error: `Conflit : ce stagiaire est déjà validé sur "${conflict.title}" sur ce créneau.` };
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('session_trainees')
     .insert({ session_id: sessionId, trainee_id: traineeId, status });
@@ -100,6 +137,17 @@ export async function setTraineeStatus(
   status: 'validee' | 'en_attente'
 ): Promise<ActionResult> {
   const supabase = await createClient();
+
+  if (status === 'validee') {
+    const { data: session } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).single();
+    if (session) {
+      const conflict = await findTraineeConflict(supabase, traineeId, session.start_at, session.end_at, sessionId);
+      if (conflict) {
+        return { ok: false, error: `Conflit : ce stagiaire est déjà validé sur "${conflict.title}" sur ce créneau.` };
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('session_trainees')
     .update({ status })
@@ -109,6 +157,7 @@ export async function setTraineeStatus(
   revalidatePath(`/sessions/${sessionId}`);
   return { ok: true };
 }
+
 
 export async function setSessionDayTime(
   sessionId: string,
@@ -179,6 +228,7 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
   }
 
   const supabase = await createClient();
+  const { data: sessionRow } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).single();
   let added = 0;
   let updated = 0;
   let skipped = 0;
@@ -190,7 +240,7 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
     const email = getField(row, 'email', 'e-mail', 'mail') || null;
     const company = getField(row, 'entreprise', 'société', 'company') || null;
     const statutRaw = norm(getField(row, 'statut', 'status'));
-    const status: 'validee' | 'en_attente' = statutRaw.startsWith('valid') ? 'validee' : 'en_attente';
+    let status: 'validee' | 'en_attente' = statutRaw.startsWith('valid') ? 'validee' : 'en_attente';
 
     if (!full_name) {
       skipped++;
@@ -222,6 +272,14 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
       traineeId = data.id;
     }
 
+    if (status === 'validee' && sessionRow && traineeId) {
+      const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
+      if (conflict) {
+        status = 'en_attente';
+        errors.push(`Ligne ${i + 2} (${full_name}) : déjà validé sur "${conflict.title}" sur ce créneau — mis en attente.`);
+      }
+    }
+
     const { error: linkError } = await supabase
       .from('session_trainees')
       .upsert({ session_id: sessionId, trainee_id: traineeId, status }, { onConflict: 'session_id,trainee_id' });
@@ -249,7 +307,7 @@ export async function saveDigiformaRef(sessionId: string, digiformaRef: string):
 }
 
 export type DigiformaImportResult =
-  | { ok: true; imported: number }
+  | { ok: true; imported: number; heldBack: number }
   | { ok: false; error: string };
 
 /**
@@ -273,7 +331,9 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
   }
 
   const supabase = await createClient();
+  const { data: sessionRow } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).single();
   let imported = 0;
+  let heldBack = 0;
 
   for (const t of trainees) {
     let traineeId: string | null = null;
@@ -295,13 +355,22 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
       traineeId = data.id;
     }
 
+    let status: 'validee' | 'en_attente' = 'validee';
+    if (sessionRow && traineeId) {
+      const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
+      if (conflict) {
+        status = 'en_attente';
+        heldBack++;
+      }
+    }
+
     const { error: linkError } = await supabase
       .from('session_trainees')
-      .upsert({ session_id: sessionId, trainee_id: traineeId, status: 'validee' }, { onConflict: 'session_id,trainee_id' });
+      .upsert({ session_id: sessionId, trainee_id: traineeId, status }, { onConflict: 'session_id,trainee_id' });
     if (!linkError) imported++;
   }
 
   await supabase.from('sessions').update({ digiforma_ref: digiformaRef.trim() }).eq('id', sessionId);
   revalidatePath(`/sessions/${sessionId}`);
-  return { ok: true, imported };
+  return { ok: true, imported, heldBack };
 }
