@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
+import { Pagination } from '@/components/pagination';
 import { nameFields } from '@/lib/trainee-name';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
@@ -7,21 +8,50 @@ import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
 
-export default async function StagiairesPage() {
+const PAGE_SIZE = 50;
+
+/** Nettoie un texte de recherche pour un filtre PostgREST `or(...)`. */
+function cleanQuery(q: string) {
+  return q.replace(/[,()*"\\%_]/g, ' ').trim().slice(0, 80);
+}
+
+export default async function StagiairesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; entreprise?: string; page?: string }>;
+}) {
+  const sp = await searchParams;
+  const q = cleanQuery(sp.q || '');
+  const company = (sp.entreprise || '').trim();
+  const page = Math.max(1, Number.parseInt(sp.page || '1', 10) || 1);
+
   const supabase = await createClient();
   const profile = await getCurrentProfile();
-  const { data: trainees } = await supabase
+
+  let query = supabase
     .from('trainees')
-    .select('id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))')
-    .order('full_name');
+    .select('id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))', {
+      count: 'exact',
+    })
+    .order('last_name', { ascending: true, nullsFirst: false })
+    .order('full_name', { ascending: true })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+  if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,company.ilike.%${q}%`);
+  if (company === '__none') query = query.is('company', null);
+  else if (company) query = query.eq('company', company);
+
+  const [{ data: trainees, count }, { data: companyRows }] = await Promise.all([
+    query,
+    supabase.from('trainees').select('company').not('company', 'is', null).order('company').limit(5000),
+  ]);
+  const companies = [...new Set((companyRows || []).map((r: any) => (r.company as string).trim()).filter(Boolean))];
+  const total = count ?? 0;
 
   // Important : on pré-calcule ici le contenu affiché (un élément React, pas
   // une fonction) car un Server Component ne peut pas passer de fonction à un
   // Client Component (CrudTable) — seuls des éléments/données sérialisables le peuvent.
   const now = new Date().toISOString();
-  const sortKey = (t: any) => `${nameFields(t).last_name} ${nameFields(t).first_name}`;
-  const sorted = [...(trainees || [])].sort((a: any, b: any) => sortKey(a).localeCompare(sortKey(b), 'fr'));
-  const rows = sorted.map((t: any) => {
+  const rows = (trainees || []).map((t: any) => {
     const n = nameFields(t);
     const links = (t.session_trainees || []).filter((l: any) => l.sessions);
     const done = links.filter((l: any) => l.status === 'validee' && l.sessions.end_at < now).length;
@@ -62,6 +92,25 @@ export default async function StagiairesPage() {
           )}
         </header>
         {canManage(profile?.role) && <QuickImportPanel />}
+
+        <form className="list-filters" method="get" role="search">
+          <label className="search">
+            <Search size={15} aria-hidden />
+            <span className="sr-only">Rechercher</span>
+            <input name="q" defaultValue={sp.q || ''} placeholder="Nom, prénom, e-mail, entreprise…" />
+          </label>
+          <select name="entreprise" defaultValue={company} aria-label="Filtrer par entreprise">
+            <option value="">Toutes les entreprises</option>
+            <option value="__none">Sans entreprise</option>
+            {companies.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <button type="submit" className="small primary">Filtrer</button>
+          {(q || company) && <Link href="/stagiaires" className="btn small ghost">Effacer</Link>}
+        </form>
+
+        <Pagination basePath="/stagiaires" params={{ q: sp.q, entreprise: company }} page={page} pageSize={PAGE_SIZE} total={total} />
         <CrudTable
           isAdmin={canManage(profile?.role)}
           title="un stagiaire"
@@ -83,9 +132,11 @@ export default async function StagiairesPage() {
           onCreate={createTrainee}
           onDelete={deleteTrainee}
           onUpdate={updateTrainee}
-          emptyLabel="Aucun stagiaire enregistré."
-          searchKeys={['full_name', 'email', 'company']}
+          emptyLabel={q || company ? 'Aucun stagiaire ne correspond à ces filtres.' : 'Aucun stagiaire enregistré.'}
         />
+        {total > PAGE_SIZE && (
+          <Pagination basePath="/stagiaires" params={{ q: sp.q, entreprise: company }} page={page} pageSize={PAGE_SIZE} total={total} />
+        )}
       </section>
     </main>
   );

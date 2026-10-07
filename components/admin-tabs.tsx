@@ -4,6 +4,7 @@ const tabs = [
   { href: '/administration', label: 'Utilisateurs' },
   { href: '/administration/parametres', label: 'Paramètres généraux' },
   { href: '/administration/integrations', label: 'Intégrations' },
+  { href: '/administration/donnees', label: 'Données' },
 ];
 
 export function AdminTabs({ active }: { active: string }) {
