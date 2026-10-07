@@ -26,7 +26,7 @@ export default async function ParametresPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation des formations</p>
+            <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Comptes, paramètres et intégrations de la plateforme.</p>
           </div>

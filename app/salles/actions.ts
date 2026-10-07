@@ -2,8 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireManager, FORBIDDEN } from '@/lib/auth';
 
 export async function createRoom(formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
@@ -19,6 +21,7 @@ export async function createRoom(formData: FormData) {
 }
 
 export async function deleteRoom(id: string) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('rooms').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -28,6 +31,7 @@ export async function deleteRoom(id: string) {
 }
 
 export async function updateRoom(id: string, formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
@@ -42,6 +46,7 @@ export async function updateRoom(id: string, formData: FormData) {
 }
 
 export async function updateRoomStatus(id: string, status: string) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('rooms').update({ status }).eq('id', id);
   if (error) return { ok: false, error: error.message };

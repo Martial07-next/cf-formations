@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { updateRole } from '@/app/administration/actions';
-import { ROLE_LABELS, type Role } from '@/lib/roles';
+import { ROLE_LABELS, ROLE_OPTIONS, type Role } from '@/lib/roles';
 
 type Row = { id: string; full_name: string; role: string; created_at: string };
 
-const ROLE_OPTIONS: Role[] = ['admin', 'responsable_formation', 'formateur', 'consultation'];
+
 
 export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentUserId: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
   return (
     <>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
+      <div className="table-wrap">
       <table className="data">
         <thead>
           <tr>
@@ -36,6 +37,8 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
               <td>{u.full_name} {u.id === currentUserId && <em>(vous)</em>}</td>
               <td>
                 <select
+                  className="input"
+                  aria-label={`Rôle de ${u.full_name}`}
                   value={u.role}
                   onChange={(e) => handleChange(u.id, e.target.value)}
                   disabled={isPending || u.id === currentUserId}
@@ -50,6 +53,7 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
           ))}
         </tbody>
       </table>
+      </div>
     </>
   );
 }

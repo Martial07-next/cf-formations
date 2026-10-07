@@ -178,3 +178,27 @@ export function weekdaysBetween(startAt: string, endAt: string): string[] {
     return weekday !== 0 && weekday !== 6;
   });
 }
+
+function minutesOf(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+/**
+ * Nombre d'heures de formation d'une session : somme, sur chaque jour ouvré
+ * couvert, de l'horaire effectif du jour (horaire spécifique s'il existe).
+ */
+export function sessionHours(startAt: string, endAt: string, overrides: DayOverride[] = []): number {
+  const days = weekdaysBetween(startAt, endAt);
+  const list = days.length ? days : [startAt.slice(0, 10)];
+  let minutes = 0;
+  for (const day of list) {
+    const { start, end } = effectiveDayTime(day, startAt, endAt, overrides);
+    minutes += Math.max(0, minutesOf(end) - minutesOf(start));
+  }
+  return Math.round((minutes / 60) * 10) / 10;
+}
+
+export function formatHours(h: number): string {
+  return `${String(h).replace('.', ',')} h`;
+}

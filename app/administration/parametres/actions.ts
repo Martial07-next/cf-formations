@@ -2,8 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 
 export async function updateSettings(formData: FormData) {
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
 
   const company_name = String(formData.get('company_name') || '').trim();
@@ -35,6 +37,7 @@ export type DigiformaTestResult =
 
 /** Test réel de connexion à l'API Digiforma (requête d'introspection, sans effet). */
 export async function testDigiformaConnection(): Promise<DigiformaTestResult> {
+  if (!(await requireAdmin())) return FORBIDDEN;
   try {
     const { digiformaIntrospect } = await import('@/lib/digiforma');
     const types = await digiformaIntrospect();

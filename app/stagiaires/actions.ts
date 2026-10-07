@@ -2,8 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { findOrCreateTrainee } from '@/lib/trainee-conflict';
 
 export async function createTrainee(formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const full_name = String(formData.get('full_name') || '').trim();
   const email = String(formData.get('email') || '').trim() || null;
@@ -16,6 +19,7 @@ export async function createTrainee(formData: FormData) {
 }
 
 export async function deleteTrainee(id: string) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('trainees').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -24,6 +28,7 @@ export async function deleteTrainee(id: string) {
 }
 
 export async function updateTrainee(id: string, formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const full_name = String(formData.get('full_name') || '').trim();
   const email = String(formData.get('email') || '').trim() || null;
@@ -46,30 +51,6 @@ function getField(row: Record<string, string>, ...names: string[]): string {
   return '';
 }
 
-async function upsertTrainee(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  full_name: string,
-  email: string | null,
-  company: string | null
-): Promise<{ id: string; created: boolean } | null> {
-  if (!full_name) return null;
-
-  if (email) {
-    const { data } = await supabase.from('trainees').select('id').ilike('email', email).maybeSingle();
-    if (data) return { id: data.id, created: false };
-  }
-  const { data: byName } = await supabase.from('trainees').select('id').ilike('full_name', full_name).maybeSingle();
-  if (byName) return { id: byName.id, created: false };
-
-  const { data, error } = await supabase
-    .from('trainees')
-    .insert({ full_name, email, company })
-    .select('id')
-    .single();
-  if (error || !data) return null;
-  return { id: data.id, created: true };
-}
-
 export type ImportResult =
   | { ok: true; created: number; matched: number; skipped: number; errors: string[] }
   | { ok: false; error: string };
@@ -80,6 +61,7 @@ export type ImportResult =
  * Colonnes attendues (insensibles à la casse) : Nom (requis), Email, Entreprise.
  */
 export async function importTraineesCsvGlobal(formData: FormData): Promise<ImportResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Choisis un fichier CSV.' };
 
@@ -108,7 +90,7 @@ export async function importTraineesCsvGlobal(formData: FormData): Promise<Impor
       errors.push(`Ligne ${i + 2} : nom manquant, ignorée.`);
       continue;
     }
-    const result = await upsertTrainee(supabase, full_name, email, company);
+    const result = await findOrCreateTrainee(supabase, full_name, email, company);
     if (!result) {
       errors.push(`Ligne ${i + 2} (${full_name}) : import impossible.`);
       continue;
@@ -123,6 +105,7 @@ export async function importTraineesCsvGlobal(formData: FormData): Promise<Impor
 
 /** Récupère tous les stagiaires connus de Digiforma et les ajoute/reconnaît dans l'annuaire. */
 export async function importTraineesFromDigiforma(): Promise<ImportResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const { digiformaListTrainees } = await import('@/lib/digiforma');
   let trainees;
   try {
@@ -141,7 +124,7 @@ export async function importTraineesFromDigiforma(): Promise<ImportResult> {
   const errors: string[] = [];
 
   for (const t of trainees) {
-    const result = await upsertTrainee(supabase, t.fullName, t.email, null);
+    const result = await findOrCreateTrainee(supabase, t.fullName, t.email);
     if (!result) {
       errors.push(`${t.fullName} : import impossible.`);
       continue;

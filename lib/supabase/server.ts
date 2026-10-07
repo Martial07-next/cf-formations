@@ -38,7 +38,11 @@ export async function getCurrentProfile() {
     .select('id, full_name, role')
     .eq('id', user.id)
     .single();
-  return profile ? { ...profile, email: user.email } : null;
+  if (!profile) return null;
+
+  // Fiche formateur liée à ce compte (si un admin l'a associée).
+  const { data: trainer } = await supabase.from('trainers').select('id').eq('profile_id', user.id).maybeSingle();
+  return { ...profile, email: user.email, trainer_id: (trainer?.id as string | undefined) ?? null };
 }
 
 export type { Role } from '@/lib/roles';

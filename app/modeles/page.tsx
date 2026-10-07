@@ -1,15 +1,19 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
-import { CrudTable } from '@/components/crud-table';
-import { createTemplate, deleteTemplate } from './actions';
+import { TemplateCatalog } from '@/components/template-catalog';
 
 export default async function ModelesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   const { data: templates } = await supabase
     .from('templates')
-    .select('id, title, reference, category, duration_hours, max_trainees, description')
+    .select('id, title, reference, category, duration_hours, max_trainees, description, sessions(count)')
     .order('title');
+
+  const rows = (templates || []).map((t: any) => ({
+    ...t,
+    sessions_count: Array.isArray(t.sessions) ? t.sessions[0]?.count ?? 0 : 0,
+  }));
 
   return (
     <main>
@@ -17,35 +21,12 @@ export default async function ModelesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation des formations</p>
-            <h1>Formations (modèles)</h1>
-            <p>Le catalogue des formations, réutilisables lors de la création d'une session.</p>
+            <p className="eyebrow">Ressources</p>
+            <h1>Formations disponibles</h1>
+            <p>Le catalogue classé par dossier : nom, nombre d’heures, places. Choisis-les directement à l’enregistrement d’une session.</p>
           </div>
         </header>
-        <CrudTable
-          isAdmin={canManage(profile?.role)}
-          title="une formation"
-          columns={[
-            { key: 'title', label: 'Titre' },
-            { key: 'reference', label: 'Référence' },
-            { key: 'category', label: 'Catégorie' },
-            { key: 'duration_hours', label: 'Durée (h)' },
-            { key: 'max_trainees', label: 'Max. stagiaires' },
-            { key: 'description', label: 'Description' },
-          ]}
-          fields={[
-            { name: 'title', label: 'Titre', required: true },
-            { name: 'reference', label: 'Référence' },
-            { name: 'category', label: 'Catégorie' },
-            { name: 'duration_hours', label: 'Durée (h)', type: 'number', step: '0.5', required: true },
-            { name: 'max_trainees', label: 'Max. stagiaires', type: 'number' },
-            { name: 'description', label: 'Description' },
-          ]}
-          rows={templates || []}
-          onCreate={createTemplate}
-          onDelete={deleteTemplate}
-          emptyLabel="Aucune formation enregistrée."
-        />
+        <TemplateCatalog templates={rows} canEdit={canManage(profile?.role)} />
       </section>
     </main>
   );

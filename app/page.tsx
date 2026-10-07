@@ -4,7 +4,7 @@ import { Planning } from '@/components/planning';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid } from '@/lib/week';
 
 const SESSION_SELECT =
-  'id, title, reference, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name), session_trainees(status)';
+  'id, title, reference, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status)';
 
 export default async function Page({
   searchParams,
@@ -17,19 +17,25 @@ export default async function Page({
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
   const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([
-    supabase.from('rooms').select('id, name, capacity').order('name'),
-    supabase.from('trainers').select('id, full_name').order('full_name'),
-    supabase.from('templates').select('id, title, duration_hours').order('title'),
+    supabase.from('rooms').select('id, name, capacity, is_holding, status').order('name'),
+    supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
+    supabase.from('templates').select('id, title, reference, category, duration_hours, max_trainees').order('title'),
   ]);
+
+  const safeDate = (v: string | undefined, suffix = '') => {
+    if (!v) return null;
+    const d = new Date(v + suffix);
+    return isNaN(d.getTime()) ? null : d;
+  };
 
   let rangeStart: Date;
   let rangeEnd: Date; // exclusif
   let monthAnchor = firstOfMonth(new Date());
-  let dayAnchor = day ? new Date(day + 'T00:00:00Z') : new Date(isoDate(new Date()) + 'T00:00:00Z');
-  let monday = week ? mondayOf(new Date(week)) : mondayOf(new Date());
+  const dayAnchor = safeDate(day, 'T00:00:00Z') || new Date(isoDate(new Date()) + 'T00:00:00Z');
+  const monday = mondayOf(safeDate(week) || new Date());
 
   if (currentView === 'month') {
-    monthAnchor = month ? new Date(month + '-01T00:00:00Z') : firstOfMonth(new Date());
+    monthAnchor = safeDate(month, '-01T00:00:00Z') || firstOfMonth(new Date());
     const weeks = monthWeekGrid(monthAnchor);
     rangeStart = weeks[0][0];
     rangeEnd = addDays(weeks[weeks.length - 1][4], 1);
@@ -41,7 +47,7 @@ export default async function Page({
     rangeEnd = addDays(monday, 5);
   }
 
-  // On élargit légèrement la requête (±1 jour) pour ne pas rater une session
+  // Requête légèrement élargie (±1 jour) pour ne pas rater une session
   // multi-jours qui commence avant ou finit après la période visible.
   const { data: sessions } = await supabase
     .from('sessions')
@@ -65,15 +71,17 @@ export default async function Page({
       <Sidebar active="/" profile={profile} />
       <Planning
         view={currentView}
-        isAdmin={canManage(profile?.role)}
-        rooms={rooms || []}
-        trainers={trainers || []}
-        templates={templates || []}
+        canEdit={canManage(profile?.role)}
+        myTrainerId={profile?.trainer_id || null}
+        rooms={(rooms as any) || []}
+        trainers={(trainers as any) || []}
+        templates={(templates as any) || []}
         sessions={(sessions as any) || []}
         dayOverrides={dayOverrides}
         mondayIso={isoDate(monday)}
         monthAnchorIso={isoDate(monthAnchor)}
         dayIso={isoDate(dayAnchor)}
+        todayIso={isoDate(new Date())}
       />
     </main>
   );
