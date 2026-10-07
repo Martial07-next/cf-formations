@@ -9,7 +9,6 @@ function readTemplate(formData: FormData) {
   const maxRaw = get('max_trainees');
   return {
     title: get('title'),
-    reference: get('reference') || null,
     category: get('category') || null, // « dossier » de la formation
     duration_hours: Number(get('duration_hours').replace(',', '.') || 0),
     max_trainees: maxRaw ? Number(maxRaw) : null,

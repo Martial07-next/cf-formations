@@ -1,6 +1,8 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { AdminUsersTable } from '@/components/admin-users-table';
+import { CreateAccessPanel } from '@/components/create-access-panel';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminTabs, AdminResourceLinks } from '@/components/admin-tabs';
 
 export default async function AdministrationPage() {
@@ -31,6 +33,18 @@ export default async function AdministrationPage() {
     .select('id, full_name, role, created_at')
     .order('created_at');
 
+  // E-mails des comptes (lisibles uniquement avec la clé service_role, côté serveur).
+  let serviceReady = true;
+  const emails = new Map<string, string>();
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    for (const u of data?.users || []) if (u.email) emails.set(u.id, u.email);
+  } catch {
+    serviceReady = false;
+  }
+  const rows = (profiles || []).map((p: any) => ({ ...p, email: emails.get(p.id) || null }));
+
   return (
     <main>
       <Sidebar active="/administration" profile={profile} />
@@ -55,8 +69,10 @@ export default async function AdministrationPage() {
           </ul>
         </div>
 
-        <h2 className="sub-heading" style={{ marginTop: 4 }}>Utilisateurs</h2>
-        <AdminUsersTable rows={profiles || []} currentUserId={user?.id || ''} />
+        <CreateAccessPanel serviceReady={serviceReady} />
+
+        <h2 className="sub-heading" style={{ marginTop: 4 }}>Accès existants</h2>
+        <AdminUsersTable rows={rows} currentUserId={user?.id || ''} />
 
         <h2 className="sub-heading">Contenu de la plateforme</h2>
         <AdminResourceLinks />

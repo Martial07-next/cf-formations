@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
+import { compareRooms } from '@/lib/buildings';
 import { formatSessionPeriod, sessionHours, formatHours } from '@/lib/week';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -24,11 +25,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       supabase
         .from('sessions')
         .select(
-          'id, title, reference, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding), trainers(id, full_name, color), templates(title, category, duration_hours)'
+          'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding), trainers(id, full_name, color), templates(title, category, duration_hours)'
         )
         .eq('id', id)
         .maybeSingle(),
-      supabase.from('rooms').select('id, name, capacity, is_holding').order('name'),
+      supabase.from('rooms').select('id, name, capacity, is_holding, location').order('name'),
       supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
       editable
         ? supabase.from('trainees').select('id, full_name, email, company').order('full_name')
@@ -90,7 +91,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           isAdmin={editable}
           session={session as any}
           template={template}
-          rooms={(rooms as any) || []}
+          rooms={[...((rooms as any[]) || [])].sort(compareRooms)}
           trainers={(trainers as any) || []}
           enrolled={enrolled}
           allTrainees={allTrainees || []}

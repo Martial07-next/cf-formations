@@ -22,7 +22,7 @@ import {
   fullDateLabel,
 } from '@/lib/week';
 
-type Room = { id: string; name: string; capacity: number; is_holding: boolean | null; status?: string | null };
+type Room = { id: string; name: string; capacity: number; is_holding: boolean | null; status?: string | null; location?: string | null };
 type Trainer = { id: string; full_name: string; color: string | null; status: string | null };
 type SessionRow = {
   id: string;
@@ -334,7 +334,7 @@ export function Planning({
                   ) : (
                     <>
                       {r.name}
-                      <small>{r.capacity} places{r.status === 'indisponible' ? ' · indisponible' : ''}</small>
+                      <small>{r.location ? `${r.location} · ` : ''}{r.capacity} places{r.status === 'indisponible' ? ' · indisponible' : ''}</small>
                     </>
                   )}
                 </div>

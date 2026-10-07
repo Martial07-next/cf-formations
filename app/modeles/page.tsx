@@ -7,7 +7,7 @@ export default async function ModelesPage() {
   const profile = await getCurrentProfile();
   const { data: templates } = await supabase
     .from('templates')
-    .select('id, title, reference, category, duration_hours, max_trainees, description, sessions(count)')
+    .select('id, title, category, duration_hours, max_trainees, description, sessions(count)')
     .order('title');
 
   const rows = (templates || []).map((t: any) => ({

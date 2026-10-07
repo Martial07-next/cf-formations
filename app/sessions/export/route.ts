@@ -11,7 +11,7 @@ export async function GET() {
   const { data: sessions } = await supabase
     .from('sessions')
     .select(
-      'title, reference, status, start_at, end_at, max_trainees, rooms(name), trainers(full_name), session_trainees(status)'
+      'title, status, start_at, end_at, max_trainees, rooms(name), trainers(full_name), session_trainees(status)'
     )
     .order('start_at', { ascending: false });
 
@@ -20,7 +20,6 @@ export async function GET() {
     const waiting = (s.session_trainees || []).filter((t: any) => t.status === 'en_attente').length;
     return {
       Titre: s.title,
-      Référence: s.reference || '',
       Statut: s.status,
       Salle: one(s.rooms)?.name || '',
       Formateur: one(s.trainers)?.full_name || '',

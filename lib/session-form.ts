@@ -3,7 +3,6 @@ import { isSessionStatus, type SessionStatus } from '@/lib/status';
 
 export type SessionInput = {
   title: string;
-  reference: string | null;
   room_id: string;
   trainer_id: string | null;
   template_id: string | null;
@@ -50,7 +49,6 @@ export function parseSessionForm(formData: FormData): { ok: true; value: Session
     ok: true,
     value: {
       title,
-      reference: get('reference') || null,
       room_id: roomId,
       trainer_id: get('trainer_id') || null,
       template_id: get('template_id') || null,

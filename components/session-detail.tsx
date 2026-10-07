@@ -23,7 +23,6 @@ type EnrolledTrainee = Trainee & { status: 'validee' | 'en_attente' };
 type SessionDetail = {
   id: string;
   title: string;
-  reference: string | null;
   status: string;
   start_at: string;
   end_at: string;
@@ -138,7 +137,6 @@ export function SessionDetailView({
           templates={[]}
           defaults={{
             title: session.title,
-            reference: session.reference,
             room_id: session.room_id,
             trainer_id: session.trainer_id,
             status: session.status,

@@ -9,7 +9,6 @@ import { formatHours } from '@/lib/week';
 type Template = {
   id: string;
   title: string;
-  reference: string | null;
   category: string | null;
   duration_hours: number;
   max_trainees: number | null;
@@ -17,13 +16,13 @@ type Template = {
   sessions_count: number;
 };
 
-function TemplateFields({ t, folders }: { t?: Template; folders: string[] }) {
+function TemplateFields({ t, folders, folder }: { t?: Template; folders: string[]; folder?: string }) {
   return (
     <>
       <div className="form-row">
         <label>
           Dossier
-          <input name="category" list="template-folders" defaultValue={t?.category || ''} placeholder="Ex. Sécurité, Électricité…" />
+          <input name="category" list="template-folders" defaultValue={t?.category ?? folder ?? ''} placeholder="Ex. Sécurité, Électricité…" />
         </label>
         <label style={{ gridColumn: 'span 2' }}>
           Nom de la formation
@@ -31,10 +30,6 @@ function TemplateFields({ t, folders }: { t?: Template; folders: string[] }) {
         </label>
       </div>
       <div className="form-row">
-        <label>
-          Référence
-          <input name="reference" defaultValue={t?.reference || ''} />
-        </label>
         <label>
           Nombre d’heures
           <input name="duration_hours" type="number" step="0.5" min="0.5" required defaultValue={t?.duration_hours ?? ''} />
@@ -61,13 +56,14 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
   const [query, setQuery] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [addFolder, setAddFolder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return templates;
-    return templates.filter((t) => `${t.title} ${t.reference ?? ''} ${t.category ?? ''}`.toLowerCase().includes(q));
+    return templates.filter((t) => `${t.title} ${t.category ?? ''}`.toLowerCase().includes(q));
   }, [templates, query]);
   const folders = useMemo(() => groupByFolder(filtered), [filtered]);
   const folderNames = useMemo(
@@ -94,7 +90,7 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
         </label>
         {canEdit && (
           <button className={addOpen ? '' : 'primary'} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen}>
-            <Plus size={16} aria-hidden /> {addOpen ? 'Fermer' : 'Ajouter une formation'}
+            <Plus size={16} aria-hidden /> {addOpen ? 'Fermer' : 'Nouveau dossier / formation'}
           </button>
         )}
       </div>
@@ -104,6 +100,7 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
       {canEdit && addOpen && (
         <div className="panel">
           <h2>Nouvelle formation</h2>
+          <p className="panel-intro">Pour créer un nouveau dossier, tape simplement son nom dans « Dossier ».</p>
           <form action={(fd) => run(() => createTemplate(fd), () => setAddOpen(false))}>
             <TemplateFields folders={folderNames} />
             <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
@@ -123,13 +120,42 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
                 <Folder size={17} aria-hidden />
                 {folder}
                 <small>{items.length} formation{items.length > 1 ? 's' : ''} · {formatHours(total)}</small>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="small icon primary"
+                    aria-label={`Ajouter une formation dans ${folder}`}
+                    title="Ajouter une formation dans ce dossier"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setError(null);
+                      setAddFolder(addFolder === folder ? null : folder);
+                      (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.setAttribute('open', '');
+                    }}
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
               </summary>
+              {canEdit && addFolder === folder && (
+                <div style={{ padding: '16px 18px', borderTop: '1px solid var(--line)', background: 'var(--surface-2)' }}>
+                  <form action={(fd) => run(() => createTemplate(fd), () => setAddFolder(null))}>
+                    <TemplateFields folders={folderNames} folder={folder === 'Sans dossier' ? '' : folder} />
+                    <div className="row-actions">
+                      <button type="submit" className="primary" disabled={isPending}>
+                        {isPending ? 'Enregistrement…' : `Ajouter dans « ${folder} »`}
+                      </button>
+                      <button type="button" onClick={() => setAddFolder(null)}>Annuler</button>
+                    </div>
+                  </form>
+                </div>
+              )}
               <div style={{ overflowX: 'auto' }}>
                 <table className="data">
                   <thead>
                     <tr>
                       <th>Formation</th>
-                      <th>Référence</th>
                       <th className="num">Heures</th>
                       <th className="num">Places</th>
                       <th className="num">Sessions</th>
@@ -140,7 +166,7 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
                     {items.map((t) =>
                       editingId === t.id ? (
                         <tr key={t.id}>
-                          <td colSpan={canEdit ? 6 : 5} style={{ background: 'var(--surface-2)', padding: 16 }}>
+                          <td colSpan={canEdit ? 5 : 4} style={{ background: 'var(--surface-2)', padding: 16 }}>
                             <form action={(fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null))}>
                               <TemplateFields t={t} folders={folderNames} />
                               <div className="row-actions">
@@ -156,7 +182,6 @@ export function TemplateCatalog({ templates, canEdit }: { templates: Template[];
                             <strong>{t.title}</strong>
                             {t.description && <div className="hint">{t.description}</div>}
                           </td>
-                          <td>{t.reference || '—'}</td>
                           <td className="num">{formatHours(Number(t.duration_hours))}</td>
                           <td className="num">{t.max_trainees ?? '—'}</td>
                           <td className="num">{t.sessions_count}</td>

@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
+import { BUILDINGS, compareRooms } from '@/lib/buildings';
 import { createRoom, deleteRoom, updateRoom, updateRoomStatus } from './actions';
 
 export default async function SallesPage() {
@@ -9,7 +10,9 @@ export default async function SallesPage() {
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name, capacity, location, equipment, status')
+    .eq('is_holding', false) // la salle virtuelle « À affecter » n'est pas une vraie salle
     .order('name');
+  const rows = [...(rooms || [])].sort(compareRooms).map((r: any) => ({ ...r, location: r.location || '' }));
 
   return (
     <main>
@@ -19,7 +22,7 @@ export default async function SallesPage() {
           <div>
             <p className="eyebrow">Ressources</p>
             <h1>Salles</h1>
-            <p>Capacité, équipements et disponibilité de chaque salle.</p>
+            <p>Deux adresses : BAT 1 (salles 1, 2, 3) et BAT 2 (salles 4, 5, 6).</p>
           </div>
         </header>
         <CrudTable
@@ -28,13 +31,18 @@ export default async function SallesPage() {
           columns={[
             { key: 'name', label: 'Nom' },
             { key: 'capacity', label: 'Capacité' },
-            { key: 'location', label: 'Localisation' },
+            { key: 'location', label: 'Bâtiment' },
             { key: 'equipment', label: 'Équipements' },
           ]}
           fields={[
             { name: 'name', label: 'Nom', required: true },
             { name: 'capacity', label: 'Capacité', type: 'number', required: true },
-            { name: 'location', label: 'Localisation' },
+            {
+              name: 'location',
+              label: 'Bâtiment',
+              type: 'select',
+              options: [...BUILDINGS.map((b) => ({ value: b, label: b })), { value: '', label: '— Non renseigné —' }],
+            },
             { name: 'equipment', label: 'Équipements' },
             {
               name: 'status',
@@ -47,7 +55,7 @@ export default async function SallesPage() {
               ],
             },
           ]}
-          rows={rooms || []}
+          rows={rows}
           onCreate={createRoom}
           onDelete={deleteRoom}
           onUpdate={updateRoom}

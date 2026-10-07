@@ -4,12 +4,11 @@ import { useMemo, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { formatHours } from '@/lib/week';
 
-export type FormRoom = { id: string; name: string; capacity: number; is_holding?: boolean | null };
+export type FormRoom = { id: string; name: string; capacity: number; is_holding?: boolean | null; location?: string | null };
 export type FormTrainer = { id: string; full_name: string; color: string | null; status?: string | null };
 export type FormTemplate = {
   id: string;
   title: string;
-  reference: string | null;
   category: string | null;
   duration_hours: number;
   max_trainees: number | null;
@@ -17,7 +16,6 @@ export type FormTemplate = {
 
 export type SessionFormDefaults = {
   title?: string;
-  reference?: string | null;
   room_id?: string;
   trainer_id?: string | null;
   template_id?: string | null;
@@ -92,7 +90,6 @@ export function SessionForm({
 }) {
   const [templateId, setTemplateId] = useState(defaults.template_id || '');
   const [title, setTitle] = useState(defaults.title || '');
-  const [reference, setReference] = useState(defaults.reference || '');
   const [maxTrainees, setMaxTrainees] = useState(defaults.max_trainees != null ? String(defaults.max_trainees) : '');
   const [startDate, setStartDate] = useState(defaults.start_date || '');
   const [endDate, setEndDate] = useState(defaults.end_date || '');
@@ -113,14 +110,14 @@ export function SessionForm({
     const t = templates.find((x) => x.id === id);
     if (!t) return;
     setTitle(t.title);
-    setReference(t.reference || '');
     setMaxTrainees(t.max_trainees != null ? String(t.max_trainees) : '');
     // Formation courte (une journée) : on calcule directement l'heure de fin.
     if (t.duration_hours <= 8) setEndTime(addMinutes(startTime, Math.round(t.duration_hours * 60)));
   }
 
   const physicalRooms = rooms.filter((r) => !r.is_holding);
-  const holdingRooms = rooms.filter((r) => r.is_holding);
+  // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
+  const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
   const activeTrainers = trainers.filter((t) => t.status !== 'inactif' || t.id === defaults.trainer_id);
 
   return (
@@ -147,13 +144,9 @@ export function SessionForm({
         )}
 
         <div className="form-row">
-          <label style={{ gridColumn: 'span 2' }}>
+          <label>
             Nom de la formation
             <input name="title" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex. Habilitation électrique B0" />
-          </label>
-          <label>
-            Référence
-            <input name="reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex. HAB-B0" />
           </label>
         </div>
 
@@ -162,7 +155,7 @@ export function SessionForm({
             Salle
             <select name="room_id" required defaultValue={defaults.room_id || physicalRooms[0]?.id || ''}>
               {physicalRooms.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} ({r.capacity} places)</option>
+                <option key={r.id} value={r.id}>{r.location ? `${r.location} — ` : ''}{r.name} ({r.capacity} places)</option>
               ))}
               {holdingRooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>

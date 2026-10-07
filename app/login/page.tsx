@@ -1,4 +1,4 @@
-import { login, signup } from './actions';
+import { login } from './actions';
 import { Zap } from 'lucide-react';
 
 export default async function LoginPage({
@@ -34,14 +34,12 @@ export default async function LoginPage({
             Mot de passe
             <input name="password" type="password" required minLength={6} placeholder="••••••••" />
           </label>
-          <label>
-            Nom complet <small>(uniquement pour la création de compte)</small>
-            <input name="full_name" type="text" placeholder="Camille Martin" />
-          </label>
           <div className="auth-actions">
             <button formAction={login} className="primary">Se connecter</button>
-            <button formAction={signup}>Créer un compte</button>
           </div>
+          <p className="hint" style={{ textAlign: 'center' }}>
+            Pas encore d’accès ? Demande-le au bureau administratif.
+          </p>
         </form>
       </div>
     </main>

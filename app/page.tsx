@@ -1,10 +1,11 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
+import { compareRooms } from '@/lib/buildings';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid } from '@/lib/week';
 
 const SESSION_SELECT =
-  'id, title, reference, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status)';
+  'id, title, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status)';
 
 export default async function Page({
   searchParams,
@@ -17,9 +18,9 @@ export default async function Page({
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
   const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([
-    supabase.from('rooms').select('id, name, capacity, is_holding, status').order('name'),
+    supabase.from('rooms').select('id, name, capacity, is_holding, status, location').order('name'),
     supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
-    supabase.from('templates').select('id, title, reference, category, duration_hours, max_trainees').order('title'),
+    supabase.from('templates').select('id, title, category, duration_hours, max_trainees').order('title'),
   ]);
 
   const safeDate = (v: string | undefined, suffix = '') => {
@@ -73,7 +74,7 @@ export default async function Page({
         view={currentView}
         canEdit={canManage(profile?.role)}
         myTrainerId={profile?.trainer_id || null}
-        rooms={(rooms as any) || []}
+        rooms={[...((rooms as any[]) || [])].sort(compareRooms)}
         trainers={(trainers as any) || []}
         templates={(templates as any) || []}
         sessions={(sessions as any) || []}
