@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { formatHours } from '@/lib/week';
+import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
 
 export type FormRoom = { id: string; name: string; capacity: number; is_holding?: boolean | null; location?: string | null };
 export type FormTrainer = { id: string; full_name: string; color: string | null; status?: string | null };
@@ -27,18 +28,6 @@ export type SessionFormDefaults = {
   start_time?: string;
   end_time?: string;
 };
-
-function addMinutes(hhmm: string, minutes: number): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-function minutesBetween(a: string, b: string): number {
-  const [ah, am] = a.split(':').map(Number);
-  const [bh, bm] = b.split(':').map(Number);
-  return bh * 60 + bm - (ah * 60 + am);
-}
 
 function countWeekdays(startIso: string, endIso: string): number {
   if (!startIso) return 0;
@@ -92,18 +81,42 @@ export function SessionForm({
   const [title, setTitle] = useState(defaults.title || '');
   const [maxTrainees, setMaxTrainees] = useState(defaults.max_trainees != null ? String(defaults.max_trainees) : '');
   const [startDate, setStartDate] = useState(defaults.start_date || '');
-  const [endDate, setEndDate] = useState(defaults.end_date || '');
+  const [manualEndDate, setManualEndDate] = useState(defaults.end_date || '');
   const [startTime, setStartTime] = useState(defaults.start_time || '09:00');
-  const [endTime, setEndTime] = useState(defaults.end_time || '17:00');
+  const [manualEndTime, setManualEndTime] = useState(defaults.end_time || '17:00');
+  // Durée totale (heures + minutes) : sert au calcul automatique des dates/horaires.
+  const [durH, setDurH] = useState('');
+  const [durM, setDurM] = useState('0');
+  const [auto, setAuto] = useState(showTemplate);
   const [trainerId, setTrainerId] = useState(defaults.trainer_id || '');
 
   const template = templates.find((t) => t.id === templateId) || null;
   const folders = useMemo(() => groupByFolder(templates), [templates]);
   const trainer = trainers.find((t) => t.id === trainerId);
 
+  const durationMinutes = (Number(durH) || 0) * 60 + (Number(durM) || 0);
+  // Calcul intelligent : journées de 7 h, pause 12h–13h, week-ends sautés.
+  const plan = auto && durationMinutes > 0 && startDate ? planDays(startDate, startTime, durationMinutes) : [];
+  const fullDayEnd = plan.length ? plan[0].end : null;
+  const endDate = plan.length ? plan[plan.length - 1].day : manualEndDate;
+  const endTime = plan.length ? plan[0].end : manualEndTime;
+  const lastDayEnd = plan.length > 1 && plan[plan.length - 1].end !== fullDayEnd ? plan[plan.length - 1].end : '';
+
   const days = countWeekdays(startDate, endDate);
-  const dailyMinutes = minutesBetween(startTime, endTime);
-  const plannedHours = days > 0 && dailyMinutes > 0 ? Math.round(((days * dailyMinutes) / 60) * 10) / 10 : 0;
+  const dailyMinutes = trainingMinutes(startTime, endTime);
+  const plannedMinutes = plan.length
+    ? plan.reduce((n, d) => n + d.minutes, 0)
+    : days > 0 && dailyMinutes > 0
+      ? days * dailyMinutes
+      : 0;
+  const plannedHours = plannedMinutes / 60;
+
+  function setDuration(hours: number) {
+    const { h, m } = splitHours(hours);
+    setDurH(String(h));
+    setDurM(String(m));
+    setAuto(true);
+  }
 
   function applyTemplate(id: string) {
     setTemplateId(id);
@@ -111,8 +124,7 @@ export function SessionForm({
     if (!t) return;
     setTitle(t.title);
     setMaxTrainees(t.max_trainees != null ? String(t.max_trainees) : '');
-    // Formation courte (une journée) : on calcule directement l'heure de fin.
-    if (t.duration_hours <= 8) setEndTime(addMinutes(startTime, Math.round(t.duration_hours * 60)));
+    setDuration(Number(t.duration_hours));
   }
 
   const physicalRooms = rooms.filter((r) => !r.is_holding);
@@ -180,44 +192,108 @@ export function SessionForm({
           </label>
         </div>
 
+        {showTemplate && (
+          <div className="form-row">
+            <div className="field">
+              Durée totale de la formation
+              <span className="duration-input">
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  aria-label="Heures"
+                  value={durH}
+                  onChange={(e) => {
+                    setDurH(e.target.value);
+                    setAuto(true);
+                  }}
+                  placeholder="21"
+                />
+                <span>h</span>
+                <select aria-label="Minutes" value={durM} onChange={(e) => { setDurM(e.target.value); setAuto(true); }}>
+                  {['0', '15', '30', '45'].map((m) => (
+                    <option key={m} value={m}>{m.padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span>min</span>
+              </span>
+            </div>
+            <p className="hint" style={{ alignSelf: 'end', marginBottom: 10 }}>
+              Les dates et horaires de fin se calculent seuls : journées de {FULL_DAY_MINUTES / 60} h, pause 12h–13h,
+              sans les week-ends.
+            </p>
+          </div>
+        )}
+
         <div className="form-row">
           <label>
             Date de début
+            <input name="start_date" type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label>
+            Heure de début
+            <input name="start_time" type="time" required step={300} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </label>
+          <label>
+            Date de fin
             <input
-              name="start_date"
+              name="end_date"
               type="date"
               required
-              value={startDate}
+              min={startDate || undefined}
+              value={endDate}
               onChange={(e) => {
-                setStartDate(e.target.value);
-                if (!endDate || endDate < e.target.value) setEndDate(e.target.value);
+                setAuto(false);
+                setManualEndTime(endTime);
+                setManualEndDate(e.target.value);
               }}
             />
           </label>
           <label>
-            Date de fin
-            <input name="end_date" type="date" required min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </label>
-          <label>
-            Heure de début
-            <input name="start_time" type="time" required step={900} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-          </label>
-          <label>
-            Heure de fin
-            <input name="end_time" type="time" required step={900} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            {plan.length > 1 ? 'Heure de fin (par jour)' : 'Heure de fin'}
+            <input
+              name="end_time"
+              type="time"
+              required
+              step={300}
+              value={endTime}
+              onChange={(e) => {
+                setAuto(false);
+                setManualEndDate(endDate);
+                setManualEndTime(e.target.value);
+              }}
+            />
           </label>
         </div>
-        <p className="hint" style={{ margin: '-4px 0 14px' }}>
-          {plannedHours > 0 ? (
+        {lastDayEnd && <input type="hidden" name="last_day_end" value={lastDayEnd} />}
+
+        <div className="plan-summary">
+          {plan.length > 0 ? (
             <>
-              Planifié : <strong>{formatHours(plannedHours)}</strong> sur {days} jour{days > 1 ? 's' : ''} ouvré{days > 1 ? 's' : ''}
-              {template && <> · catalogue : {formatHours(Number(template.duration_hours))}</>}
-              {template && Math.abs(plannedHours - Number(template.duration_hours)) >= 0.5 && ' (différent de la durée prévue)'}
+              <strong>{formatHours(plannedHours)}</strong> sur {plan.length} jour{plan.length > 1 ? 's' : ''} :{' '}
+              {plan.map((d, i) => (
+                <span key={d.day} className="plan-day">
+                  {new Date(d.day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{' '}
+                  {d.start.replace(':', 'h')}–{d.end.replace(':', 'h')}
+                  {i < plan.length - 1 ? ' · ' : ''}
+                </span>
+              ))}
+              <span className="hint"> (pause 12h–13h déduite)</span>
+            </>
+          ) : plannedHours > 0 ? (
+            <>
+              <strong>{formatHours(plannedHours)}</strong> sur {days} jour{days > 1 ? 's' : ''} ouvré{days > 1 ? 's' : ''}, pause 12h–13h déduite
+              {template && Math.abs(plannedHours - Number(template.duration_hours)) >= 0.25 && (
+                <> · <span style={{ color: 'var(--wait-ink)' }}>catalogue : {formatHours(Number(template.duration_hours))}</span></>
+              )}
+              {showTemplate && durationMinutes > 0 && (
+                <> · <button type="button" className="small ghost" onClick={() => setAuto(true)}>Recalculer</button></>
+              )}
             </>
           ) : (
-            'Pour une formation sur plusieurs jours, choisis une date de fin différente. Les horaires s’appliquent à chaque jour (modifiables jour par jour ensuite).'
+            <span className="hint">Indique la durée totale (ou choisis une formation) et la date de début : la fin est calculée automatiquement.</span>
           )}
-        </p>
+        </div>
 
         <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
           <div className="field">

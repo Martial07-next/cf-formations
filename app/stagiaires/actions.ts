@@ -3,7 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { findOrCreateTrainee } from '@/lib/trainee-conflict';
+import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
+import { parseNameList } from '@/lib/name-list';
 import { buildFullName, readTraineeName } from '@/lib/trainee-name';
 
 export async function createTrainee(formData: FormData) {
@@ -142,4 +143,66 @@ export async function importTraineesFromDigiforma(): Promise<ImportResult> {
 
   revalidatePath('/stagiaires');
   return { ok: true, created, matched, skipped: 0, errors };
+}
+
+export type PasteImportResult =
+  | { ok: true; created: number; matched: number; enrolled: number; errors: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Importe une liste collée (Nom + Prénom, une personne par ligne).
+ * Avec `sessionId`, les stagiaires sont aussi inscrits à cette session.
+ */
+export async function importTraineesFromText(formData: FormData): Promise<PasteImportResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const text = String(formData.get('list') || '');
+  const order = formData.get('order') === 'prenom_nom' ? 'prenom_nom' : 'nom_prenom';
+  const sessionId = String(formData.get('session_id') || '') || null;
+  const enrollStatus = formData.get('enroll_status') === 'validee' ? 'validee' : 'en_attente';
+
+  const rows = parseNameList(text, order);
+  if (rows.length === 0) return { ok: false, error: 'Aucun nom trouvé. Colle une personne par ligne (Nom et Prénom).' };
+  if (rows.length > 1000) return { ok: false, error: 'Trop de lignes d’un coup (1000 maximum).' };
+
+  const supabase = await createClient();
+  const session = sessionId
+    ? (await supabase.from('sessions').select('id, start_at, end_at').eq('id', sessionId).maybeSingle()).data
+    : null;
+  if (sessionId && !session) return { ok: false, error: 'Session introuvable.' };
+
+  let created = 0;
+  let matched = 0;
+  let enrolled = 0;
+  const errors: string[] = [];
+
+  for (const row of rows) {
+    const label = [row.name.first_name, row.name.last_name].filter(Boolean).join(' ');
+    const trainee = await findOrCreateTrainee(supabase, row.name, row.email);
+    if (!trainee) {
+      errors.push(`Ligne ${row.line} (${label}) : création impossible.`);
+      continue;
+    }
+    if (trainee.created) created++;
+    else matched++;
+
+    if (session) {
+      let status: 'validee' | 'en_attente' = enrollStatus;
+      if (status === 'validee') {
+        const conflict = await findTraineeConflict(supabase, trainee.id, session.start_at, session.end_at, session.id);
+        if (conflict) {
+          status = 'en_attente';
+          errors.push(`${label} : déjà validé sur « ${conflict.title} » sur ce créneau — mis en attente.`);
+        }
+      }
+      const { error } = await supabase
+        .from('session_trainees')
+        .upsert({ session_id: session.id, trainee_id: trainee.id, status }, { onConflict: 'session_id,trainee_id' });
+      if (error) errors.push(`${label} : ${error.message}`);
+      else enrolled++;
+    }
+  }
+
+  revalidatePath('/stagiaires');
+  if (sessionId) revalidatePath(`/sessions/${sessionId}`);
+  return { ok: true, created, matched, enrolled, errors };
 }

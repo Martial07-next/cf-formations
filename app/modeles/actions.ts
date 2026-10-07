@@ -10,7 +10,8 @@ function readTemplate(formData: FormData) {
   return {
     title: get('title'),
     category: get('category') || null, // « dossier » de la formation
-    duration_hours: Number(get('duration_hours').replace(',', '.') || 0),
+    // Saisie en heures + minutes (ex. 7 h 30), stockée en heures décimales.
+    duration_hours: Math.max(0, Number.parseInt(get('duration_h') || '0', 10) || 0) + (Number.parseInt(get('duration_min') || '0', 10) || 0) / 60,
     max_trainees: maxRaw ? Number(maxRaw) : null,
     description: get('description') || null,
   };
@@ -24,7 +25,7 @@ function refresh() {
 export async function createTemplate(formData: FormData) {
   if (!(await requireManager())) return FORBIDDEN;
   const t = readTemplate(formData);
-  if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et nombre d’heures (> 0) requis.' };
+  if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
   const { error } = await supabase.from('templates').insert(t);
   if (error) return { ok: false, error: error.message };
@@ -35,7 +36,7 @@ export async function createTemplate(formData: FormData) {
 export async function updateTemplate(id: string, formData: FormData) {
   if (!(await requireManager())) return FORBIDDEN;
   const t = readTemplate(formData);
-  if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et nombre d’heures (> 0) requis.' };
+  if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
   const { error } = await supabase.from('templates').update(t).eq('id', id);
   if (error) return { ok: false, error: error.message };

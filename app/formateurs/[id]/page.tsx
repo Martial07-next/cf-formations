@@ -4,12 +4,21 @@ import { ArrowLeft, Mail, Phone } from 'lucide-react';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
-import { loadDayOverrides, hoursOf, one } from '@/lib/history';
+import { loadDayOverrides, hoursOf, one, hoursByMonth } from '@/lib/history';
+import { MonthlyTable } from '@/components/monthly-table';
 import { formatHours } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 
-export default async function TrainerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TrainerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ annee?: string }>;
+}) {
   const { id } = await params;
+  const { annee } = await searchParams;
+  const year = Number.parseInt(annee || '', 10) || new Date().getUTCFullYear();
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
@@ -85,6 +94,13 @@ export default async function TrainerDetailPage({ params }: { params: Promise<{ 
           <div className="stat"><span>Heures planifiées</span><strong>{formatHours(sum(upcoming))}</strong><small>{upcoming.length} session{upcoming.length > 1 ? 's' : ''} à venir</small></div>
           <div className="stat"><span>Sessions réalisées</span><strong>{done.length}</strong><small>{traineesTrained} stagiaire{traineesTrained > 1 ? 's' : ''} formé{traineesTrained > 1 ? 's' : ''}</small></div>
         </div>
+
+        <MonthlyTable
+          title="Suivi mensuel"
+          year={year}
+          yearHref={(y) => `/formateurs/${id}?annee=${y}`}
+          rows={[{ label: 'Heures', ...hoursByMonth((sessions || []) as any[], overrides, year) }]}
+        />
 
         <TrainingHistory entries={entries} emptyLabel="Ce formateur n’a encore animé aucune session." />
       </section>

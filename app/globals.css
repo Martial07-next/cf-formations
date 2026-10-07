@@ -357,3 +357,23 @@ dialog.modal::backdrop{background:rgba(10,20,14,.45)}
 .purge-list label:has(input:checked){border-color:#e8a4a1;background:#fff6f5}
 .purge-list input{margin-top:3px;accent-color:var(--cf-red)}
 .purge-list small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+
+/* Durée (heures + minutes) et récapitulatif du calcul des journées */
+.duration-input{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink-2)}
+.duration-input input{width:90px}
+.duration-input select{padding:9px 10px;min-height:40px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:#fff}
+.plan-summary{font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:-4px 0 14px;line-height:1.7}
+.plan-day{white-space:nowrap;text-transform:capitalize}
+
+/* Suivi mensuel / annuel */
+.year-nav{display:inline-flex;align-items:center;gap:8px}
+.year-nav strong{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
+table.monthly th,table.monthly td{padding:9px 10px;white-space:nowrap}
+table.monthly td.num strong,table.monthly td.num small{display:block}
+table.monthly td.num strong{font-size:13px}
+table.monthly small{font-size:10.5px}
+.planned-part{color:var(--wait-ink)}
+table.monthly .current-month{background:var(--cf-mint-soft)}
+table.monthly .year-total{background:var(--surface-2);border-left:1px solid var(--line)}
+table.monthly tr.total-row td{font-weight:800;background:var(--surface-2)}
+.radio-inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}

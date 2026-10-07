@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { CalendarClock } from 'lucide-react';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
-import { loadDayOverrides, hoursOf } from '@/lib/history';
+import { loadDayOverrides, hoursByMonth } from '@/lib/history';
+import { MonthlyTable } from '@/components/monthly-table';
 import { formatHours, formatSessionPeriod } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
@@ -10,7 +11,8 @@ import { SESSION_STATUS_LABEL } from '@/lib/status';
 type Trainer = { id: string; full_name: string; color: string | null; status: string; specialty: string | null; referent_id: string | null };
 type Session = { id: string; title: string; status: string; start_at: string; end_at: string; trainer_id: string };
 
-export default async function EquipePage() {
+export default async function EquipePage({ searchParams }: { searchParams: Promise<{ annee?: string }> }) {
+  const { annee } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === 'admin';
@@ -39,9 +41,12 @@ export default async function EquipePage() {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const yearStart = `${nowIso.slice(0, 4)}-01-01`;
-  const monthStart = `${nowIso.slice(0, 7)}-01`;
-  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const year = Number.parseInt(annee || '', 10) || currentYear;
+  // Sessions couvrant l'année affichée et l'année en cours (pour les cartes).
+  const fromYear = Math.min(year, currentYear);
+  const toYear = Math.max(year, currentYear);
 
   const ids = trainers.map((t) => t.id);
   const { data: sessionsData } = ids.length
@@ -49,20 +54,22 @@ export default async function EquipePage() {
         .from('sessions')
         .select('id, title, status, start_at, end_at, trainer_id')
         .in('trainer_id', ids)
-        .gte('end_at', yearStart)
+        .gte('end_at', `${fromYear}-01-01`)
+        .lt('start_at', `${toYear + 1}-01-01`)
         .order('start_at')
     : { data: [] as Session[] };
   const sessions = (sessionsData || []) as Session[];
   const overrides = await loadDayOverrides(supabase, sessions.map((s) => s.id));
 
-  const sum = (list: Session[]) => Math.round(list.reduce((n, s) => n + hoursOf(s, overrides), 0) * 10) / 10;
+  const total = (a: number[]) => a.reduce((n, x) => n + x, 0);
 
   function statsFor(t: Trainer) {
     const own = sessions.filter((s) => s.trainer_id === t.id && s.status !== 'brouillon');
     const upcoming = own.filter((s) => s.end_at >= nowIso);
+    const current = hoursByMonth(own, overrides, currentYear);
     return {
-      month: sum(own.filter((s) => s.start_at < nextMonthStart && s.end_at >= monthStart)),
-      year: sum(own.filter((s) => s.end_at < nowIso)),
+      month: current.done[currentMonth] + current.planned[currentMonth],
+      year: total(current.done),
       upcoming,
       waiting: upcoming.filter((s) => s.status === 'planifiee').length,
       next: upcoming[0] || null,
@@ -113,6 +120,24 @@ export default async function EquipePage() {
           </p>
         )}
 
+        {trainers.length > 0 && (
+          <MonthlyTable
+            title={`Suivi mois par mois — ${isAdmin ? 'tous les formateurs' : 'mon équipe'}`}
+            year={year}
+            yearHref={(y) => `/equipe?annee=${y}`}
+            rows={trainers.map((t) => ({
+              label: t.full_name,
+              href: `/formateurs/${t.id}?annee=${year}`,
+              color: t.color || DEFAULT_TRAINER_COLOR,
+              ...hoursByMonth(
+                sessions.filter((s) => s.trainer_id === t.id),
+                overrides,
+                year
+              ),
+            }))}
+          />
+        )}
+
         {teamList.map(([referentId, members]) => (
           <section key={referentId || 'none'}>
             {isAdmin && (
@@ -136,7 +161,7 @@ export default async function EquipePage() {
                     {t.specialty && <span className="hint">{t.specialty}</span>}
                     <div className="mini-stats">
                       <div><strong>{formatHours(st.month)}</strong><span>ce mois</span></div>
-                      <div><strong>{formatHours(st.year)}</strong><span>réalisées {nowIso.slice(0, 4)}</span></div>
+                      <div><strong>{formatHours(st.year)}</strong><span>réalisées {currentYear}</span></div>
                       <div><strong>{st.upcoming.length}</strong><span>à venir</span></div>
                     </div>
                     <div className="next">

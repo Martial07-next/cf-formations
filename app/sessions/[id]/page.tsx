@@ -89,6 +89,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
         <SessionDetailView
           isAdmin={editable}
+          digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}
           template={template}
           rooms={[...((rooms as any[]) || [])].sort(compareRooms)}

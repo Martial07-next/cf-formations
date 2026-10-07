@@ -12,6 +12,7 @@ import {
 } from '@/app/sessions/[id]/actions';
 import { deleteSession } from '@/app/sessions/actions';
 import { CsvImportTrainees } from '@/components/csv-import';
+import { PasteImport } from '@/components/paste-import';
 import { DigiformaPanel } from '@/components/digiforma-panel';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
@@ -37,6 +38,7 @@ export function SessionDetailView({
   isAdmin,
   session,
   template,
+  digiformaEnabled,
   rooms,
   trainers,
   enrolled,
@@ -45,6 +47,7 @@ export function SessionDetailView({
 }: {
   isAdmin: boolean;
   session: SessionDetail;
+  digiformaEnabled: boolean;
   template: { title: string; category: string | null; duration_hours: number } | null;
   rooms: FormRoom[];
   trainers: FormTrainer[];
@@ -170,7 +173,8 @@ export function SessionDetailView({
         overrides={dayOverrides}
       />
 
-      {isAdmin && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
+      {isAdmin && <PasteImport sessionId={session.id} />}
+      {isAdmin && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
       {isAdmin && <CsvImportTrainees sessionId={session.id} />}
 
       <div className="panel">

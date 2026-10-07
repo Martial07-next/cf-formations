@@ -1,3 +1,5 @@
+import { trainingMinutes } from '@/lib/schedule';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Renvoie le lundi (00:00 UTC) de la semaine contenant `date`. */
@@ -179,26 +181,28 @@ export function weekdaysBetween(startAt: string, endAt: string): string[] {
   });
 }
 
-function minutesOf(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + (m || 0);
-}
-
 /**
  * Nombre d'heures de formation d'une session : somme, sur chaque jour ouvré
- * couvert, de l'horaire effectif du jour (horaire spécifique s'il existe).
+ * couvert, de l'horaire effectif du jour, pause déjeuner (12h–13h) déduite.
  */
 export function sessionHours(startAt: string, endAt: string, overrides: DayOverride[] = []): number {
-  const days = weekdaysBetween(startAt, endAt);
-  const list = days.length ? days : [startAt.slice(0, 10)];
-  let minutes = 0;
-  for (const day of list) {
-    const { start, end } = effectiveDayTime(day, startAt, endAt, overrides);
-    minutes += Math.max(0, minutesOf(end) - minutesOf(start));
-  }
-  return Math.round((minutes / 60) * 10) / 10;
+  return Math.round(dayHours(startAt, endAt, overrides).reduce((n, d) => n + d.minutes, 0) / 6) / 10;
 }
 
+/** Détail jour par jour des minutes de formation d'une session. */
+export function dayHours(startAt: string, endAt: string, overrides: DayOverride[] = []): { day: string; minutes: number }[] {
+  const days = weekdaysBetween(startAt, endAt);
+  const list = days.length ? days : [startAt.slice(0, 10)];
+  return list.map((day) => {
+    const { start, end } = effectiveDayTime(day, startAt, endAt, overrides);
+    return { day, minutes: trainingMinutes(start, end) };
+  });
+}
+
+/** 7.5 → « 7 h 30 », 21 → « 21 h » (jamais de décimales). */
 export function formatHours(h: number): string {
-  return `${String(h).replace('.', ',')} h`;
+  const total = Math.round((Number(h) || 0) * 60);
+  const hh = Math.floor(total / 60);
+  const mm = total % 60;
+  return mm ? `${hh} h ${String(mm).padStart(2, '0')}` : `${hh} h`;
 }

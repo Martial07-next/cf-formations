@@ -5,6 +5,7 @@ import { ChevronRight, Folder, Pencil, Plus, Search, Trash2 } from 'lucide-react
 import { createTemplate, updateTemplate, deleteTemplate } from '@/app/modeles/actions';
 import { groupByFolder } from '@/components/session-form';
 import { formatHours } from '@/lib/week';
+import { splitHours } from '@/lib/schedule';
 
 type Template = {
   id: string;
@@ -30,10 +31,19 @@ function TemplateFields({ t, folders, folder }: { t?: Template; folders: string[
         </label>
       </div>
       <div className="form-row">
-        <label>
-          Nombre d’heures
-          <input name="duration_hours" type="number" step="0.5" min="0.5" required defaultValue={t?.duration_hours ?? ''} />
-        </label>
+        <div className="field">
+          Durée totale
+          <span className="duration-input">
+            <input name="duration_h" type="number" min={0} inputMode="numeric" required aria-label="Heures" defaultValue={t ? splitHours(Number(t.duration_hours)).h : ''} />
+            <span>h</span>
+            <select name="duration_min" aria-label="Minutes" defaultValue={t ? String(splitHours(Number(t.duration_hours)).m) : '0'}>
+              {['0', '15', '30', '45'].map((m) => (
+                <option key={m} value={m}>{m.padStart(2, '0')}</option>
+              ))}
+            </select>
+            <span>min</span>
+          </span>
+        </div>
         <label>
           Max. stagiaires
           <input name="max_trainees" type="number" min="0" defaultValue={t?.max_trainees ?? ''} />

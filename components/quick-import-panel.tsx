@@ -12,7 +12,7 @@ function summarize(result: ImportResult): { text: string; error: boolean } {
   return { text: parts.join(', ') || 'Rien à importer.', error: false };
 }
 
-export function QuickImportPanel() {
+export function QuickImportPanel({ digiformaEnabled }: { digiformaEnabled: boolean }) {
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -72,10 +72,10 @@ export function QuickImportPanel() {
               {isPending ? '…' : 'Importer'}
             </button>
           </form>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Colonnes : Prénom, Nom, Email, Entreprise.</p>
+          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Colonnes : Nom, Prénom (Email et Entreprise facultatifs).</p>
         </div>
 
-        <div>
+        {digiformaEnabled && <div>
           <p style={{ fontSize: 12.5, fontWeight: 700, margin: '0 0 8px' }}>Depuis Digiforma</p>
           <button onClick={handleDigiforma} disabled={isPending}>
             {isPending ? '…' : 'Importer tous les stagiaires Digiforma'}
@@ -83,7 +83,7 @@ export function QuickImportPanel() {
           <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
             Nécessite la clé API configurée (Administration → Intégrations).
           </p>
-        </div>
+        </div>}
       </div>
     </div>
   );

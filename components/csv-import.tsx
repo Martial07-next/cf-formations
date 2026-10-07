@@ -21,8 +21,8 @@ export function CsvImportTrainees({ sessionId }: { sessionId: string }) {
     <div className="panel">
       <h2>Importer des stagiaires (CSV)</h2>
       <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-8px 0 14px' }}>
-        Colonnes attendues : <code>Prénom</code>, <code>Nom</code> (requis), <code>Email</code>, <code>Entreprise</code>, <code>Statut</code>{' '}
-        (facultatif : "validé" ou "en attente", défaut en attente). Un stagiaire déjà connu (par e-mail ou par nom) est
+        Colonnes : <code>Nom</code> (requis), <code>Prénom</code> ; facultatives : <code>Email</code>, <code>Entreprise</code>, <code>Statut</code>{' '}
+        (« validé » ou « en attente », défaut en attente). Un stagiaire déjà connu (par e-mail ou par nom) est
         réutilisé, sinon une nouvelle fiche est créée.
       </p>
 

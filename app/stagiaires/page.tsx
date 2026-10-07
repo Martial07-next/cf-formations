@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
+import { PasteImport } from '@/components/paste-import';
 
 const PAGE_SIZE = 50;
 
@@ -91,7 +92,8 @@ export default async function StagiairesPage({
             </div>
           )}
         </header>
-        {canManage(profile?.role) && <QuickImportPanel />}
+        {canManage(profile?.role) && <PasteImport />}
+        {canManage(profile?.role) && <QuickImportPanel digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)} />}
 
         <form className="list-filters" method="get" role="search">
           <label className="search">
