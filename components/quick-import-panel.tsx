@@ -72,7 +72,7 @@ export function QuickImportPanel() {
               {isPending ? '…' : 'Importer'}
             </button>
           </form>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Colonnes : Nom, Email, Entreprise.</p>
+          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Colonnes : Prénom, Nom, Email, Entreprise.</p>
         </div>
 
         <div>

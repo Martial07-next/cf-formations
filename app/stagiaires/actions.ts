@@ -4,15 +4,16 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { findOrCreateTrainee } from '@/lib/trainee-conflict';
+import { buildFullName, readTraineeName } from '@/lib/trainee-name';
 
 export async function createTrainee(formData: FormData) {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
-  const full_name = String(formData.get('full_name') || '').trim();
+  const name = readTraineeName(formData);
   const email = String(formData.get('email') || '').trim() || null;
   const company = String(formData.get('company') || '').trim() || null;
-  if (!full_name) return { ok: false, error: 'Le nom est requis.' };
-  const { error } = await supabase.from('trainees').insert({ full_name, email, company });
+  if (!name.last_name) return { ok: false, error: 'Le nom est requis.' };
+  const { error } = await supabase.from('trainees').insert({ ...name, full_name: buildFullName(name), email, company });
   if (error) return { ok: false, error: error.message };
   revalidatePath('/stagiaires');
   return { ok: true };
@@ -30,11 +31,14 @@ export async function deleteTrainee(id: string) {
 export async function updateTrainee(id: string, formData: FormData) {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
-  const full_name = String(formData.get('full_name') || '').trim();
+  const name = readTraineeName(formData);
   const email = String(formData.get('email') || '').trim() || null;
   const company = String(formData.get('company') || '').trim() || null;
-  if (!full_name) return { ok: false, error: 'Le nom est requis.' };
-  const { error } = await supabase.from('trainees').update({ full_name, email, company }).eq('id', id);
+  if (!name.last_name) return { ok: false, error: 'Le nom est requis.' };
+  const { error } = await supabase
+    .from('trainees')
+    .update({ ...name, full_name: buildFullName(name), email, company })
+    .eq('id', id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/stagiaires');
   revalidatePath(`/stagiaires/${id}`);
@@ -58,7 +62,7 @@ export type ImportResult =
 /**
  * Importe des stagiaires depuis un CSV dans l'annuaire (sans les lier à une
  * session — ça se fait ensuite depuis la fiche de la session concernée).
- * Colonnes attendues (insensibles à la casse) : Nom (requis), Email, Entreprise.
+ * Colonnes attendues (insensibles à la casse) : Prénom, Nom (requis), Email, Entreprise.
  */
 export async function importTraineesCsvGlobal(formData: FormData): Promise<ImportResult> {
   if (!(await requireManager())) return FORBIDDEN;
@@ -81,16 +85,19 @@ export async function importTraineesCsvGlobal(formData: FormData): Promise<Impor
 
   for (let i = 0; i < parsed.data.length; i++) {
     const row = parsed.data[i];
-    const full_name = getField(row, 'nom', 'nom complet', 'name');
+    // « Prénom » + « Nom », ou un seul « Nom complet ».
+    const first_name = getField(row, 'prénom', 'prenom', 'first name', 'firstname') || null;
+    const last_name = getField(row, 'nom', 'nom complet', 'name', 'last name', 'lastname');
+    const full_name = [first_name, last_name].filter(Boolean).join(' ');
     const email = getField(row, 'email', 'e-mail', 'mail') || null;
     const company = getField(row, 'entreprise', 'société', 'company') || null;
 
-    if (!full_name) {
+    if (!last_name) {
       skipped++;
       errors.push(`Ligne ${i + 2} : nom manquant, ignorée.`);
       continue;
     }
-    const result = await findOrCreateTrainee(supabase, full_name, email, company);
+    const result = await findOrCreateTrainee(supabase, { first_name, last_name }, email, company);
     if (!result) {
       errors.push(`Ligne ${i + 2} (${full_name}) : import impossible.`);
       continue;
@@ -124,7 +131,7 @@ export async function importTraineesFromDigiforma(): Promise<ImportResult> {
   const errors: string[] = [];
 
   for (const t of trainees) {
-    const result = await findOrCreateTrainee(supabase, t.fullName, t.email);
+    const result = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
     if (!result) {
       errors.push(`${t.fullName} : import impossible.`);
       continue;

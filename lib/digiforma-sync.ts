@@ -79,7 +79,7 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
     created++;
 
     for (const t of s.trainees) {
-      const trainee = await findOrCreateTrainee(supabase, t.fullName, t.email);
+      const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
       if (!trainee) continue;
 
       let traineeStatus: 'validee' | 'en_attente' = 'validee';

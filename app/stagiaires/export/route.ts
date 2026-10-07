@@ -5,11 +5,12 @@ export async function GET() {
   const supabase = await createClient();
   const { data: trainees } = await supabase
     .from('trainees')
-    .select('full_name, email, company, session_trainees(status, sessions(title, start_at))')
+    .select('full_name, first_name, last_name, email, company, session_trainees(status, sessions(title, start_at))')
     .order('full_name');
 
   const rows = (trainees || []).map((t: any) => ({
-    Nom: t.full_name,
+    Nom: t.last_name || (t.first_name ? '' : t.full_name),
+    Prénom: t.first_name || '',
     Email: t.email || '',
     Entreprise: t.company || '',
     'Nb sessions': (t.session_trainees || []).length,

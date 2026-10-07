@@ -6,13 +6,15 @@ import { updateTrainee } from '@/app/stagiaires/actions';
 export function TraineeInfoForm({
   isAdmin,
   traineeId,
-  fullName,
+  firstName,
+  lastName,
   email,
   company,
 }: {
   isAdmin: boolean;
   traineeId: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string | null;
   company: string | null;
 }) {
@@ -35,8 +37,12 @@ export function TraineeInfoForm({
         <form action={handle}>
           <div className="form-row">
             <label>
-              Nom complet
-              <input name="full_name" defaultValue={fullName} required />
+              Prénom
+              <input name="first_name" defaultValue={firstName} autoComplete="off" />
+            </label>
+            <label>
+              Nom
+              <input name="last_name" defaultValue={lastName} required autoComplete="off" />
             </label>
             <label>
               E-mail

@@ -59,6 +59,8 @@ export async function digiformaIntrospect(): Promise<string[]> {
 export type DigiformaTrainee = {
   id: string;
   fullName: string;
+  firstName: string | null;
+  lastName: string;
   email: string | null;
 };
 
@@ -72,6 +74,8 @@ export async function digiformaListTrainees(): Promise<DigiformaTrainee[]> {
   return trainees.map((t: any) => ({
     id: String(t.id),
     fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+      firstName: t.firstName || null,
+      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
     email: t.email || null,
   }));
 }
@@ -110,6 +114,8 @@ export async function digiformaListTrainingSessions(): Promise<DigiformaSession[
     trainees: (s.trainees || []).map((t: any) => ({
       id: String(t.id),
       fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+      firstName: t.firstName || null,
+      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
       email: t.email || null,
     })),
   }));
@@ -134,6 +140,8 @@ export async function digiformaFetchSessionTrainees(digiformaRef: string): Promi
   return trainees.map((t: any) => ({
     id: String(t.id),
     fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+      firstName: t.firstName || null,
+      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
     email: t.email || null,
   }));
 }

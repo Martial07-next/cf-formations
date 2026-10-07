@@ -7,6 +7,7 @@ import { TraineeInfoForm } from '@/components/trainee-info-form';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursOf, one } from '@/lib/history';
 import { formatHours } from '@/lib/week';
+import { nameFields } from '@/lib/trainee-name';
 
 export default async function TraineeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +15,7 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
   const profile = await getCurrentProfile();
 
   const [{ data: trainee }, { data: links }] = await Promise.all([
-    supabase.from('trainees').select('id, full_name, email, company').eq('id', id).maybeSingle(),
+    supabase.from('trainees').select('id, full_name, first_name, last_name, email, company').eq('id', id).maybeSingle(),
     supabase
       .from('session_trainees')
       .select('status, sessions(id, title, status, start_at, end_at, rooms(name), trainers(full_name, color))')
@@ -71,7 +72,8 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
         <TraineeInfoForm
           isAdmin={canManage(profile?.role)}
           traineeId={trainee.id}
-          fullName={trainee.full_name}
+          firstName={nameFields(trainee).first_name}
+          lastName={nameFields(trainee).last_name}
           email={trainee.email}
           company={trainee.company}
         />

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Download } from 'lucide-react';
+import { nameFields } from '@/lib/trainee-name';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
@@ -11,14 +12,17 @@ export default async function StagiairesPage() {
   const profile = await getCurrentProfile();
   const { data: trainees } = await supabase
     .from('trainees')
-    .select('id, full_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))')
+    .select('id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))')
     .order('full_name');
 
   // Important : on pré-calcule ici le contenu affiché (un élément React, pas
   // une fonction) car un Server Component ne peut pas passer de fonction à un
   // Client Component (CrudTable) — seuls des éléments/données sérialisables le peuvent.
   const now = new Date().toISOString();
-  const rows = (trainees || []).map((t: any) => {
+  const sortKey = (t: any) => `${nameFields(t).last_name} ${nameFields(t).first_name}`;
+  const sorted = [...(trainees || [])].sort((a: any, b: any) => sortKey(a).localeCompare(sortKey(b), 'fr'));
+  const rows = sorted.map((t: any) => {
+    const n = nameFields(t);
     const links = (t.session_trainees || []).filter((l: any) => l.sessions);
     const done = links.filter((l: any) => l.status === 'validee' && l.sessions.end_at < now).length;
     const next = links
@@ -26,7 +30,9 @@ export default async function StagiairesPage() {
       .sort((a: any, b: any) => a.sessions.start_at.localeCompare(b.sessions.start_at))[0];
     return {
       ...t,
-      name_cell: <Link href={`/stagiaires/${t.id}`}>{t.full_name}</Link>,
+      ...n,
+      name_cell: <Link href={`/stagiaires/${t.id}`}>{n.last_name}</Link>,
+      first_cell: n.first_name || <span className="hint">—</span>,
       done_cell: done,
       next_cell: next ? (
         <Link href={`/sessions/${next.sessions.id}`} style={{ fontWeight: 600 }}>
@@ -61,13 +67,15 @@ export default async function StagiairesPage() {
           title="un stagiaire"
           columns={[
             { key: 'name_cell', label: 'Nom' },
+            { key: 'first_cell', label: 'Prénom' },
             { key: 'company', label: 'Entreprise' },
             { key: 'email', label: 'E-mail' },
             { key: 'done_cell', label: 'Formations suivies' },
             { key: 'next_cell', label: 'Prochaine formation' },
           ]}
           fields={[
-            { name: 'full_name', label: 'Nom complet', required: true },
+            { name: 'last_name', label: 'Nom', required: true },
+            { name: 'first_name', label: 'Prénom' },
             { name: 'email', label: 'E-mail', type: 'email' },
             { name: 'company', label: 'Entreprise' },
           ]}

@@ -139,7 +139,7 @@ export type CsvImportResult =
 
 /**
  * Importe des stagiaires depuis un CSV et les inscrit à cette session.
- * Colonnes attendues (insensibles à la casse) : Nom (requis), Email, Entreprise, Statut.
+ * Colonnes attendues (insensibles à la casse) : Prénom, Nom (requis), Email, Entreprise, Statut.
  * Statut accepte "validé"/"validee" ou "en attente"/"en_attente" (défaut : en attente).
  * Un stagiaire existant est reconnu par e-mail (prioritaire) ou par nom exact ;
  * sinon une nouvelle fiche stagiaire est créée.
@@ -180,19 +180,22 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
 
   for (let i = 0; i < parsed.data.length; i++) {
     const row = parsed.data[i];
-    const full_name = getField(row, 'nom', 'nom complet', 'name');
+    // « Prénom » + « Nom », ou un seul « Nom complet ».
+    const first_name = getField(row, 'prénom', 'prenom', 'first name', 'firstname') || null;
+    const last_name = getField(row, 'nom', 'nom complet', 'name', 'last name', 'lastname');
+    const full_name = [first_name, last_name].filter(Boolean).join(' ');
     const email = getField(row, 'email', 'e-mail', 'mail') || null;
     const company = getField(row, 'entreprise', 'société', 'company') || null;
     const statutRaw = norm(getField(row, 'statut', 'status'));
     let status: 'validee' | 'en_attente' = statutRaw.startsWith('valid') ? 'validee' : 'en_attente';
 
-    if (!full_name) {
+    if (!last_name) {
       skipped++;
       errors.push(`Ligne ${i + 2} : nom manquant, ignorée.`);
       continue;
     }
 
-    const trainee = await findOrCreateTrainee(supabase, full_name, email, company);
+    const trainee = await findOrCreateTrainee(supabase, { first_name, last_name }, email, company);
     if (!trainee) {
       errors.push(`Ligne ${i + 2} (${full_name}) : création impossible.`);
       continue;
@@ -266,7 +269,7 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
   let heldBack = 0;
 
   for (const t of trainees) {
-    const trainee = await findOrCreateTrainee(supabase, t.fullName, t.email);
+    const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
     if (!trainee) continue;
     const traineeId = trainee.id;
 

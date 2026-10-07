@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { buildFullName, type TraineeName } from '@/lib/trainee-name';
 
 /**
  * Cherche si `traineeId` est déjà VALIDÉ sur une autre session dont le
@@ -38,10 +39,11 @@ function exact(v: string): string {
 /** Retrouve un stagiaire par e-mail puis par nom exact, sinon le crée. */
 export async function findOrCreateTrainee(
   supabase: SupabaseClient,
-  fullName: string,
+  name: TraineeName,
   email: string | null,
   company: string | null = null
 ): Promise<{ id: string; created: boolean } | null> {
+  const fullName = buildFullName(name);
   if (!fullName) return null;
   if (email) {
     const { data } = await supabase.from('trainees').select('id').ilike('email', exact(email)).limit(1).maybeSingle();
@@ -52,7 +54,7 @@ export async function findOrCreateTrainee(
 
   const { data, error } = await supabase
     .from('trainees')
-    .insert({ full_name: fullName, email, company })
+    .insert({ full_name: fullName, first_name: name.first_name, last_name: name.last_name, email, company })
     .select('id')
     .single();
   if (error || !data) return null;
