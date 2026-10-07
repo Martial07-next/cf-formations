@@ -19,3 +19,6 @@ where coalesce(is_holding, false) = false
 
 -- Contrôle : liste des salles et de leur bâtiment.
 select name, location from rooms where coalesce(is_holding, false) = false order by location, name;
+
+-- Recharge le cache de schéma de l'API Supabase (sinon : « Could not find the 'x' column … in the schema cache »).
+notify pgrst, 'reload schema';

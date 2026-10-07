@@ -104,3 +104,6 @@ drop trigger if exists sessions_room_overlap on sessions;
 create trigger sessions_room_overlap
   before insert or update of room_id, start_at, end_at on sessions
   for each row execute procedure check_room_overlap();
+
+-- Recharge le cache de schéma de l'API Supabase (sinon : « Could not find the 'x' column … in the schema cache »).
+notify pgrst, 'reload schema';
