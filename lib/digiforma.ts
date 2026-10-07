@@ -1,4 +1,6 @@
-// Client pour l'API GraphQL de Digiforma.
+// Client pour l'API GraphQL de Digiforma — SERVEUR UNIQUEMENT.
+// La clé DIGIFORMA_API_TOKEN est lue ici depuis les variables d'environnement
+// du serveur (Vercel) : elle n'est jamais envoyée au navigateur ni stockée en base.
 // Endpoint et authentification confirmés par leur documentation publique ;
 // les noms de champs des requêtes ci-dessous sont une meilleure estimation
 // basée sur les conventions habituelles et devront être confirmés/ajustés
@@ -14,11 +16,23 @@ async function digiformaFetch(query: string, variables?: Record<string, unknown>
     );
   }
 
-  const res = await fetch(DIGIFORMA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ query, variables }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(DIGIFORMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ query, variables }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (e: any) {
+    // Message générique : ne jamais renvoyer d'en-têtes ni de token dans une erreur.
+    throw new Error(e?.name === 'TimeoutError' ? 'Digiforma ne répond pas (délai dépassé).' : 'Digiforma injoignable.');
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Clé API Digiforma refusée (vérifie DIGIFORMA_API_TOKEN).');
+  }
 
   let json: any;
   try {

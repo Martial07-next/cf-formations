@@ -17,7 +17,7 @@ export default async function SallesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation des formations</p>
+            <p className="eyebrow">Ressources</p>
             <h1>Salles</h1>
             <p>Capacité, équipements et disponibilité de chaque salle.</p>
           </div>
@@ -40,6 +40,7 @@ export default async function SallesPage() {
               name: 'status',
               label: 'Statut',
               type: 'select',
+              createOnly: true,
               options: [
                 { value: 'disponible', label: 'Disponible' },
                 { value: 'indisponible', label: 'Indisponible' },

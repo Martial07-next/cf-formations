@@ -13,10 +13,10 @@ import {
 import { deleteSession } from '@/app/sessions/actions';
 import { CsvImportTrainees } from '@/components/csv-import';
 import { DigiformaPanel } from '@/components/digiforma-panel';
-import { weekdaysBetween, effectiveDayTime, fullDateLabel, type DayOverride } from '@/lib/week';
+import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
+import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
+import { Trash2, AlertTriangle } from 'lucide-react';
 
-type Room = { id: string; name: string; capacity: number };
-type Trainer = { id: string; full_name: string };
 type Trainee = { id: string; full_name: string; email: string | null; company: string | null };
 type EnrolledTrainee = Trainee & { status: 'validee' | 'en_attente' };
 
@@ -34,14 +34,10 @@ type SessionDetail = {
   digiforma_ref: string | null;
 };
 
-function toLocalInput(iso: string) {
-  // "2026-09-29T08:30:00+00:00" -> "2026-09-29T08:30" pour <input type=datetime-local>
-  return iso.slice(0, 16);
-}
-
 export function SessionDetailView({
   isAdmin,
   session,
+  template,
   rooms,
   trainers,
   enrolled,
@@ -50,8 +46,9 @@ export function SessionDetailView({
 }: {
   isAdmin: boolean;
   session: SessionDetail;
-  rooms: Room[];
-  trainers: Trainer[];
+  template: { title: string; category: string | null; duration_hours: number } | null;
+  rooms: FormRoom[];
+  trainers: FormTrainer[];
   enrolled: EnrolledTrainee[];
   allTrainees: Trainee[];
   dayOverrides: DayOverride[];
@@ -74,7 +71,10 @@ export function SessionDetailView({
     setNotice(null);
     startTransition(async () => {
       const result = await updateSessionDetails(session.id, formData);
-      if (result.ok) setNotice('Session mise à jour.');
+      if (result.ok) {
+        setNotice('Session mise à jour.');
+        router.refresh();
+      }
       else setError(result.error);
     });
   }
@@ -121,78 +121,47 @@ export function SessionDetailView({
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
 
       <div className="panel">
-        <h2>Informations</h2>
-        <fieldset disabled={!isAdmin} style={{ border: 'none', padding: 0, margin: 0 }}>
-          <form action={handleUpdate}>
-            <div className="form-row">
-              <label>
-                Nom de la formation
-                <input name="title" defaultValue={session.title} required />
-              </label>
-              <label>
-                Référence
-                <input name="reference" defaultValue={session.reference || ''} />
-              </label>
-              <label>
-                Statut
-                <select name="status" defaultValue={session.status}>
-                  <option value="brouillon">Brouillon</option>
-                  <option value="planifiee">Planifiée</option>
-                  <option value="confirmee">Confirmée</option>
-                </select>
-              </label>
-            </div>
-            <div className="form-row">
-              <label>
-                Salle
-                <select name="room_id" defaultValue={session.room_id} required>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name} ({r.capacity} places)</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Formateur
-                <select name="trainer_id" defaultValue={session.trainer_id || ''}>
-                  <option value="">—</option>
-                  {trainers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.full_name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Max. stagiaires
-                <input name="max_trainees" type="number" min={0} defaultValue={session.max_trainees ?? ''} />
-              </label>
-            </div>
-            <div className="form-row">
-              <label>
-                Début
-                <input name="start_at" type="datetime-local" defaultValue={toLocalInput(session.start_at)} required />
-              </label>
-              <label>
-                Fin
-                <input name="end_at" type="datetime-local" defaultValue={toLocalInput(session.end_at)} required />
-              </label>
-            </div>
-            <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
-              <label>
-                Notes / informations complémentaires
-                <textarea name="notes" rows={3} defaultValue={session.notes || ''} />
-              </label>
-            </div>
-            {isAdmin && (
-              <div className="row-actions">
-                <button type="submit" className="primary" disabled={isPending}>
-                  {isPending ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
-                <button type="button" className="danger" onClick={handleDeleteSession} disabled={isPending}>
-                  Supprimer la session
-                </button>
-              </div>
-            )}
-          </form>
-        </fieldset>
+        <div className="panel-head">
+          <h2>Informations</h2>
+          {template && (
+            <span className="hint">
+              Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
+            </span>
+          )}
+        </div>
+        <SessionForm
+          formId="session-edit-form"
+          showTemplate={false}
+          disabled={!isAdmin}
+          rooms={rooms}
+          trainers={trainers}
+          templates={[]}
+          defaults={{
+            title: session.title,
+            reference: session.reference,
+            room_id: session.room_id,
+            trainer_id: session.trainer_id,
+            status: session.status,
+            max_trainees: session.max_trainees,
+            notes: session.notes,
+            start_date: session.start_at.slice(0, 10),
+            end_date: session.end_at.slice(0, 10),
+            start_time: session.start_at.slice(11, 16),
+            end_time: session.end_at.slice(11, 16),
+          }}
+          onSubmit={handleUpdate}
+        />
+        {isAdmin && (
+          <div className="form-actions">
+            <button type="submit" form="session-edit-form" className="primary" disabled={isPending}>
+              {isPending ? 'Enregistrement…' : 'Enregistrer les modifications'}
+            </button>
+            <span className="spacer" style={{ flex: 1 }} />
+            <button type="button" className="danger" onClick={handleDeleteSession} disabled={isPending}>
+              <Trash2 size={15} aria-hidden /> Supprimer la session
+            </button>
+          </div>
+        )}
       </div>
 
       <DayTimesPanel
@@ -210,7 +179,7 @@ export function SessionDetailView({
         <h2>Stagiaires</h2>
         {overCapacity && (
           <div role="alert" className="alert alert-warning">
-            ⚠ Capacité dépassée : {validated.length} stagiaires validés pour {capacity} places prévues.
+            <AlertTriangle size={16} aria-hidden /> Capacité dépassée : {validated.length} stagiaires validés pour {capacity} places prévues.
           </div>
         )}
         <div className="counters">
@@ -257,13 +226,13 @@ export function SessionDetailView({
             <tbody>
               {validated.map((t) => (
                 <tr key={t.id}>
-                  <td>{t.full_name}</td>
+                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
                   <td>{t.email || '—'}</td>
                   <td>{t.company || '—'}</td>
                   {isAdmin && (
                     <td className="row-actions">
-                      <button onClick={() => handleStatusChange(t.id, 'en_attente')} disabled={isPending}>Mettre en attente</button>
-                      <button className="danger" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
+                      <button className="small" onClick={() => handleStatusChange(t.id, 'en_attente')} disabled={isPending}>Mettre en attente</button>
+                      <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
                     </td>
                   )}
                 </tr>
@@ -281,13 +250,13 @@ export function SessionDetailView({
             <tbody>
               {waiting.map((t) => (
                 <tr key={t.id}>
-                  <td>{t.full_name}</td>
+                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
                   <td>{t.email || '—'}</td>
                   <td>{t.company || '—'}</td>
                   {isAdmin && (
                     <td className="row-actions">
-                      <button className="primary" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>
-                      <button className="danger" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
+                      <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>
+                      <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
                     </td>
                   )}
                 </tr>
@@ -361,6 +330,7 @@ function DayTimeRow({
   isAdmin: boolean;
 }) {
   const effective = effectiveDayTime(day, startAt, endAt, overrides);
+  const label = fullDateLabel(new Date(day + 'T00:00:00Z'));
   const hasOverride = overrides.some((o) => o.day === day);
   const [start, setStart] = useState(effective.start);
   const [end, setEnd] = useState(effective.end);
@@ -383,17 +353,17 @@ function DayTimeRow({
 
   return (
     <tr>
-      <td style={{ fontWeight: 700, textTransform: 'capitalize' }}>{fullDateLabel(new Date(day + 'T00:00:00Z'))}</td>
+      <td style={{ fontWeight: 700 }}>{label}</td>
       <td>
-        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} style={{ padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8 }} />
+        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Début — ${label}`} />
       </td>
       <td>
-        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} style={{ padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8 }} />
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Fin — ${label}`} />
       </td>
       {isAdmin && (
         <td className="row-actions">
-          <button onClick={save} disabled={isPending}>{isPending ? '…' : 'Enregistrer'}</button>
-          {hasOverride && <button onClick={reset} disabled={isPending}>Réinitialiser</button>}
+          <button className="small" onClick={save} disabled={isPending}>{isPending ? '…' : 'Enregistrer'}</button>
+          {hasOverride && <button className="small ghost" onClick={reset} disabled={isPending}>Réinitialiser</button>}
           {error && <span style={{ color: 'var(--cf-red-ink)', fontSize: 12 }}>{error}</span>}
         </td>
       )}

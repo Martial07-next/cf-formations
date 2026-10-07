@@ -2,86 +2,24 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
+import { findTraineeConflict, findOrCreateTrainee } from '@/lib/trainee-conflict';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-/**
- * Cherche si `traineeId` est déjà VALIDÉ sur une autre session dont le
- * créneau chevauche [startAt, endAt]. Un stagiaire ne peut pas suivre deux
- * formations en même temps.
- */
-export async function findTraineeConflict(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  traineeId: string,
-  startAt: string,
-  endAt: string,
-  excludeSessionId?: string
-): Promise<{ sessionId: string; title: string } | null> {
-  const { data } = await supabase
-    .from('session_trainees')
-    .select('status, sessions(id, title, start_at, end_at)')
-    .eq('trainee_id', traineeId)
-    .eq('status', 'validee');
-
-  for (const row of data || []) {
-    const s: any = Array.isArray(row.sessions) ? row.sessions[0] : row.sessions;
-    if (!s || s.id === excludeSessionId) continue;
-    if (s.start_at < endAt && s.end_at > startAt) return { sessionId: s.id, title: s.title };
-  }
-  return null;
-}
-
 export async function updateSessionDetails(sessionId: string, formData: FormData): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const parsed = parseSessionForm(formData);
+  if (!parsed.ok) return parsed;
+
   const supabase = await createClient();
+  const conflict = await findSessionConflict(supabase, parsed.value, sessionId);
+  if (conflict) return { ok: false, error: conflict };
 
-  const title = String(formData.get('title') || '').trim();
-  const reference = String(formData.get('reference') || '').trim() || null;
-  const roomId = String(formData.get('room_id') || '');
-  const trainerId = String(formData.get('trainer_id') || '') || null;
-  const startAt = String(formData.get('start_at') || '');
-  const endAt = String(formData.get('end_at') || '');
-  const status = String(formData.get('status') || 'planifiee');
-  const maxTraineesRaw = String(formData.get('max_trainees') || '');
-  const maxTrainees = maxTraineesRaw ? Number(maxTraineesRaw) : null;
-  const notes = String(formData.get('notes') || '').trim() || null;
-
-  if (!title || !roomId || !startAt || !endAt) {
-    return { ok: false, error: 'Titre, salle, début et fin sont obligatoires.' };
-  }
-  if (new Date(endAt) <= new Date(startAt)) {
-    return { ok: false, error: 'La fin doit être après le début.' };
-  }
-
-  const { data: overlaps, error: overlapError } = await supabase
-    .from('sessions')
-    .select('id, title, room_id, trainer_id')
-    .neq('id', sessionId)
-    .lt('start_at', endAt)
-    .gt('end_at', startAt);
-  if (overlapError) return { ok: false, error: overlapError.message };
-
-  const roomClash = overlaps?.find((s) => s.room_id === roomId);
-  if (roomClash) return { ok: false, error: `Conflit : la salle est déjà réservée pour "${roomClash.title}".` };
-  if (trainerId) {
-    const trainerClash = overlaps?.find((s) => s.trainer_id === trainerId);
-    if (trainerClash) return { ok: false, error: `Conflit : ce formateur anime déjà "${trainerClash.title}".` };
-  }
-
-  const { error } = await supabase
-    .from('sessions')
-    .update({
-      title,
-      reference,
-      room_id: roomId,
-      trainer_id: trainerId,
-      start_at: startAt,
-      end_at: endAt,
-      status,
-      max_trainees: maxTrainees,
-      notes,
-    })
-    .eq('id', sessionId);
-
+  // template_id n'est pas modifiable depuis la fiche : on ne l'écrase pas.
+  const { template_id: _ignored, ...fields } = parsed.value;
+  const { error } = await supabase.from('sessions').update(fields).eq('id', sessionId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/sessions/${sessionId}`);
@@ -95,6 +33,7 @@ export async function addTraineeToSession(
   traineeId: string,
   status: 'validee' | 'en_attente'
 ): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   if (!traineeId) return { ok: false, error: 'Choisis un stagiaire.' };
   const supabase = await createClient();
 
@@ -120,6 +59,7 @@ export async function addTraineeToSession(
 }
 
 export async function removeTraineeFromSession(sessionId: string, traineeId: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase
     .from('session_trainees')
@@ -136,6 +76,7 @@ export async function setTraineeStatus(
   traineeId: string,
   status: 'validee' | 'en_attente'
 ): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
 
   if (status === 'validee') {
@@ -165,6 +106,7 @@ export async function setSessionDayTime(
   startTime: string,
   endTime: string
 ): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   if (!startTime || !endTime) return { ok: false, error: 'Heure de début et de fin requises.' };
   if (endTime <= startTime) return { ok: false, error: "L'heure de fin doit être après l'heure de début." };
 
@@ -182,6 +124,7 @@ export async function setSessionDayTime(
 }
 
 export async function resetSessionDayTime(sessionId: string, day: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('session_days').delete().eq('session_id', sessionId).eq('day', day);
   if (error) return { ok: false, error: error.message };
@@ -202,6 +145,7 @@ export type CsvImportResult =
  * sinon une nouvelle fiche stagiaire est créée.
  */
 export async function importTraineesCsv(sessionId: string, formData: FormData): Promise<CsvImportResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: 'Choisis un fichier CSV.' };
@@ -248,29 +192,13 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
       continue;
     }
 
-    // Cherche un stagiaire existant (par e-mail, sinon par nom exact).
-    let traineeId: string | null = null;
-    if (email) {
-      const { data } = await supabase.from('trainees').select('id').ilike('email', email).maybeSingle();
-      traineeId = data?.id || null;
+    const trainee = await findOrCreateTrainee(supabase, full_name, email, company);
+    if (!trainee) {
+      errors.push(`Ligne ${i + 2} (${full_name}) : création impossible.`);
+      continue;
     }
-    if (!traineeId) {
-      const { data } = await supabase.from('trainees').select('id').ilike('full_name', full_name).maybeSingle();
-      traineeId = data?.id || null;
-    }
-
-    if (!traineeId) {
-      const { data, error } = await supabase
-        .from('trainees')
-        .insert({ full_name, email, company })
-        .select('id')
-        .single();
-      if (error || !data) {
-        errors.push(`Ligne ${i + 2} (${full_name}) : ${error?.message || 'création impossible'}.`);
-        continue;
-      }
-      traineeId = data.id;
-    }
+    const traineeId = trainee.id;
+    if (!trainee.created) updated++;
 
     if (status === 'validee' && sessionRow && traineeId) {
       const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
@@ -296,6 +224,7 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
 }
 
 export async function saveDigiformaRef(sessionId: string, digiformaRef: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase
     .from('sessions')
@@ -316,6 +245,7 @@ export type DigiformaImportResult =
  * Un stagiaire Digiforma est considéré confirmé, donc inscrit en statut "validée".
  */
 export async function importFromDigiforma(sessionId: string, digiformaRef: string): Promise<DigiformaImportResult> {
+  if (!(await requireManager())) return FORBIDDEN;
   if (!digiformaRef.trim()) return { ok: false, error: 'Renseigne la référence/l\'id de session Digiforma.' };
 
   const { digiformaFetchSessionTrainees } = await import('@/lib/digiforma');
@@ -336,24 +266,9 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
   let heldBack = 0;
 
   for (const t of trainees) {
-    let traineeId: string | null = null;
-    if (t.email) {
-      const { data } = await supabase.from('trainees').select('id').ilike('email', t.email).maybeSingle();
-      traineeId = data?.id || null;
-    }
-    if (!traineeId) {
-      const { data } = await supabase.from('trainees').select('id').ilike('full_name', t.fullName).maybeSingle();
-      traineeId = data?.id || null;
-    }
-    if (!traineeId) {
-      const { data, error } = await supabase
-        .from('trainees')
-        .insert({ full_name: t.fullName, email: t.email })
-        .select('id')
-        .single();
-      if (error || !data) continue;
-      traineeId = data.id;
-    }
+    const trainee = await findOrCreateTrainee(supabase, t.fullName, t.email);
+    if (!trainee) continue;
+    const traineeId = trainee.id;
 
     let status: 'validee' | 'en_attente' = 'validee';
     if (sessionRow && traineeId) {

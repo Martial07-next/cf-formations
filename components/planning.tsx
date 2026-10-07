@@ -1,9 +1,13 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox } from 'lucide-react';
 import { createSession } from '@/app/sessions/actions';
+import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
+import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
+import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import {
   addDays,
   isoDate,
@@ -18,9 +22,8 @@ import {
   fullDateLabel,
 } from '@/lib/week';
 
-type Room = { id: string; name: string; capacity: number };
-type Trainer = { id: string; full_name: string };
-type Template = { id: string; title: string; duration_hours: number };
+type Room = { id: string; name: string; capacity: number; is_holding: boolean | null; status?: string | null };
+type Trainer = { id: string; full_name: string; color: string | null; status: string | null };
 type SessionRow = {
   id: string;
   title: string;
@@ -30,7 +33,7 @@ type SessionRow = {
   room_id: string;
   trainer_id: string | null;
   max_trainees: number | null;
-  trainers: { full_name: string } | { full_name: string }[] | null;
+  trainers: { full_name: string; color: string | null } | { full_name: string; color: string | null }[] | null;
   rooms?: { name: string } | { name: string }[] | null;
   session_trainees?: { status: string }[] | null;
 };
@@ -44,11 +47,48 @@ function validatedCount(s: SessionRow): number {
   return (s.session_trainees || []).filter((t) => t.status === 'validee').length;
 }
 
-const statusLabel: Record<string, string> = { confirmee: 'Confirmée', planifiee: 'Planifiée', brouillon: 'Brouillon' };
+function colorOf(s: SessionRow): string {
+  return one(s.trainers)?.color || DEFAULT_TRAINER_COLOR;
+}
+
+function StatusPill({ status }: { status: string }) {
+  return <span className={`status-pill ${status}`}>{SESSION_STATUS_LABEL[status] ?? status}</span>;
+}
+
+function SessionCard({ s, dIso, overrides }: { s: SessionRow; dIso: string; overrides: DayOverride[] }) {
+  const isStart = s.start_at.slice(0, 10) === dIso;
+  const trainer = one(s.trainers)?.full_name;
+  const count = validatedCount(s);
+  const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
+  return (
+    <Link
+      href={`/sessions/${s.id}`}
+      className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}
+      style={{ ['--c' as any]: colorOf(s) }}
+      title={`${s.title} — ${SESSION_STATUS_LABEL[s.status]}`}
+    >
+      <span className="sc-top">
+        <StatusPill status={s.status} />
+        <span className="sc-count" title="Stagiaires validés / places">
+          <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
+        </span>
+      </span>
+      <span className="sc-title">
+        {!isStart && <CornerDownRight size={12} aria-label="suite" style={{ verticalAlign: '-2px', marginRight: 3 }} />}
+        {s.title}
+      </span>
+      <span className="sc-meta">
+        <span><Clock size={11} aria-hidden /> {start} – {end}</span>
+        <span className="sc-trainer">{trainer || 'Formateur à définir'}</span>
+      </span>
+    </Link>
+  );
+}
 
 export function Planning({
   view,
-  isAdmin,
+  canEdit,
+  myTrainerId,
   rooms,
   trainers,
   templates,
@@ -57,17 +97,20 @@ export function Planning({
   mondayIso,
   monthAnchorIso,
   dayIso,
+  todayIso,
 }: {
   view: 'day' | 'week' | 'month';
-  isAdmin: boolean;
+  canEdit: boolean;
+  myTrainerId: string | null;
   rooms: Room[];
   trainers: Trainer[];
-  templates: Template[];
+  templates: FormTemplate[];
   sessions: SessionRow[];
   dayOverrides: Record<string, DayOverride[]>;
   mondayIso: string;
   monthAnchorIso: string;
   dayIso: string;
+  todayIso: string;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -75,20 +118,37 @@ export function Planning({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [filter, setFilter] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [query, setQuery] = useState('');
+  const [trainerFilter, setTrainerFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formDefaults, setFormDefaults] = useState<SessionFormDefaults>({});
+  const [formKey, setFormKey] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const shown = useMemo(
     () =>
       sessions.filter((s) => {
-        if (!filter) return true;
+        if (trainerFilter === 'none' ? s.trainer_id : trainerFilter && s.trainer_id !== trainerFilter) return false;
+        if (statusFilter && s.status !== statusFilter) return false;
+        if (!query) return true;
         const trainer = one(s.trainers)?.full_name ?? '';
-        return `${s.title} ${trainer}`.toLowerCase().includes(filter.toLowerCase());
+        return `${s.title} ${trainer}`.toLowerCase().includes(query.toLowerCase());
       }),
-    [sessions, filter]
+    [sessions, query, trainerFilter, statusFilter]
   );
+
+  // Formateurs présents sur la période (légende des couleurs).
+  const visibleTrainers = useMemo(() => {
+    const ids = new Set(sessions.map((s) => s.trainer_id).filter(Boolean));
+    return trainers.filter((t) => ids.has(t.id));
+  }, [sessions, trainers]);
+
+  const holding = rooms.filter((r) => r.is_holding);
+  const holdingWithSessions = holding.filter((r) => shown.some((s) => s.room_id === r.id));
+  const gridRooms = [...holdingWithSessions, ...rooms.filter((r) => !r.is_holding)];
 
   function setParams(mut: (p: URLSearchParams) => void) {
     const params = new URLSearchParams(searchParams);
@@ -105,7 +165,7 @@ export function Planning({
 
   function goToDay(offsetDays: number) {
     let d = addDays(dayAnchor, offsetDays);
-    const weekday = d.getUTCDay(); // 0=dim, 6=sam
+    const weekday = d.getUTCDay();
     if (weekday === 6) d = addDays(d, offsetDays > 0 ? 2 : -1);
     else if (weekday === 0) d = addDays(d, offsetDays > 0 ? 1 : -2);
     setParams((p) => {
@@ -122,6 +182,12 @@ export function Planning({
     });
   }
 
+  function step(dir: 1 | -1) {
+    if (view === 'day') goToDay(dir);
+    else if (view === 'week') goToWeek(7 * dir);
+    else goToMonth(dir);
+  }
+
   function switchView(next: 'day' | 'week' | 'month') {
     setParams((p) => p.set('view', next));
   }
@@ -134,174 +200,121 @@ export function Planning({
     });
   }
 
-  async function handleCreate(formData: FormData) {
+  function openForm(defaults: SessionFormDefaults = {}) {
+    setFormError(null);
+    setFormDefaults(defaults);
+    setFormKey((k) => k + 1);
+    dialogRef.current?.showModal();
+  }
+
+  function handleCreate(formData: FormData) {
+    setFormError(null);
     startTransition(async () => {
       const result = await createSession(formData);
       if (result.ok) {
-        setMessage({ text: 'Session ajoutée.', isError: false });
-        setShowForm(false);
+        dialogRef.current?.close();
+        setMessage({ text: 'Session enregistrée.', isError: false });
       } else {
-        setMessage({ text: result.error, isError: true });
+        setFormError(result.error);
       }
     });
   }
 
-  const dayRows = view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
+  const dayRows =
+    view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
-  const monthDayLabels = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.'];
+  const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+  const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
+  const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
-  function sessionsFor(dayIso: string, roomId: string) {
-    return shown.filter((s) => s.room_id === roomId && dayIsInRange(dayIso, s.start_at, s.end_at));
-  }
-
-  function SessionCard({ s, dIso }: { s: SessionRow; dIso: string }) {
-    const isStart = s.start_at.slice(0, 10) === dIso;
-    const trainer = one(s.trainers)?.full_name;
-    const count = validatedCount(s);
-    const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []);
-    const timeLabel = `${start} → ${end}`;
-    return (
-      <Link href={`/sessions/${s.id}`} className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}>
-        <span className="sc-title">{isStart ? s.title : `↳ ${s.title}`}</span>
-        <span className="sc-meta">
-          <span>{timeLabel}</span>
-          {trainer && <span>· {trainer}</span>}
-          <span className="sc-count">{count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}</span>
-        </span>
-      </Link>
-    );
+  function sessionsFor(dIso: string, roomId: string) {
+    return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
   }
 
   return (
     <section className="content">
       <header>
         <div>
-          <p className="eyebrow">Organisation des formations</p>
+          <p className="eyebrow">Planning</p>
           <h1>Planning des salles</h1>
-          <p>Vue {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'} — salles en colonnes, jours en lignes.</p>
+          <p>Une couleur par formateur · la pastille indique le statut de la session.</p>
         </div>
-        {isAdmin && (
+        {canEdit && (
           <div className="header-actions">
-            <button className="primary" onClick={() => setShowForm((v) => !v)}>+ Nouvelle session</button>
+            <button className="primary" onClick={() => openForm({ start_date: view === 'day' ? dayIso : undefined })}>
+              <Plus size={16} aria-hidden /> Nouvelle session
+            </button>
           </div>
         )}
       </header>
 
-      {showForm && (
-        <div className="panel">
-          <h2>Nouvelle session</h2>
-          <form action={handleCreate}>
-            <div className="form-row">
-              <label>
-                Titre
-                <input name="title" required placeholder="Ex. Habilitation électrique B0" />
-              </label>
-              <label>
-                Référence
-                <input name="reference" placeholder="Ex. HAB-B0-2026" />
-              </label>
-              <label>
-                Salle
-                <select name="room_id" required>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name} ({r.capacity} places)</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Formateur
-                <select name="trainer_id">
-                  <option value="">—</option>
-                  {trainers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.full_name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="form-row">
-              <label>
-                Modèle
-                <select name="template_id">
-                  <option value="">—</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Max. stagiaires
-                <input name="max_trainees" type="number" min={0} />
-              </label>
-              <label>
-                Statut
-                <select name="status" defaultValue="planifiee">
-                  <option value="brouillon">Brouillon</option>
-                  <option value="planifiee">Planifiée</option>
-                  <option value="confirmee">Confirmée</option>
-                </select>
-              </label>
-            </div>
-            <div className="form-row">
-              <label>
-                Début (date + heure)
-                <input name="start_at" type="datetime-local" required />
-              </label>
-              <label>
-                Fin (date + heure)
-                <input name="end_at" type="datetime-local" required />
-              </label>
-            </div>
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-6px 0 12px' }}>
-              Pour une formation sur plusieurs jours, choisis simplement une date de fin différente de la date de début.
-            </p>
-            <div className="row-actions">
-              <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
-              <button type="button" onClick={() => setShowForm(false)}>Annuler</button>
-            </div>
-          </form>
+      <div className="toolbar" role="toolbar" aria-label="Navigation du planning">
+        <div className="period">
+          <button className="icon" onClick={() => step(-1)} aria-label="Période précédente"><ChevronLeft size={18} /></button>
+          <strong aria-live="polite">{periodLabel}</strong>
+          <button className="icon" onClick={() => step(1)} aria-label="Période suivante"><ChevronRight size={18} /></button>
+          <button className="small" onClick={goToday}>Aujourd’hui</button>
+        </div>
+        <div className="toggle-group" role="group" aria-label="Vue">
+          {(['day', 'week', 'month'] as const).map((v) => (
+            <button key={v} className={view === v ? 'active' : ''} aria-pressed={view === v} onClick={() => switchView(v)}>
+              {v === 'day' ? 'Jour' : v === 'week' ? 'Semaine' : 'Mois'}
+            </button>
+          ))}
+        </div>
+        <span className="spacer" />
+        <label className="search">
+          <Search size={15} aria-hidden />
+          <span className="sr-only">Rechercher</span>
+          <input placeholder="Rechercher une formation…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+        <select aria-label="Filtrer par formateur" value={trainerFilter} onChange={(e) => setTrainerFilter(e.target.value)}>
+          <option value="">Tous les formateurs</option>
+          {myTrainerId && <option value={myTrainerId}>Mes sessions</option>}
+          <option value="none">Sans formateur</option>
+          {trainers.map((t) => (
+            <option key={t.id} value={t.id}>{t.full_name}</option>
+          ))}
+        </select>
+        <select aria-label="Filtrer par statut" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="">Tous les statuts</option>
+          {SESSION_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+        {filtersActive && (
+          <button
+            className="small ghost"
+            onClick={() => {
+              setQuery('');
+              setTrainerFilter('');
+              setStatusFilter('');
+            }}
+          >
+            <X size={14} aria-hidden /> Effacer
+          </button>
+        )}
+      </div>
+
+      {visibleTrainers.length > 0 && (
+        <div className="trainer-legend" aria-label="Formateurs de la période">
+          {visibleTrainers.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="trainer-chip"
+              aria-pressed={trainerFilter === t.id}
+              onClick={() => setTrainerFilter(trainerFilter === t.id ? '' : t.id)}
+            >
+              <span className="swatch" style={{ background: t.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
+              {t.full_name}
+            </button>
+          ))}
         </div>
       )}
 
-      <div className="toolbar">
-        <div className="period">
-          {view === 'day' && (
-            <>
-              <button onClick={() => goToDay(-1)} aria-label="Jour précédent">‹</button>
-              <strong style={{ textTransform: 'capitalize' }}>{fullDateLabel(dayAnchor)}</strong>
-              <button onClick={() => goToDay(1)} aria-label="Jour suivant">›</button>
-            </>
-          )}
-          {view === 'week' && (
-            <>
-              <button onClick={() => goToWeek(-7)} aria-label="Semaine précédente">‹</button>
-              <strong>{weekRangeLabel(monday)}</strong>
-              <button onClick={() => goToWeek(7)} aria-label="Semaine suivante">›</button>
-            </>
-          )}
-          {view === 'month' && (
-            <>
-              <button onClick={() => goToMonth(-1)} aria-label="Mois précédent">‹</button>
-              <strong style={{ textTransform: 'capitalize' }}>{monthLabel(monthAnchor)}</strong>
-              <button onClick={() => goToMonth(1)} aria-label="Mois suivant">›</button>
-            </>
-          )}
-          <button onClick={goToday}>Aujourd’hui</button>
-        </div>
-        <input
-          aria-label="Rechercher"
-          placeholder="Rechercher une formation…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <div className="toggle-group">
-          <button className={view === 'day' ? 'active' : ''} onClick={() => switchView('day')}>Jour</button>
-          <button className={view === 'week' ? 'active' : ''} onClick={() => switchView('week')}>Semaine</button>
-          <button className={view === 'month' ? 'active' : ''} onClick={() => switchView('month')}>Mois</button>
-        </div>
-      </div>
-
       {message && (
-        <div role="alert" className={`alert ${message.isError ? 'alert-error' : ''}`}>
+        <div role="status" className={`alert ${message.isError ? 'alert-error' : 'alert-success'}`}>
           {message.text}
         </div>
       )}
@@ -309,68 +322,101 @@ export function Planning({
       {(view === 'day' || view === 'week') && (
         <>
           <div className="grid-scroll">
-            <div className="plan-grid" style={{ gridTemplateColumns: `140px repeat(${rooms.length || 1}, minmax(160px, 1fr))` }}>
-              <div className="plan-head" style={{ background: '#fff', borderLeft: 'none' }}>
-                {view === 'day' ? 'Jour' : 'Jours'}
-              </div>
-              {rooms.map((r) => (
-                <div className="plan-head" key={r.id}>{r.name}<br /><small style={{ fontWeight: 500 }}>{r.capacity} places</small></div>
-              ))}
-
-              {dayRows.map((d) => (
-                <div key={d.iso} style={{ display: 'contents' }}>
-                  <div className="plan-day-label">
-                    {view === 'day' ? 'Aujourd’hui' : d.full}
-                    <small>{view === 'day' ? d.iso : d.dateLabel}</small>
-                  </div>
-                  {rooms.map((r) => (
-                    <div className="plan-cell" key={r.id}>
-                      {sessionsFor(d.iso, r.id).map((s) => (
-                        <SessionCard key={s.id} s={s} dIso={d.iso} />
-                      ))}
-                    </div>
-                  ))}
+            <div className="plan-grid" style={{ gridTemplateColumns: `minmax(96px, 130px) repeat(${gridRooms.length || 1}, minmax(170px, 1fr))` }}>
+              <div className="plan-head corner">{view === 'day' ? 'Jour' : 'Jours'}</div>
+              {gridRooms.map((r) => (
+                <div className={`plan-head${r.is_holding ? ' holding' : ''}`} key={r.id}>
+                  {r.is_holding ? (
+                    <>
+                      <Inbox size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> À affecter
+                      <small>Import Digiforma</small>
+                    </>
+                  ) : (
+                    <>
+                      {r.name}
+                      <small>{r.capacity} places{r.status === 'indisponible' ? ' · indisponible' : ''}</small>
+                    </>
+                  )}
                 </div>
               ))}
 
-              {rooms.length === 0 && (
+              {dayRows.map((d) => {
+                const isToday = d.iso === todayIso;
+                return (
+                  <div key={d.iso} style={{ display: 'contents' }}>
+                    <div className={`plan-day-label${isToday ? ' today' : ''}`}>
+                      {view === 'day' ? (isToday ? 'Aujourd’hui' : 'Jour') : d.full}
+                      <small>{view === 'day' ? d.iso.split('-').reverse().join('/') : d.dateLabel}</small>
+                    </div>
+                    {gridRooms.map((r) => (
+                      <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
+                        {sessionsFor(d.iso, r.id).map((s) => (
+                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} />
+                        ))}
+                        {canEdit && !r.is_holding && (
+                          <button
+                            type="button"
+                            className="cell-add"
+                            aria-label={`Ajouter une session — ${r.name}, ${d.full} ${d.dateLabel}`}
+                            onClick={() => openForm({ room_id: r.id, start_date: d.iso, end_date: d.iso })}
+                          >
+                            <Plus size={14} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {gridRooms.length === 0 && (
                 <div className="plan-cell" style={{ gridColumn: '2 / -1' }}>
                   Aucune salle enregistrée — <Link href="/salles">ajoutes-en une</Link>.
                 </div>
               )}
             </div>
           </div>
-          <p className="legend" style={{ marginTop: 10 }}>
-            <i className="confirmed" /> Confirmée <i className="planned" /> Planifiée <i className="draft" /> Brouillon · une formation qui se poursuit un jour suivant est marquée ↳
-          </p>
         </>
       )}
 
       {view === 'month' && (
         <>
-          <div className="month-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: 8 }}>
+          <div className="month-head">
             {monthDayLabels.map((d) => (
               <div className="month-day-label" key={d}>{d}</div>
             ))}
           </div>
           {weeks.map((week, wi) => (
-            <div className="month-grid" key={wi} style={{ marginBottom: 10 }}>
+            <div className="month-grid" key={wi}>
               {week.map((day) => {
                 const dIso = isoDate(day);
                 const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at));
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
-                  <div className={`month-cell${muted ? ' muted' : ''}`} key={dIso} style={muted ? { opacity: 0.45 } : undefined}>
-                    <span className="date-num">{day.getUTCDate()}</span>
+                  <div
+                    className={`month-cell${muted ? ' muted' : ''}${dIso === todayIso ? ' today' : ''}${daySessions.length === 0 ? ' empty-day' : ''}`}
+                    key={dIso}
+                  >
+                    <span className="date-num">{fullDateLabel(day).split(' ').slice(0, 2).join(' ')}</span>
                     {daySessions.map((s) => {
                       const room = one(s.rooms)?.name || '—';
                       const trainer = one(s.trainers)?.full_name;
                       const count = validatedCount(s);
                       return (
-                        <Link key={s.id} href={`/sessions/${s.id}`} className={`month-chip ${s.status}`}>
-                          <span className="chip-room">{room} — {s.title}</span>
-                          {trainer && <span className="chip-trainer">{trainer}</span>}
-                          <span className="chip-count">{count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}</span>
+                        <Link
+                          key={s.id}
+                          href={`/sessions/${s.id}`}
+                          className="month-chip"
+                          style={{ ['--c' as any]: colorOf(s) }}
+                          title={`${s.title} — ${SESSION_STATUS_LABEL[s.status]}`}
+                        >
+                          <span className="chip-top">
+                            <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
+                            <span className="chip-room">{s.title}</span>
+                          </span>
+                          <span className="chip-trainer">
+                            {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
+                          </span>
                         </Link>
                       );
                     })}
@@ -379,10 +425,41 @@ export function Planning({
               })}
             </div>
           ))}
-          <p className="legend" style={{ marginTop: 10 }}>
-            <i className="confirmed" /> Confirmée <i className="planned" /> Planifiée <i className="draft" /> Brouillon
-          </p>
         </>
+      )}
+
+      <p className="legend">
+        {SESSION_STATUSES.map((s) => (
+          <span className="legend-item" key={s.value}><StatusPill status={s.value} /></span>
+        ))}
+        <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
+      </p>
+
+      {canEdit && (
+        <dialog ref={dialogRef} className="modal" aria-labelledby="new-session-title" onClose={() => setFormError(null)}>
+          <div className="modal-head">
+            <h2 id="new-session-title">Nouvelle session</h2>
+            <button className="icon ghost" onClick={() => dialogRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
+          </div>
+          <div className="modal-body">
+            {formError && <div role="alert" className="alert alert-error">{formError}</div>}
+            <SessionForm
+              key={formKey}
+              formId="new-session-form"
+              rooms={rooms}
+              trainers={trainers}
+              templates={templates}
+              defaults={formDefaults}
+              onSubmit={handleCreate}
+            />
+          </div>
+          <div className="modal-foot">
+            <button type="button" onClick={() => dialogRef.current?.close()}>Annuler</button>
+            <button type="submit" form="new-session-form" className="primary" disabled={isPending}>
+              {isPending ? 'Enregistrement…' : 'Enregistrer la session'}
+            </button>
+          </div>
+        </dialog>
       )}
     </section>
   );

@@ -1,5 +1,6 @@
 import { getSupabaseUrl, getSupabaseKey } from '@/lib/supabase-env';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { notFound } from 'next/navigation';
 
 function mask(key: string) {
   if (key.length < 20) return `(clé très courte : ${key.length} caractères) ${key}`;
@@ -7,6 +8,10 @@ function mask(key: string) {
 }
 
 export default async function DebugEnvPage() {
+  // Page de diagnostic : réservée aux administrateurs.
+  const profile = await getCurrentProfile();
+  if (profile?.role !== 'admin') notFound();
+
   let url = '(erreur)';
   let key = '(erreur)';
   let envError: string | null = null;

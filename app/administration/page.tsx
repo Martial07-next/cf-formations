@@ -14,7 +14,7 @@ export default async function AdministrationPage() {
         <section className="content">
           <header>
             <div>
-              <p className="eyebrow">Organisation des formations</p>
+              <p className="eyebrow">Bureau administratif</p>
               <h1>Administration</h1>
               <p>Accès réservé aux administrateurs.</p>
             </div>
@@ -37,13 +37,23 @@ export default async function AdministrationPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation des formations</p>
+            <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Comptes, paramètres et intégrations de la plateforme.</p>
           </div>
         </header>
 
         <AdminTabs active="/administration" />
+
+        <div className="panel">
+          <h2>Les rôles</h2>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.8 }}>
+            <li><span className="badge admin">Administrateur</span> bureau administratif : tout gérer, comptes, paramètres, Digiforma.</li>
+            <li><span className="badge referent">Référent cadre</span> modifie le planning et les ressources, suit son équipe de formateurs (page « Mon équipe »).</li>
+            <li><span className="badge formateur">Formateur</span> consulte le planning et son propre historique (si son compte est lié à sa fiche formateur).</li>
+            <li><span className="badge consultation">Consultation</span> lecture seule du planning.</li>
+          </ul>
+        </div>
 
         <h2 className="sub-heading" style={{ marginTop: 4 }}>Utilisateurs</h2>
         <AdminUsersTable rows={profiles || []} currentUserId={user?.id || ''} />
