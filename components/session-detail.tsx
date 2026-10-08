@@ -42,6 +42,7 @@ export function SessionDetailView({
   template,
   digiformaEnabled,
   isOwnTrainer = false,
+  canEditSession = false,
   modules = [],
   traineeModules = {},
   rooms,
@@ -55,6 +56,8 @@ export function SessionDetailView({
   digiformaEnabled: boolean;
   /** Le formateur connecté anime cette session : il peut ajuster ses horaires. */
   isOwnTrainer?: boolean;
+  /** Peut modifier la session (bureau, admin, référent cadre) ; isAdmin = gestion complète. */
+  canEditSession?: boolean;
   modules?: SessionModule[];
   traineeModules?: Record<string, string[]>;
   template: { title: string; category: string | null; duration_hours: number } | null;
@@ -143,7 +146,7 @@ export function SessionDetailView({
         <SessionForm
           formId="session-edit-form"
           showTemplate={false}
-          disabled={!isAdmin}
+          disabled={!canEditSession}
           rooms={rooms}
           trainers={trainers}
           templates={[]}
@@ -161,22 +164,22 @@ export function SessionDetailView({
           }}
           onSubmit={handleUpdate}
         />
-        {isAdmin && (
+        {canEditSession && (
           <div className="form-actions">
             <button type="submit" form="session-edit-form" className="primary" disabled={isPending}>
               {isPending ? 'Enregistrement…' : 'Enregistrer les modifications'}
             </button>
             <span className="spacer" style={{ flex: 1 }} />
-            <button type="button" className="danger" onClick={handleDeleteSession} disabled={isPending}>
+            {isAdmin && <button type="button" className="danger" onClick={handleDeleteSession} disabled={isPending}>
               <Trash2 size={15} aria-hidden /> Supprimer la session
-            </button>
+            </button>}
           </div>
         )}
       </div>
 
       <DayTimesPanel
-        isAdmin={isAdmin || isOwnTrainer}
-        ownTrainer={!isAdmin && isOwnTrainer}
+        isAdmin={canEditSession || isOwnTrainer}
+        ownTrainer={!canEditSession && isOwnTrainer}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}

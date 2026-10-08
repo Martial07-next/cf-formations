@@ -10,10 +10,14 @@ export default async function SallesPage() {
   const profile = await getCurrentProfile();
   const { data: rooms } = await supabase
     .from('rooms')
-    .select('id, name, capacity, location, equipment, status')
+    .select('id, name, capacity, location, status')
     .eq('is_holding', false) // la salle virtuelle « À affecter » n'est pas une vraie salle
     .order('name');
-  const { data: workshops } = await supabase.from('room_workshops').select('id, room_id, name, equipment, modules').order('name');
+  const [{ data: workshops }, { data: roomTemplates }, { data: templates }] = await Promise.all([
+    supabase.from('room_workshops').select('id, room_id, name').order('name'),
+    supabase.from('room_templates').select('room_id, template_id'),
+    supabase.from('templates').select('id, title, category').order('category').order('title'),
+  ]);
   const rows = [...(rooms || [])].sort(compareRooms).map((r: any) => ({ ...r, location: r.location || '' }));
 
   return (
@@ -34,7 +38,6 @@ export default async function SallesPage() {
             { key: 'name', label: 'Nom' },
             { key: 'capacity', label: 'Capacité' },
             { key: 'location', label: 'Bâtiment' },
-            { key: 'equipment', label: 'Équipements' },
           ]}
           fields={[
             { name: 'name', label: 'Nom', required: true },
@@ -45,7 +48,6 @@ export default async function SallesPage() {
               type: 'select',
               options: [...BUILDINGS.map((b) => ({ value: b, label: b })), { value: '', label: 'Non renseigné' }],
             },
-            { name: 'equipment', label: 'Équipements' },
             {
               name: 'status',
               label: 'Statut',
@@ -72,7 +74,13 @@ export default async function SallesPage() {
             onChange: updateRoomStatus,
           }}
         />
-        <RoomWorkshops rooms={rows as any} workshops={(workshops as any) || []} canEdit={canManage(profile?.role)} />
+        <RoomWorkshops
+          rooms={rows as any}
+          workshops={(workshops as any) || []}
+          roomTemplates={(roomTemplates as any) || []}
+          templates={(templates as any) || []}
+          canEdit={canManage(profile?.role)}
+        />
       </section>
     </main>
   );

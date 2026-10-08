@@ -5,12 +5,13 @@ import { TemplateCatalog } from '@/components/template-catalog';
 export default async function ModelesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
-  const [{ data: templates }, { data: trainers }] = await Promise.all([
+  const [{ data: templates }, { data: trainers }, { data: folders }] = await Promise.all([
     supabase
       .from('templates')
-      .select('id, title, category, duration_hours, max_trainees, description, sessions(count), template_modules(name, duration_hours, position), template_trainers(trainer_id)')
+      .select('id, title, category, folder_id, position, duration_hours, max_trainees, description, sessions(count), template_modules(name, duration_hours, position), template_trainers(trainer_id)')
       .order('title'),
     supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
+    supabase.from('template_folders').select('id, name, parent_id, position').order('position'),
   ]);
 
   const rows = (templates || []).map((t: any) => ({
@@ -31,10 +32,10 @@ export default async function ModelesPage() {
           <div>
             <p className="eyebrow">Ressources</p>
             <h1>Formations disponibles</h1>
-            <p>Le catalogue classé par dossier : nom, nombre d’heures, places. Choisis-les directement à l’enregistrement d’une session.</p>
+            <p>Range tes formations dans des dossiers et sous-dossiers, dans l’ordre que tu veux (flèches ↑ ↓). Elles se choisissent ensuite à la création d’une session.</p>
           </div>
         </header>
-        <TemplateCatalog templates={rows} trainers={activeTrainers as any} canEdit={canManage(profile?.role)} />
+        <TemplateCatalog templates={rows} folders={(folders as any) || []} trainers={activeTrainers as any} canEdit={canManage(profile?.role)} />
       </section>
     </main>
   );

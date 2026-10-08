@@ -107,3 +107,19 @@ export async function findSessionConflict(
   }
   return null;
 }
+
+/**
+ * Formations réalisables par salle : une salle qui en définit n'accepte que
+ * celles-là ; une salle sans liste accepte toutes les formations.
+ */
+export async function roomRejectsTemplate(
+  supabase: SupabaseClient,
+  roomId: string,
+  templateId: string | null
+): Promise<string | null> {
+  if (!templateId) return null;
+  const { data, error } = await supabase.from('room_templates').select('template_id').eq('room_id', roomId);
+  if (error || !data || data.length === 0) return null;
+  if (data.some((r: any) => r.template_id === templateId)) return null;
+  return "Cette salle n'est pas prévue pour cette formation (voir Salles → formations réalisables).";
+}

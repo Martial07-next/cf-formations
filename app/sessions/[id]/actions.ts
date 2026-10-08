@@ -1,20 +1,24 @@
 'use server';
 
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { canManage } from '@/lib/roles';
+import { canEditSessions } from '@/lib/roles';
 import { revalidatePath } from 'next/cache';
-import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
+import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
+import { parseSessionForm, findSessionConflict, roomRejectsTemplate } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee } from '@/lib/trainee-conflict';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function updateSessionDetails(sessionId: string, formData: FormData): Promise<ActionResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  // Bureau administratif, administrateur et référent cadre peuvent modifier une session.
+  if (!(await requireSessionEditor())) return FORBIDDEN;
   const parsed = parseSessionForm(formData);
   if (!parsed.ok) return parsed;
 
   const supabase = await createClient();
+  const { data: current } = await supabase.from('sessions').select('template_id').eq('id', sessionId).maybeSingle();
+  const roomIssue = await roomRejectsTemplate(supabase, parsed.value.room_id, current?.template_id ?? null);
+  if (roomIssue) return { ok: false, error: roomIssue };
   const conflict = await findSessionConflict(supabase, parsed.value, sessionId);
   if (conflict) return { ok: false, error: conflict };
 
@@ -108,7 +112,7 @@ export async function setTraineeStatus(
 async function canEditTimes(sessionId: string): Promise<boolean> {
   const profile = await getCurrentProfile();
   if (!profile) return false;
-  if (canManage(profile.role)) return true;
+  if (canEditSessions(profile.role)) return true;
   if (!profile.trainer_id) return false;
   const supabase = await createClient();
   const { data } = await supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle();

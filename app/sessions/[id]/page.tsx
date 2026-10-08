@@ -1,4 +1,5 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
+import { canEditSessions } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms } from '@/lib/buildings';
@@ -96,6 +97,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
         <SessionDetailView
           isAdmin={editable}
+          canEditSession={canEditSessions(profile?.role)}
           modules={(modules as any) || []}
           traineeModules={traineeModules}
           isOwnTrainer={Boolean(profile?.trainer_id) && profile?.trainer_id === (session as any).trainer_id}

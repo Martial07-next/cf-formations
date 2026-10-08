@@ -36,7 +36,19 @@ function fmt(iso: string) {
   });
 }
 
-export function SessionsTable({ isAdmin, myTrainerId, rows }: { isAdmin: boolean; myTrainerId: string | null; rows: Row[] }) {
+export function SessionsTable({
+  isAdmin,
+  canEditStatus = isAdmin,
+  myTrainerId,
+  rows,
+}: {
+  /** Gestion complète (suppression) : administrateur et bureau administratif. */
+  isAdmin: boolean;
+  /** Changement de statut : + référent cadre. */
+  canEditStatus?: boolean;
+  myTrainerId: string | null;
+  rows: Row[];
+}) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState('');
@@ -131,7 +143,7 @@ export function SessionsTable({ isAdmin, myTrainerId, rows }: { isAdmin: boolean
                 return (
                   <tr key={s.id}>
                     <td>
-                      {isAdmin ? (
+                      {canEditStatus ? (
                         <select
                           aria-label={`Statut de ${s.title}`}
                           className="input"

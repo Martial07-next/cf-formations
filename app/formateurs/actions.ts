@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { isHexColor, nextTrainerColor } from '@/lib/colors';
@@ -88,8 +88,18 @@ export async function updateTrainerStatus(id: string, status: string) {
 export type AbsenceResult = { ok: true; warning?: string } | { ok: false; error: string };
 
 /** Ajoute un congé / une absence ; signale les sessions déjà planifiées sur ces dates. */
+/** Bureau / admin, ou référent cadre pour un formateur de son équipe. */
+async function canManageAbsences(trainerId: string): Promise<boolean> {
+  if (await requireManager()) return true;
+  const profile = await getCurrentProfile();
+  if (profile?.role !== 'referent') return false;
+  const supabase = await createClient();
+  const { data } = await supabase.from('trainers').select('referent_id').eq('id', trainerId).maybeSingle();
+  return data?.referent_id === profile.id;
+}
+
 export async function addAbsence(trainerId: string, formData: FormData): Promise<AbsenceResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await canManageAbsences(trainerId))) return FORBIDDEN;
   const start = String(formData.get('start_date') || '');
   const end = String(formData.get('end_date') || '') || start;
   const kind = String(formData.get('kind') || 'conge');
@@ -123,9 +133,9 @@ export async function addAbsence(trainerId: string, formData: FormData): Promise
 }
 
 export async function deleteAbsence(id: string, trainerId: string): Promise<AbsenceResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await canManageAbsences(trainerId))) return FORBIDDEN;
   const supabase = await createClient();
-  const { error } = await supabase.from('trainer_absences').delete().eq('id', id);
+  const { error } = await supabase.from('trainer_absences').delete().eq('id', id).eq('trainer_id', trainerId);
   if (error) return { ok: false, error: error.message };
   refresh(trainerId);
   return { ok: true };

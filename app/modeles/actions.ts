@@ -9,7 +9,7 @@ function readTemplate(formData: FormData) {
   const maxRaw = get('max_trainees');
   return {
     title: get('title'),
-    category: get('category') || null, // « dossier » de la formation
+    folder_id: get('folder_id') || null, // dossier ou sous-dossier de la formation
     // Saisie en heures + minutes (ex. 7 h 30), stockée en heures décimales.
     duration_hours: Math.max(0, Number.parseInt(get('duration_h') || '0', 10) || 0) + (Number.parseInt(get('duration_min') || '0', 10) || 0) / 60,
     max_trainees: maxRaw ? Number(maxRaw) : null,
@@ -54,6 +54,26 @@ async function saveExtras(supabase: Awaited<ReturnType<typeof createClient>>, te
   return null;
 }
 
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/** Libellé « Dossier › Sous-dossier » d'un dossier (conservé dans templates.category pour l'affichage et la recherche). */
+async function folderPath(supabase: Client, folderId: string | null): Promise<string | null> {
+  if (!folderId) return null;
+  const { data: f } = await supabase.from('template_folders').select('name, parent_id').eq('id', folderId).maybeSingle();
+  if (!f) return null;
+  if (!f.parent_id) return f.name;
+  const { data: p } = await supabase.from('template_folders').select('name').eq('id', f.parent_id).maybeSingle();
+  return p ? `${p.name} › ${f.name}` : f.name;
+}
+
+/** Dernière position + 1 dans un dossier. */
+async function nextPosition(supabase: Client, table: 'templates' | 'template_folders', column: 'folder_id' | 'parent_id', id: string | null) {
+  let q = supabase.from(table).select('position').order('position', { ascending: false }).limit(1);
+  q = id ? q.eq(column, id) : q.is(column, null);
+  const { data } = await q;
+  return ((data?.[0] as any)?.position ?? -1) + 1;
+}
+
 function refresh() {
   revalidatePath('/modeles');
   revalidatePath('/');
@@ -64,7 +84,12 @@ export async function createTemplate(formData: FormData) {
   const t = readTemplate(formData);
   if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
-  const { data, error } = await supabase.from('templates').insert(t).select('id').single();
+  const position = await nextPosition(supabase, 'templates', 'folder_id', t.folder_id);
+  const { data, error } = await supabase
+    .from('templates')
+    .insert({ ...t, category: await folderPath(supabase, t.folder_id), position })
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, data.id, formData);
   refresh();
@@ -77,7 +102,17 @@ export async function updateTemplate(id: string, formData: FormData) {
   const t = readTemplate(formData);
   if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('templates').update(t).eq('id', id);
+  const { data: before } = await supabase.from('templates').select('folder_id').eq('id', id).maybeSingle();
+  const moved = (before?.folder_id ?? null) !== t.folder_id;
+  const { error } = await supabase
+    .from('templates')
+    .update({
+      ...t,
+      category: await folderPath(supabase, t.folder_id),
+      // Changement de dossier : la formation se place à la fin de son nouveau dossier.
+      ...(moved ? { position: await nextPosition(supabase, 'templates', 'folder_id', t.folder_id) } : {}),
+    })
+    .eq('id', id);
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, id, formData);
   refresh();
@@ -92,4 +127,99 @@ export async function deleteTemplate(id: string) {
   if (error) return { ok: false, error: error.message };
   refresh();
   return { ok: true };
+}
+
+// ------------------------------------------------------------
+// Dossiers et sous-dossiers (un seul niveau de sous-dossier)
+// ------------------------------------------------------------
+
+type Result = { ok: true } | { ok: false; error: string };
+
+export async function createFolder(name: string, parentId: string | null): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const clean = name.trim().slice(0, 80);
+  if (!clean) return { ok: false, error: 'Indique le nom du dossier.' };
+  const supabase = await createClient();
+  if (parentId) {
+    const { data: parent } = await supabase.from('template_folders').select('parent_id').eq('id', parentId).maybeSingle();
+    if (!parent) return { ok: false, error: 'Dossier parent introuvable.' };
+    if (parent.parent_id) return { ok: false, error: 'Un sous-dossier ne peut pas contenir d’autre sous-dossier.' };
+  }
+  const position = await nextPosition(supabase, 'template_folders', 'parent_id', parentId);
+  const { error } = await supabase.from('template_folders').insert({ name: clean, parent_id: parentId, position });
+  if (error) return { ok: false, error: error.message };
+  refresh();
+  return { ok: true };
+}
+
+/** Met à jour le libellé « Dossier › Sous-dossier » des formations concernées. */
+async function syncCategories(supabase: Client, folderId: string) {
+  const { data: subs } = await supabase.from('template_folders').select('id').eq('parent_id', folderId);
+  for (const id of [folderId, ...(subs || []).map((x: any) => x.id)]) {
+    await supabase.from('templates').update({ category: await folderPath(supabase, id) }).eq('folder_id', id);
+  }
+}
+
+export async function renameFolder(id: string, name: string): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const clean = name.trim().slice(0, 80);
+  if (!clean) return { ok: false, error: 'Indique le nom du dossier.' };
+  const supabase = await createClient();
+  const { error } = await supabase.from('template_folders').update({ name: clean }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  await syncCategories(supabase, id);
+  refresh();
+  return { ok: true };
+}
+
+export async function deleteFolder(id: string): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const [{ count: subCount }, { count: tplCount }] = await Promise.all([
+    supabase.from('template_folders').select('id', { count: 'exact', head: true }).eq('parent_id', id),
+    supabase.from('templates').select('id', { count: 'exact', head: true }).eq('folder_id', id),
+  ]);
+  if (subCount || tplCount) return { ok: false, error: 'Le dossier n’est pas vide : déplace ou supprime d’abord son contenu.' };
+  const { error } = await supabase.from('template_folders').delete().eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  refresh();
+  return { ok: true };
+}
+
+/** Déplace un élément d'un cran (−1 = vers le haut, +1 = vers le bas) parmi ses voisins. */
+async function moveAmong(
+  supabase: Client,
+  table: 'templates' | 'template_folders',
+  column: 'folder_id' | 'parent_id',
+  id: string,
+  direction: -1 | 1
+): Promise<Result> {
+  const { data: item } = await supabase.from(table).select(`id, ${column}`).eq('id', id).maybeSingle();
+  if (!item) return { ok: false, error: 'Élément introuvable.' };
+  const parent = (item as any)[column] as string | null;
+  let q = supabase.from(table).select('id, position').order('position').order(table === 'templates' ? 'title' : 'name');
+  q = parent ? q.eq(column, parent) : q.is(column, null);
+  const { data: siblings } = await q;
+  const list = (siblings || []).map((x: any) => x.id as string);
+  const i = list.indexOf(id);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= list.length) return { ok: true };
+  [list[i], list[j]] = [list[j], list[i]];
+  // Renumérote proprement toute la liste (0, 1, 2…).
+  for (let k = 0; k < list.length; k++) {
+    const { error } = await supabase.from(table).update({ position: k }).eq('id', list[k]);
+    if (error) return { ok: false, error: error.message };
+  }
+  refresh();
+  return { ok: true };
+}
+
+export async function moveFolder(id: string, direction: -1 | 1): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  return moveAmong(await createClient(), 'template_folders', 'parent_id', id, direction);
+}
+
+export async function moveTemplate(id: string, direction: -1 | 1): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  return moveAmong(await createClient(), 'templates', 'folder_id', id, direction);
 }

@@ -101,7 +101,7 @@ export default async function TrainerDetailPage({
           <div className="stat"><span>Sessions réalisées</span><strong>{done.length}</strong><small>{traineesTrained} stagiaire{traineesTrained > 1 ? 's' : ''} formé{traineesTrained > 1 ? 's' : ''}</small></div>
         </div>
 
-        <AbsencesPanel trainerId={id} absences={((absences as any[]) || []).reverse()} canEdit={canManage(profile?.role)} />
+        <AbsencesPanel trainerId={id} absences={((absences as any[]) || []).reverse()} canEdit={canManage(profile?.role) || (profile?.role === 'referent' && trainer.referent_id === profile.id)} />
 
         <MonthlyTable
           title="Suivi mensuel"

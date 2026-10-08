@@ -62,9 +62,10 @@ export default async function AdministrationPage() {
         <div className="panel">
           <h2>Les rôles</h2>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.8 }}>
-            <li><span className="badge admin">Administrateur</span> bureau administratif : tout gérer, comptes, paramètres, Digiforma.</li>
-            <li><span className="badge referent">Référent cadre</span> modifie le planning et les ressources, suit son équipe de formateurs (page « Mon équipe »).</li>
-            <li><span className="badge formateur">Formateur</span> consulte le planning et son propre historique (si son compte est lié à sa fiche formateur).</li>
+            <li><span className="badge admin">Administrateur</span> gère la plateforme : accès, paramètres, intégrations, suppression des données (et tout le reste).</li>
+            <li><span className="badge bureau">Bureau administratif</span> crée, modifie et supprime les sessions ; gère les stagiaires et les imports, les formateurs, les salles, les formations et les congés.</li>
+            <li><span className="badge referent">Référent cadre</span> modifie les sessions existantes (sans en créer ni en supprimer, sans gérer les stagiaires), suit son équipe et gère les congés de ses formateurs.</li>
+            <li><span className="badge formateur">Formateur</span> consulte le planning, ses stagiaires et son historique ; ajuste les horaires de ses propres sessions.</li>
             <li><span className="badge consultation">Consultation</span> lecture seule du planning.</li>
           </ul>
         </div>

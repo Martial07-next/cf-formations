@@ -1,9 +1,17 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { ChevronRight, Folder, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { createTemplate, updateTemplate, deleteTemplate } from '@/app/modeles/actions';
-import { groupByFolder } from '@/components/session-form';
+import { ArrowDown, ArrowUp, ChevronRight, Folder, FolderPlus, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  moveFolder,
+  moveTemplate,
+} from '@/app/modeles/actions';
 import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
 
@@ -15,10 +23,14 @@ type Template = {
   max_trainees: number | null;
   description: string | null;
   sessions_count: number;
+  folder_id: string | null;
+  position: number;
   modules: { name: string; duration_hours: number }[];
   trainer_ids: string[];
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
+export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
+type FolderOption = { id: string; label: string };
 
 type ModuleRow = { name: string; h: string; m: string };
 
@@ -29,8 +41,9 @@ function TemplateFields({
   trainers,
 }: {
   t?: Template;
-  folders: string[];
-  folder?: string;
+  folders: FolderOption[];
+  /** Dossier présélectionné (bouton + d'un dossier). */
+  folder?: string | null;
   trainers: TrainerOption[];
 }) {
   const [modules, setModules] = useState<ModuleRow[]>(
@@ -51,7 +64,12 @@ function TemplateFields({
       <div className="form-row">
         <label>
           Dossier
-          <input name="category" list="template-folders" defaultValue={t?.category ?? folder ?? ''} placeholder="Ex. Sécurité, Électricité…" />
+          <select name="folder_id" defaultValue={t ? t.folder_id ?? '' : folder ?? ''}>
+            <option value="">Sans dossier</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
         </label>
         <label style={{ gridColumn: 'span 2' }}>
           Nom de la formation
@@ -134,31 +152,47 @@ function TemplateFields({
           <textarea name="description" rows={2} defaultValue={t?.description || ''} />
         </label>
       </div>
-      <datalist id="template-folders">
-        {folders.map((f) => <option key={f} value={f} />)}
-      </datalist>
     </>
   );
 }
 
-export function TemplateCatalog({ templates, canEdit, trainers }: { templates: Template[]; canEdit: boolean; trainers: TrainerOption[] }) {
+export function TemplateCatalog({
+  templates,
+  folders,
+  canEdit,
+  trainers,
+}: {
+  templates: Template[];
+  folders: FolderRow[];
+  canEdit: boolean;
+  trainers: TrainerOption[];
+}) {
   const [query, setQuery] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [addFolder, setAddFolder] = useState<string | null>(null);
+  const [addIn, setAddIn] = useState<string | null>(null); // id du dossier où l'on ajoute une formation ('' = sans dossier)
+  const [newFolder, setNewFolder] = useState<string | null>(null); // '' = dossier principal, sinon id du parent
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return templates;
-    return templates.filter((t) => `${t.title} ${t.category ?? ''}`.toLowerCase().includes(q));
-  }, [templates, query]);
-  const folders = useMemo(() => groupByFolder(filtered), [filtered]);
-  const folderNames = useMemo(
-    () => [...new Set(templates.map((t) => t.category?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr')),
-    [templates]
+  const byPos = <T extends { position: number }>(a: T, b: T) => a.position - b.position;
+  const roots = useMemo(() => folders.filter((f) => !f.parent_id).sort(byPos), [folders]);
+  const childrenOf = (id: string) => folders.filter((f) => f.parent_id === id).sort(byPos);
+  const folderOptions: FolderOption[] = useMemo(
+    () => roots.flatMap((r) => [{ id: r.id, label: r.name }, ...childrenOf(r.id).map((c) => ({ id: c.id, label: `${r.name} › ${c.name}` }))]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [folders]
   );
+
+  const q = query.trim().toLowerCase();
+  const visible = (t: Template) => !q || `${t.title} ${t.category ?? ''}`.toLowerCase().includes(q);
+  const templatesIn = (folderId: string | null) =>
+    templates.filter((t) => (t.folder_id ?? null) === folderId && visible(t)).sort((a, b) => a.position - b.position || a.title.localeCompare(b.title, 'fr'));
+  const knownIds = new Set(folders.map((f) => f.id));
+  const orphans = templates
+    .filter((t) => (!t.folder_id || !knownIds.has(t.folder_id)) && visible(t))
+    .sort((a, b) => a.position - b.position || a.title.localeCompare(b.title, 'fr'));
+  const countDeep = (id: string): number => templatesIn(id).length + childrenOf(id).reduce((n, c) => n + templatesIn(c.id).length, 0);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) {
     setError(null);
@@ -167,6 +201,177 @@ export function TemplateCatalog({ templates, canEdit, trainers }: { templates: T
       if (!res.ok) setError(res.error || 'Une erreur est survenue.');
       else after?.();
     });
+  }
+
+  function renderNewFolder(parentId: string | null) {
+    return (
+      <form
+        className="inline-form"
+        action={(fd) => run(() => createFolder(String(fd.get('name') || ''), parentId), () => setNewFolder(null))}
+        style={{ padding: '10px 18px' }}
+      >
+        <input name="name" required autoFocus className="input" placeholder={parentId ? 'Nom du sous-dossier' : 'Nom du dossier'} aria-label="Nom" />
+        <button type="submit" className="primary small" disabled={isPending}>Créer</button>
+        <button type="button" className="small" onClick={() => setNewFolder(null)}>Annuler</button>
+      </form>
+    );
+  }
+
+  function renderRows(list: Template[], folderId: string | null) {
+    return (
+      <>
+        {canEdit && addIn === (folderId ?? '') && (
+          <div className="folder-add">
+            <form action={(fd) => run(() => createTemplate(fd), () => setAddIn(null))}>
+              <TemplateFields folders={folderOptions} trainers={trainers} folder={folderId} />
+              <div className="row-actions">
+                <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Ajouter la formation'}</button>
+                <button type="button" onClick={() => setAddIn(null)}>Annuler</button>
+              </div>
+            </form>
+          </div>
+        )}
+        {list.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Formation</th>
+                  <th className="num">Heures</th>
+                  <th className="num">Places</th>
+                  <th className="num">Sessions</th>
+                  {canEdit && <th><span className="sr-only">Actions</span></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((t, i) =>
+                  editingId === t.id ? (
+                    <tr key={t.id}>
+                      <td colSpan={canEdit ? 5 : 4} style={{ background: 'var(--surface-2)', padding: 16 }}>
+                        <form action={(fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null))}>
+                          <TemplateFields t={t} folders={folderOptions} trainers={trainers} />
+                          <div className="row-actions">
+                            <button type="submit" className="primary" disabled={isPending}>Enregistrer</button>
+                            <button type="button" onClick={() => setEditingId(null)}>Annuler</button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={t.id}>
+                      <td>
+                        <strong>{t.title}</strong>
+                        {t.modules.length > 0 && (
+                          <div className="module-tags">
+                            {t.modules.map((m) => (
+                              <span key={m.name} className="badge brouillon">{m.name} · {formatHours(m.duration_hours)}</span>
+                            ))}
+                          </div>
+                        )}
+                        {t.trainer_ids.length > 0 && (
+                          <div className="hint">
+                            Habilités : {trainers.filter((tr) => t.trainer_ids.includes(tr.id)).map((tr) => tr.full_name).join(', ')}
+                          </div>
+                        )}
+                        {t.description && <div className="hint">{t.description}</div>}
+                      </td>
+                      <td className="num">{formatHours(Number(t.duration_hours))}</td>
+                      <td className="num">{t.max_trainees ?? '-'}</td>
+                      <td className="num">{t.sessions_count}</td>
+                      {canEdit && (
+                        <td className="row-actions" style={{ justifyContent: 'flex-end' }}>
+                          {!q && (
+                            <>
+                              <button className="small icon ghost" aria-label={`Monter ${t.title}`} disabled={isPending || i === 0} onClick={() => run(() => moveTemplate(t.id, -1))}>
+                                <ArrowUp size={14} />
+                              </button>
+                              <button className="small icon ghost" aria-label={`Descendre ${t.title}`} disabled={isPending || i === list.length - 1} onClick={() => run(() => moveTemplate(t.id, 1))}>
+                                <ArrowDown size={14} />
+                              </button>
+                            </>
+                          )}
+                          <button className="small" onClick={() => setEditingId(t.id)} disabled={isPending}>
+                            <Pencil size={14} aria-hidden /> Modifier
+                          </button>
+                          <button
+                            className="danger small icon"
+                            aria-label={`Supprimer ${t.title}`}
+                            title="Supprimer"
+                            disabled={isPending}
+                            onClick={() => confirm(`Supprimer la formation « ${t.title} » du catalogue ?`) && run(() => deleteTemplate(t.id))}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function renderRename(f: FolderRow) {
+    return (
+      <form
+        className="inline-form"
+        style={{ padding: '0 18px 12px 46px' }}
+        action={(fd) => run(() => renameFolder(f.id, String(fd.get('name') || '')), () => setRenaming(null))}
+      >
+        <input name="name" required autoFocus defaultValue={f.name} className="input" aria-label="Nouveau nom du dossier" />
+        <button type="submit" className="primary small" disabled={isPending}>Renommer</button>
+        <button type="button" className="small" onClick={() => setRenaming(null)}>Annuler</button>
+      </form>
+    );
+  }
+
+  function renderHeader(f: FolderRow, index: number, siblings: number, isSub: boolean) {
+    const count = isSub ? templatesIn(f.id).length : countDeep(f.id);
+    return (
+      <summary>
+        <ChevronRight size={16} className="chev" aria-hidden />
+        <Folder size={isSub ? 15 : 17} aria-hidden />
+        <span>{f.name}</span>
+        <small>{count} formation{count > 1 ? 's' : ''}</small>
+        {canEdit && renaming !== f.id && (
+          <span className="folder-tools" onClick={(e) => e.preventDefault()}>
+            {!q && (
+              <>
+                <button className="small icon ghost" aria-label={`Monter le dossier ${f.name}`} disabled={isPending || index === 0} onClick={() => run(() => moveFolder(f.id, -1))}>
+                  <ArrowUp size={14} />
+                </button>
+                <button className="small icon ghost" aria-label={`Descendre le dossier ${f.name}`} disabled={isPending || index === siblings - 1} onClick={() => run(() => moveFolder(f.id, 1))}>
+                  <ArrowDown size={14} />
+                </button>
+              </>
+            )}
+            <button className="small icon ghost" aria-label={`Renommer ${f.name}`} onClick={() => setRenaming(f.id)}>
+              <Pencil size={14} />
+            </button>
+            {!isSub && (
+              <button className="small icon ghost" aria-label={`Créer un sous-dossier dans ${f.name}`} title="Sous-dossier" onClick={() => setNewFolder(f.id)}>
+                <FolderPlus size={15} />
+              </button>
+            )}
+            <button
+              className="small icon ghost"
+              aria-label={`Supprimer le dossier ${f.name}`}
+              disabled={isPending}
+              onClick={() => confirm(`Supprimer le dossier « ${f.name} » ? (il doit être vide)`) && run(() => deleteFolder(f.id))}
+            >
+              <Trash2 size={14} />
+            </button>
+            <button className="small icon primary" aria-label={`Ajouter une formation dans ${f.name}`} title="Ajouter une formation" onClick={() => { setAddIn(f.id); setEditingId(null); }}>
+              <Plus size={16} />
+            </button>
+          </span>
+        )}
+      </summary>
+    );
   }
 
   return (
@@ -178,141 +383,57 @@ export function TemplateCatalog({ templates, canEdit, trainers }: { templates: T
           <input placeholder="Rechercher une formation…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         {canEdit && (
-          <button className={addOpen ? '' : 'primary'} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen}>
-            <Plus size={16} aria-hidden /> {addOpen ? 'Fermer' : 'Nouveau dossier / formation'}
-          </button>
+          <span className="row-actions">
+            <button className="primary" onClick={() => setNewFolder('')}>
+              <FolderPlus size={16} aria-hidden /> Nouveau dossier
+            </button>
+          </span>
         )}
       </div>
 
       {error && <div role="alert" className="alert alert-error">{error}</div>}
-
-      {canEdit && addOpen && (
-        <div className="panel">
-          <h2>Nouvelle formation</h2>
-          <p className="panel-intro">Pour créer un nouveau dossier, tape simplement son nom dans « Dossier ».</p>
-          <form action={(fd) => run(() => createTemplate(fd), () => setAddOpen(false))}>
-            <TemplateFields folders={folderNames} trainers={trainers} />
-            <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
-          </form>
-        </div>
+      {canEdit && newFolder === '' && (
+        <div className="folder">{renderNewFolder(null)}</div>
       )}
 
-      {folders.length === 0 ? (
-        <p className="empty">{templates.length === 0 ? 'Aucune formation enregistrée.' : 'Aucun résultat.'}</p>
-      ) : (
-        folders.map(([folder, items]) => {
-          const total = items.reduce((n, t) => n + Number(t.duration_hours), 0);
-          return (
-            <details className="folder" key={folder} open>
-              <summary>
-                <ChevronRight size={16} className="chev" aria-hidden />
-                <Folder size={17} aria-hidden />
-                {folder}
-                <small>{items.length} formation{items.length > 1 ? 's' : ''} · {formatHours(total)}</small>
-                {canEdit && (
-                  <button
-                    type="button"
-                    className="small icon primary"
-                    aria-label={`Ajouter une formation dans ${folder}`}
-                    title="Ajouter une formation dans ce dossier"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setError(null);
-                      setAddFolder(addFolder === folder ? null : folder);
-                      (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.setAttribute('open', '');
-                    }}
-                  >
-                    <Plus size={16} />
-                  </button>
-                )}
-              </summary>
-              {canEdit && addFolder === folder && (
-                <div style={{ padding: '16px 18px', borderTop: '1px solid var(--line)', background: 'var(--surface-2)' }}>
-                  <form action={(fd) => run(() => createTemplate(fd), () => setAddFolder(null))}>
-                    <TemplateFields folders={folderNames} trainers={trainers} folder={folder === 'Sans dossier' ? '' : folder} />
-                    <div className="row-actions">
-                      <button type="submit" className="primary" disabled={isPending}>
-                        {isPending ? 'Enregistrement…' : `Ajouter dans « ${folder} »`}
-                      </button>
-                      <button type="button" onClick={() => setAddFolder(null)}>Annuler</button>
-                    </div>
-                  </form>
-                </div>
-              )}
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Formation</th>
-                      <th className="num">Heures</th>
-                      <th className="num">Places</th>
-                      <th className="num">Sessions</th>
-                      {canEdit && <th><span className="sr-only">Actions</span></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((t) =>
-                      editingId === t.id ? (
-                        <tr key={t.id}>
-                          <td colSpan={canEdit ? 5 : 4} style={{ background: 'var(--surface-2)', padding: 16 }}>
-                            <form action={(fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null))}>
-                              <TemplateFields t={t} folders={folderNames} trainers={trainers} />
-                              <div className="row-actions">
-                                <button type="submit" className="primary" disabled={isPending}>Enregistrer</button>
-                                <button type="button" onClick={() => setEditingId(null)}>Annuler</button>
-                              </div>
-                            </form>
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={t.id}>
-                          <td>
-                            <strong>{t.title}</strong>
-                            {t.modules.length > 0 && (
-                              <div className="module-tags">
-                                {t.modules.map((m) => (
-                                  <span key={m.name} className="badge brouillon">{m.name} · {formatHours(m.duration_hours)}</span>
-                                ))}
-                              </div>
-                            )}
-                            {t.trainer_ids.length > 0 && (
-                              <div className="hint">
-                                Habilités : {trainers.filter((tr) => t.trainer_ids.includes(tr.id)).map((tr) => tr.full_name).join(', ')}
-                              </div>
-                            )}
-                            {t.description && <div className="hint">{t.description}</div>}
-                          </td>
-                          <td className="num">{formatHours(Number(t.duration_hours))}</td>
-                          <td className="num">{t.max_trainees ?? '-'}</td>
-                          <td className="num">{t.sessions_count}</td>
-                          {canEdit && (
-                            <td className="row-actions">
-                              <button className="small" onClick={() => setEditingId(t.id)} disabled={isPending}>
-                                <Pencil size={14} aria-hidden /> Modifier
-                              </button>
-                              <button
-                                className="danger small icon"
-                                aria-label={`Supprimer ${t.title}`}
-                                title="Supprimer"
-                                disabled={isPending}
-                                onClick={() => {
-                                  if (confirm(`Supprimer la formation « ${t.title} » du catalogue ?`)) run(() => deleteTemplate(t.id));
-                                }}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          );
-        })
+      {roots.map((f, i) => {
+        const subs = childrenOf(f.id);
+        if (q && countDeep(f.id) === 0) return null;
+        return (
+          <details className="folder" key={f.id} open>
+            {renderHeader(f, i, roots.length, false)}
+            {renaming === f.id && renderRename(f)}
+            {canEdit && newFolder === f.id && renderNewFolder(f.id)}
+            {subs.map((c, j) => {
+              if (q && templatesIn(c.id).length === 0) return null;
+              return (
+                <details className="folder subfolder" key={c.id} open>
+                  {renderHeader(c, j, subs.length, true)}
+                  {renaming === c.id && renderRename(c)}
+                  {renderRows(templatesIn(c.id), c.id)}
+                  {templatesIn(c.id).length === 0 && addIn !== c.id && <p className="hint" style={{ padding: '0 18px 12px' }}>Sous-dossier vide.</p>}
+                </details>
+              );
+            })}
+            {renderRows(templatesIn(f.id), f.id)}
+            {countDeep(f.id) === 0 && subs.length === 0 && addIn !== f.id && <p className="hint" style={{ padding: '0 18px 14px' }}>Dossier vide : ajoute une formation avec +.</p>}
+          </details>
+        );
+      })}
+
+      {(orphans.length > 0 || addIn === '') && (
+        <details className="folder" open>
+          <summary>
+            <ChevronRight size={16} className="chev" aria-hidden />
+            <Folder size={17} aria-hidden /> <span>Sans dossier</span>
+            <small>{orphans.length} formation{orphans.length > 1 ? 's' : ''}</small>
+          </summary>
+          {renderRows(orphans, null)}
+        </details>
+      )}
+
+      {roots.length === 0 && orphans.length === 0 && (
+        <p className="empty">{templates.length === 0 ? 'Aucune formation : crée d’abord un dossier, puis ajoute des formations avec +.' : 'Aucun résultat.'}</p>
       )}
     </>
   );

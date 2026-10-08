@@ -146,6 +146,7 @@ fieldset.plain{border:none;padding:0;margin:0;min-width:0}
 .badge.indisponible{background:#fdeceb;color:var(--cf-red-ink)}
 .badge.admin{background:#e7ecff;color:#2f3f8f}
 .badge.referent{background:#f3e8ff;color:#6b21a8}
+.badge.bureau{background:#e0f2fe;color:#075985}
 
 /* Pastille de statut d'une session (en haut de la bulle) */
 .status-pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;letter-spacing:.2px;padding:2px 8px 2px 6px;border-radius:999px;line-height:1.5;white-space:nowrap;background:#fff;border:1px solid transparent}
@@ -424,3 +425,14 @@ table.monthly tr.total-row td{font-weight:800;background:var(--surface-2)}
 .module-toggle.on{border-style:solid;border-color:var(--cf-mint-strong);background:var(--cf-mint-soft);color:var(--cf-mint-ink)}
 .module-plan{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .sc-module{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.85);border:1px solid color-mix(in srgb,var(--c) 35%,#fff);color:color-mix(in srgb,var(--c) 75%,#000);vertical-align:1px}
+.workshop-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.workshop-chip{display:inline-flex;align-items:center;gap:2px;background:#fff;border:1px solid var(--line-strong);border-radius:999px;padding:3px 6px 3px 12px;font-size:13px;font-weight:700}
+button.tiny{width:24px;min-height:24px;padding:0}
+.inline-form{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.inline-form .input{min-height:32px;padding:5px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px}
+.room-templates{border-top:1px dashed var(--line-strong);padding-top:10px}
+.folder > summary > span:first-of-type{flex:0 1 auto}
+.folder-tools{display:inline-flex;gap:2px;align-items:center;margin-left:8px}
+.folder.subfolder{margin:0 14px 12px 34px;box-shadow:none;background:var(--surface-2)}
+.folder.subfolder > summary{font-size:13.5px;padding:10px 14px}
+.folder-add{padding:16px 18px;border-top:1px solid var(--line);background:var(--surface-2)}

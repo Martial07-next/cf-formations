@@ -18,7 +18,7 @@ export default async function FormateursPage() {
   ]);
 
   const byId = new Map((profiles || []).map((p: any) => [p.id, p]));
-  const referents = (profiles || []).filter((p: any) => p.role === 'referent' || p.role === 'admin');
+  const referents = (profiles || []).filter((p: any) => ['referent', 'bureau', 'admin'].includes(p.role));
 
   // Contenu affiché pré-calculé côté serveur (un Server Component ne peut pas
   // passer de fonction de rendu à un Client Component).

@@ -8,7 +8,15 @@ import { placeModules, frDay } from '@/lib/modules';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
 
-export type FormRoom = { id: string; name: string; capacity: number; is_holding?: boolean | null; location?: string | null };
+export type FormRoom = {
+  id: string;
+  name: string;
+  capacity: number;
+  is_holding?: boolean | null;
+  location?: string | null;
+  /** Formations réalisables (vide = toutes). */
+  template_ids?: string[];
+};
 export type FormTrainer = { id: string; full_name: string; color: string | null; status?: string | null };
 export type FormTemplate = {
   id: string;
@@ -137,7 +145,10 @@ export function SessionForm({
     if (t.trainer_ids?.length && trainerId && !t.trainer_ids.includes(trainerId)) setTrainerId('');
   }
 
-  const physicalRooms = rooms.filter((r) => !r.is_holding);
+  // Salles prévues pour la formation choisie (une salle sans liste accepte tout).
+  const physicalRooms = rooms.filter(
+    (r) => !r.is_holding && (!template || !r.template_ids?.length || r.template_ids.includes(template.id) || r.id === defaults.room_id)
+  );
   // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
   const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
   const qualified = template?.trainer_ids?.length ? template.trainer_ids : null;
@@ -170,7 +181,7 @@ export function SessionForm({
         <div className="form-row">
           <label>
             Salle
-            <select name="room_id" required defaultValue={defaults.room_id || physicalRooms[0]?.id || ''}>
+            <select key={templateId || "libre"} name="room_id" required defaultValue={defaults.room_id || physicalRooms[0]?.id || ''}>
               {physicalRooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.location ? `${r.location} · ` : ''}{r.name} ({r.capacity} places)</option>
               ))}

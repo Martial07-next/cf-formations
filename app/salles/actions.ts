@@ -10,10 +10,9 @@ export async function createRoom(formData: FormData) {
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
   const location = String(formData.get('location') || '').trim() || null;
-  const equipment = String(formData.get('equipment') || '').trim() || null;
   const status = String(formData.get('status') || 'disponible');
   if (!name || capacity <= 0) return { ok: false, error: 'Nom et capacité (> 0) requis.' };
-  const { error } = await supabase.from('rooms').insert({ name, capacity, location, equipment, status });
+  const { error } = await supabase.from('rooms').insert({ name, capacity, location, status });
   if (error) return { ok: false, error: error.message };
   revalidatePath('/salles');
   revalidatePath('/');
@@ -36,9 +35,8 @@ export async function updateRoom(id: string, formData: FormData) {
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
   const location = String(formData.get('location') || '').trim() || null;
-  const equipment = String(formData.get('equipment') || '').trim() || null;
   if (!name || capacity <= 0) return { ok: false, error: 'Nom et capacité (> 0) requis.' };
-  const { error } = await supabase.from('rooms').update({ name, capacity, location, equipment }).eq('id', id);
+  const { error } = await supabase.from('rooms').update({ name, capacity, location }).eq('id', id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/salles');
   revalidatePath('/');
@@ -56,7 +54,7 @@ export async function updateRoomStatus(id: string, status: string) {
 
 function readWorkshop(formData: FormData) {
   const get = (k: string) => String(formData.get(k) ?? '').trim();
-  return { name: get('name'), equipment: get('equipment') || null, modules: get('modules') || null };
+  return { name: get('name') };
 }
 
 function refreshWorkshops() {
@@ -91,6 +89,21 @@ export async function deleteWorkshop(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from('room_workshops').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
+  refreshWorkshops();
+  return { ok: true };
+}
+
+/** Formations réalisables dans une salle (aucune = toutes les formations). */
+export async function setRoomTemplates(roomId: string, templateIds: string[]) {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const ids = [...new Set(templateIds.filter(Boolean))];
+  const { error: delError } = await supabase.from('room_templates').delete().eq('room_id', roomId);
+  if (delError) return { ok: false, error: delError.message };
+  if (ids.length) {
+    const { error } = await supabase.from('room_templates').insert(ids.map((template_id) => ({ room_id: roomId, template_id })));
+    if (error) return { ok: false, error: error.message };
+  }
   refreshWorkshops();
   return { ok: true };
 }

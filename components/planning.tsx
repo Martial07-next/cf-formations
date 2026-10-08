@@ -23,7 +23,16 @@ import {
   fullDateLabel,
 } from '@/lib/week';
 
-type Room = { id: string; name: string; capacity: number; is_holding: boolean | null; status?: string | null; location?: string | null };
+type Room = {
+  id: string;
+  name: string;
+  capacity: number;
+  is_holding: boolean | null;
+  status?: string | null;
+  location?: string | null;
+  /** Formations réalisables dans la salle (vide = toutes). */
+  template_ids?: string[];
+};
 type Trainer = { id: string; full_name: string; color: string | null; status: string | null };
 type SessionRow = {
   id: string;
@@ -132,7 +141,7 @@ export function Planning({
   monthAnchorIso: string;
   dayIso: string;
   todayIso: string;
-  workshops: { id: string; room_id: string; name: string; equipment: string | null; modules: string | null }[];
+  workshops: { id: string; room_id: string; name: string }[];
   absences: Absence[];
   dayInfo?: Record<string, Record<string, { modules: string[]; present: number }>>;
 }) {
@@ -393,12 +402,12 @@ export function Planning({
                   ) : (
                     <>
                       {r.name}
-                      {workshops.some((w) => w.room_id === r.id) && (
+                      {(workshops.some((w) => w.room_id === r.id) || (r.template_ids?.length ?? 0) > 0) && (
                         <button
                           type="button"
                           className="workshop-btn small"
-                          aria-label={`Voir les ateliers de ${r.name}`}
-                          title="Ateliers de la salle"
+                          aria-label={`Voir les ateliers et formations de ${r.name}`}
+                          title="Ateliers et formations réalisables"
                           onClick={() => {
                             setWorkshopRoom(r);
                             workshopRef.current?.showModal();
@@ -537,20 +546,28 @@ export function Planning({
       )}
       <dialog ref={workshopRef} className="modal" aria-labelledby="workshop-title" onClose={() => setWorkshopRoom(null)}>
         <div className="modal-head">
-          <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> Ateliers : {workshopRoom?.name}</h2>
+          <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> {workshopRoom?.name}</h2>
           <button className="icon ghost" onClick={() => workshopRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ paddingBottom: 18 }}>
-          <div className="workshop-list">
-            {workshops
-              .filter((w) => w.room_id === workshopRoom?.id)
-              .map((w) => (
-                <article key={w.id}>
-                  <h3>{w.name}</h3>
-                  {w.equipment && <p><span className="hint">Équipements :</span> {w.equipment}</p>}
-                  {w.modules && <p><span className="hint">Modules réalisables :</span> {w.modules}</p>}
-                </article>
-              ))}
+          <h3 className="sub-heading" style={{ marginTop: 0 }}>Ateliers</h3>
+          <div className="check-grid">
+            {workshops.filter((w) => w.room_id === workshopRoom?.id).map((w) => (
+              <span key={w.id} className="workshop-chip" style={{ paddingRight: 12 }}>{w.name}</span>
+            ))}
+            {!workshops.some((w) => w.room_id === workshopRoom?.id) && <span className="hint">Aucun atelier.</span>}
+          </div>
+          <h3 className="sub-heading">Formations réalisables</h3>
+          <div className="check-grid">
+            {(workshopRoom?.template_ids?.length ?? 0) === 0 ? (
+              <span className="hint">Toutes les formations.</span>
+            ) : (
+              templates
+                .filter((t) => workshopRoom?.template_ids?.includes(t.id))
+                .map((t) => (
+                  <span key={t.id} className="badge brouillon">{t.category ? `${t.category} › ` : ''}{t.title}</span>
+                ))
+            )}
           </div>
         </div>
       </dialog>

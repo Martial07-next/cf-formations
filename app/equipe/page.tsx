@@ -16,7 +16,8 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
   const { annee } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
-  const isAdmin = profile?.role === 'admin';
+  // Bureau administratif et administrateur voient toutes les équipes ; le référent, la sienne.
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'bureau';
 
   if (!profile || (profile.role !== 'referent' && !isAdmin)) {
     return (

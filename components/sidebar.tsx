@@ -35,7 +35,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
   const suivi: NavLink[] = [];
   if (profile?.trainer_id) suivi.push({ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History });
   if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound });
-  if (role === 'admin') suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
+  if (role === 'admin' || role === 'bureau') suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
   if (suivi.length) groups.push({ label: 'Suivi', links: suivi });
 
   if (canManage(role)) {

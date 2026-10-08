@@ -2,8 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
+import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
+import { parseSessionForm, findSessionConflict, roomRejectsTemplate } from '@/lib/session-form';
 import { isSessionStatus } from '@/lib/status';
 import { placeModules } from '@/lib/modules';
 
@@ -34,6 +34,9 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
     }
     templateModules = (mods || []).map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) }));
   }
+
+  const roomIssue = await roomRejectsTemplate(supabase, parsed.value.room_id, parsed.value.template_id);
+  if (roomIssue) return { ok: false, error: roomIssue };
 
   const conflict = await findSessionConflict(supabase, parsed.value);
   if (conflict) return { ok: false, error: conflict };
@@ -71,7 +74,7 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateSessionStatus(sessionId: string, status: string): Promise<ActionResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireSessionEditor())) return FORBIDDEN;
   if (!isSessionStatus(status)) return { ok: false, error: 'Statut inconnu.' };
   const supabase = await createClient();
   const { error } = await supabase.from('sessions').update({ status }).eq('id', sessionId);
