@@ -18,13 +18,15 @@ returns text as $$
   select lower(regexp_replace(btrim(coalesce(name, '')), '\s+', ' ', 'g'));
 $$ language sql immutable;
 
--- 1a. Fusion des doublons déjà présents : on garde la fiche la plus ancienne,
+-- 1a. Fusion des doublons déjà présents (table de travail _trainee_dups,
+--     supprimée à la fin ; pas de table temporaire, que l'éditeur SQL de
+--     Supabase ne conserve pas d'une instruction à l'autre) : on garde la fiche la plus ancienne,
 --     on y rattache les inscriptions des autres (sans perdre un statut
 --     « validé »), on complète e-mail/entreprise/prénom/nom manquants, puis
 --     on supprime les fiches en double. (Instructions simples, sans boucle,
 --     pour fonctionner dans l'éditeur SQL de Supabase.)
-drop table if exists trainee_dups;
-create temporary table trainee_dups as
+drop table if exists public._trainee_dups;
+create table public._trainee_dups as
 select id, keep_id from (
   select id,
          first_value(id) over (partition by trainee_name_key(full_name) order by created_at, id) as keep_id
@@ -36,7 +38,7 @@ insert into session_trainees (session_id, trainee_id, status)
 select st.session_id, d.keep_id,
        case when bool_or(st.status = 'validee') then 'validee' else 'en_attente' end
 from session_trainees st
-join trainee_dups d on d.id = st.trainee_id
+join public._trainee_dups d on d.id = st.trainee_id
 group by st.session_id, d.keep_id
 on conflict (session_id, trainee_id) do update
   set status = case when session_trainees.status = 'validee' or excluded.status = 'validee'
@@ -50,13 +52,13 @@ update trainees k set
 from (
   select d.keep_id, max(t.email) as email, max(t.company) as company,
          max(t.first_name) as first_name, max(t.last_name) as last_name
-  from trainee_dups d join trainees t on t.id = d.id
+  from public._trainee_dups d join trainees t on t.id = d.id
   group by d.keep_id
 ) x
 where k.id = x.keep_id;
 
-delete from trainees where id in (select id from trainee_dups);
-drop table trainee_dups;
+delete from trainees where id in (select id from public._trainee_dups);
+drop table if exists public._trainee_dups;
 
 -- 1b. Interdiction définitive : la base refuse tout nouveau doublon.
 create unique index if not exists trainees_name_key on trainees (trainee_name_key(full_name));
