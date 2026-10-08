@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, Mail } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
@@ -26,7 +26,7 @@ export default async function TrainerDetailPage({
   const [{ data: trainer }, { data: sessions }, { data: absences }] = await Promise.all([
     supabase
       .from('trainers')
-      .select('id, full_name, email, phone, specialty, availability, status, color, referent_id, profiles!trainers_referent_id_fkey(full_name)')
+      .select('id, full_name, email, specialty, availability, status, color, referent_id, profiles!trainers_referent_id_fkey(full_name)')
       .eq('id', id)
       .maybeSingle(),
     supabase
@@ -89,7 +89,6 @@ export default async function TrainerDetailPage({
               {trainer.specialty && <span>{trainer.specialty}</span>}
               {referent && <span>Référent : <strong>{referent}</strong></span>}
               {trainer.email && <a href={`mailto:${trainer.email}`} className="trainer-tag" style={{ fontWeight: 600 }}><Mail size={14} aria-hidden /> {trainer.email}</a>}
-              {trainer.phone && <a href={`tel:${trainer.phone}`} className="trainer-tag" style={{ fontWeight: 600 }}><Phone size={14} aria-hidden /> {trainer.phone}</a>}
             </p>
           </div>
         </header>

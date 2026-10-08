@@ -161,13 +161,39 @@ export function TemplateCatalog({
   folders,
   canEdit,
   trainers,
+  initialClosed = [],
+  stateCookie,
 }: {
   templates: Template[];
   folders: FolderRow[];
   canEdit: boolean;
   trainers: TrainerOption[];
+  /** Dossiers fermés lors de la dernière visite de ce collaborateur. */
+  initialClosed?: string[];
+  /** Nom du cookie qui mémorise les dossiers fermés (propre à chaque compte). */
+  stateCookie: string;
 }) {
   const [query, setQuery] = useState('');
+  const [closed, setClosed] = useState<Set<string>>(() => new Set(initialClosed));
+
+  // Ouvrir / fermer un dossier est mémorisé : on retrouve la page telle qu'on l'a laissée.
+  function toggleFolder(id: string, open: boolean) {
+    setClosed((prev) => {
+      if (open === !prev.has(id)) return prev;
+      const next = new Set(prev);
+      if (open) next.delete(id);
+      else next.add(id);
+      document.cookie = `${stateCookie}=${encodeURIComponent([...next].join(','))}; path=/; max-age=31536000; samesite=lax`;
+      return next;
+    });
+  }
+  // Pendant une recherche, tout est déplié pour voir les résultats.
+  const folderProps = (id: string) => ({
+    open: query.trim() ? true : !closed.has(id),
+    onToggle: (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+      if (!query.trim()) toggleFolder(id, e.currentTarget.open);
+    },
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addIn, setAddIn] = useState<string | null>(null); // id du dossier où l'on ajoute une formation ('' = sans dossier)
   const [newFolder, setNewFolder] = useState<string | null>(null); // '' = dossier principal, sinon id du parent
@@ -400,14 +426,14 @@ export function TemplateCatalog({
         const subs = childrenOf(f.id);
         if (q && countDeep(f.id) === 0) return null;
         return (
-          <details className="folder" key={f.id} open>
+          <details className="folder" key={f.id} {...folderProps(f.id)}>
             {renderHeader(f, i, roots.length, false)}
             {renaming === f.id && renderRename(f)}
             {canEdit && newFolder === f.id && renderNewFolder(f.id)}
             {subs.map((c, j) => {
               if (q && templatesIn(c.id).length === 0) return null;
               return (
-                <details className="folder subfolder" key={c.id} open>
+                <details className="folder subfolder" key={c.id} {...folderProps(c.id)}>
                   {renderHeader(c, j, subs.length, true)}
                   {renaming === c.id && renderRename(c)}
                   {renderRows(templatesIn(c.id), c.id)}
@@ -422,7 +448,7 @@ export function TemplateCatalog({
       })}
 
       {(orphans.length > 0 || addIn === '') && (
-        <details className="folder" open>
+        <details className="folder" {...folderProps('sans-dossier')}>
           <summary>
             <ChevronRight size={16} className="chev" aria-hidden />
             <Folder size={17} aria-hidden /> <span>Sans dossier</span>

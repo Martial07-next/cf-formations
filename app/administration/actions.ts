@@ -16,8 +16,55 @@ export async function updateRole(userId: string, role: Role) {
   const supabase = await createClient();
   const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
   if (error) return { ok: false, error: error.message };
+
+  // Passage en « Formateur » : on crée (ou lie) sa fiche formateur.
+  if (role === 'formateur') {
+    const service = serviceClient();
+    if (service) {
+      const [{ data: profile }, { data: authUser }] = await Promise.all([
+        service.from('profiles').select('full_name').eq('id', userId).maybeSingle(),
+        service.auth.admin.getUserById(userId),
+      ]);
+      await ensureTrainerProfile(service, userId, profile?.full_name || authUser?.user?.email || 'Formateur', authUser?.user?.email ?? null, true);
+    }
+  }
   revalidatePath('/administration');
+  revalidatePath('/formateurs');
   return { ok: true };
+}
+
+type ServiceClient = ReturnType<typeof createAdminClient>;
+
+/**
+ * Fiche formateur d'un compte : déjà liée → rien à faire ; une fiche porte le
+ * même e-mail → on la lie ; sinon (si `create`) on crée la fiche, avec sa couleur.
+ */
+async function ensureTrainerProfile(admin: ServiceClient, userId: string, fullName: string, email: string | null, create: boolean) {
+  const { data: linked } = await admin.from('trainers').select('id').eq('profile_id', userId).maybeSingle();
+  if (linked) return true;
+  if (email) {
+    const { data: existing } = await admin
+      .from('trainers')
+      .select('id, profile_id')
+      .ilike('email', email.replace(/[\\%_]/g, (c) => '\\' + c))
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      if (existing.profile_id) return false; // fiche déjà liée à un autre compte
+      const { error } = await admin.from('trainers').update({ profile_id: userId }).eq('id', existing.id);
+      return !error;
+    }
+  }
+  if (!create) return false;
+  const { data: used } = await admin.from('trainers').select('color');
+  const { error } = await admin.from('trainers').insert({
+    full_name: fullName,
+    email,
+    status: 'actif',
+    profile_id: userId,
+    color: nextTrainerColor((used || []).map((r: any) => r.color)),
+  });
+  return !error;
 }
 
 /** Mot de passe provisoire lisible (sans caractères ambigus). */
@@ -83,29 +130,11 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
     .upsert({ id: userId, full_name: fullName, role }, { onConflict: 'id' });
   if (profileError) return { ok: false, error: `Compte créé, mais rôle non appliqué : ${profileError.message}` };
 
-  let trainerLinked = false;
-  if (role === 'formateur' || role === 'referent') {
-    const { data: existing } = await admin
-      .from('trainers')
-      .select('id, profile_id')
-      .ilike('email', email.replace(/[\\%_]/g, (c) => '\\' + c))
-      .limit(1)
-      .maybeSingle();
-    if (existing && !existing.profile_id) {
-      const { error: linkError } = await admin.from('trainers').update({ profile_id: userId }).eq('id', existing.id);
-      trainerLinked = !linkError;
-    } else if (!existing && role === 'formateur') {
-      const { data: used } = await admin.from('trainers').select('color');
-      const { error: insertError } = await admin.from('trainers').insert({
-        full_name: fullName,
-        email,
-        status: 'actif',
-        profile_id: userId,
-        color: nextTrainerColor((used || []).map((r: any) => r.color)),
-      });
-      trainerLinked = !insertError;
-    }
-  }
+  // Un accès « Formateur » a toujours sa fiche formateur (créée ou liée par e-mail).
+  const trainerLinked =
+    role === 'formateur' || role === 'referent'
+      ? await ensureTrainerProfile(admin, userId, fullName, email, role === 'formateur')
+      : false;
 
   revalidatePath('/administration');
   revalidatePath('/formateurs');

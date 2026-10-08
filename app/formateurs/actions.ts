@@ -10,7 +10,6 @@ function readTrainer(formData: FormData) {
   return {
     full_name: get('full_name'),
     email: get('email') || null,
-    phone: get('phone') || null,
     specialty: get('specialty') || null,
     availability: get('availability') || null,
     color: get('color'),

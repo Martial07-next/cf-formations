@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
-import { parseSessionForm, findSessionConflict, roomRejectsTemplate } from '@/lib/session-form';
+import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { isSessionStatus } from '@/lib/status';
 import { placeModules } from '@/lib/modules';
 
@@ -34,9 +34,6 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
     }
     templateModules = (mods || []).map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) }));
   }
-
-  const roomIssue = await roomRejectsTemplate(supabase, parsed.value.room_id, parsed.value.template_id);
-  if (roomIssue) return { ok: false, error: roomIssue };
 
   const conflict = await findSessionConflict(supabase, parsed.value);
   if (conflict) return { ok: false, error: conflict };

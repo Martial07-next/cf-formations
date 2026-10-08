@@ -12,7 +12,7 @@ export default async function FormateursPage() {
   const [{ data: trainers }, { data: profiles }] = await Promise.all([
     supabase
       .from('trainers')
-      .select('id, full_name, email, phone, specialty, availability, status, color, referent_id, profile_id')
+      .select('id, full_name, email, specialty, availability, status, color, referent_id, profile_id')
       .order('full_name'),
     supabase.from('profiles').select('id, full_name, role').order('full_name'),
   ]);
@@ -55,14 +55,12 @@ export default async function FormateursPage() {
             { key: 'name_cell', label: 'Formateur' },
             { key: 'specialty', label: 'Spécialité' },
             { key: 'email', label: 'E-mail' },
-            { key: 'phone', label: 'Téléphone' },
             { key: 'referent_cell', label: 'Référent' },
             { key: 'account_cell', label: 'Compte' },
           ]}
           fields={[
             { name: 'full_name', label: 'Nom complet', required: true },
             { name: 'email', label: 'E-mail', type: 'email' },
-            { name: 'phone', label: 'Téléphone', type: 'tel' },
             { name: 'specialty', label: 'Spécialité' },
             { name: 'availability', label: 'Disponibilité', placeholder: 'Ex. lundi–jeudi' },
             { name: 'color', label: 'Couleur planning', type: 'color', editOnly: true },

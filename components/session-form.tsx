@@ -145,10 +145,12 @@ export function SessionForm({
     if (t.trainer_ids?.length && trainerId && !t.trainer_ids.includes(trainerId)) setTrainerId('');
   }
 
-  // Salles prévues pour la formation choisie (une salle sans liste accepte tout).
-  const physicalRooms = rooms.filter(
-    (r) => !r.is_holding && (!template || !r.template_ids?.length || r.template_ids.includes(template.id) || r.id === defaults.room_id)
-  );
+  // Salles : celles où la formation choisie est réalisable passent en premier
+  // (et sont présélectionnées), les autres restent disponibles au cas où.
+  const physicalRooms = rooms.filter((r) => !r.is_holding);
+  const suitedRooms = template ? physicalRooms.filter((r) => r.template_ids?.includes(template.id)) : [];
+  const otherRooms = physicalRooms.filter((r) => !suitedRooms.includes(r));
+  const roomLabel = (r: FormRoom) => `${r.location ? `${r.location} · ` : ''}${r.name} (${r.capacity} places)`;
   // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
   const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
   const qualified = template?.trainer_ids?.length ? template.trainer_ids : null;
@@ -181,10 +183,24 @@ export function SessionForm({
         <div className="form-row">
           <label>
             Salle
-            <select key={templateId || "libre"} name="room_id" required defaultValue={defaults.room_id || physicalRooms[0]?.id || ''}>
-              {physicalRooms.map((r) => (
-                <option key={r.id} value={r.id}>{r.location ? `${r.location} · ` : ''}{r.name} ({r.capacity} places)</option>
-              ))}
+            <select
+              key={templateId || 'libre'}
+              name="room_id"
+              required
+              defaultValue={defaults.room_id || suitedRooms[0]?.id || physicalRooms[0]?.id || ''}
+            >
+              {suitedRooms.length > 0 ? (
+                <>
+                  <optgroup label="Recommandées pour cette formation">
+                    {suitedRooms.map((r) => <option key={r.id} value={r.id}>★ {roomLabel(r)}</option>)}
+                  </optgroup>
+                  <optgroup label="Autres salles">
+                    {otherRooms.map((r) => <option key={r.id} value={r.id}>{roomLabel(r)}</option>)}
+                  </optgroup>
+                </>
+              ) : (
+                physicalRooms.map((r) => <option key={r.id} value={r.id}>{roomLabel(r)}</option>)
+              )}
               {holdingRooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}

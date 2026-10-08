@@ -560,7 +560,7 @@ export function Planning({
           <h3 className="sub-heading">Formations réalisables</h3>
           <div className="check-grid">
             {(workshopRoom?.template_ids?.length ?? 0) === 0 ? (
-              <span className="hint">Toutes les formations.</span>
+              <span className="hint">Aucune formation indiquée.</span>
             ) : (
               templates
                 .filter((t) => workshopRoom?.template_ids?.includes(t.id))

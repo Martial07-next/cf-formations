@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { TemplateCatalog } from '@/components/template-catalog';
@@ -22,6 +23,11 @@ export default async function ModelesPage() {
       .map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) })),
     trainer_ids: (t.template_trainers || []).map((x: any) => x.trainer_id),
   }));
+  // Dossiers fermés par ce collaborateur lors de sa dernière visite.
+  const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;
+  const initialClosed = decodeURIComponent((await cookies()).get(stateCookie)?.value || '')
+    .split(',')
+    .filter(Boolean);
   const activeTrainers = (trainers || []).filter((t: any) => t.status !== 'inactif');
 
   return (
@@ -35,7 +41,7 @@ export default async function ModelesPage() {
             <p>Range tes formations dans des dossiers et sous-dossiers, dans l’ordre que tu veux (flèches ↑ ↓). Elles se choisissent ensuite à la création d’une session.</p>
           </div>
         </header>
-        <TemplateCatalog templates={rows} folders={(folders as any) || []} trainers={activeTrainers as any} canEdit={canManage(profile?.role)} />
+        <TemplateCatalog templates={rows} folders={(folders as any) || []} initialClosed={initialClosed} stateCookie={stateCookie} trainers={activeTrainers as any} canEdit={canManage(profile?.role)} />
       </section>
     </main>
   );

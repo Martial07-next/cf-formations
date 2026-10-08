@@ -4,7 +4,7 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { canEditSessions } from '@/lib/roles';
 import { revalidatePath } from 'next/cache';
 import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
-import { parseSessionForm, findSessionConflict, roomRejectsTemplate } from '@/lib/session-form';
+import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee } from '@/lib/trainee-conflict';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -16,9 +16,6 @@ export async function updateSessionDetails(sessionId: string, formData: FormData
   if (!parsed.ok) return parsed;
 
   const supabase = await createClient();
-  const { data: current } = await supabase.from('sessions').select('template_id').eq('id', sessionId).maybeSingle();
-  const roomIssue = await roomRejectsTemplate(supabase, parsed.value.room_id, current?.template_id ?? null);
-  if (roomIssue) return { ok: false, error: roomIssue };
   const conflict = await findSessionConflict(supabase, parsed.value, sessionId);
   if (conflict) return { ok: false, error: conflict };
 
