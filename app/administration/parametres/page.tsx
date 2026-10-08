@@ -35,7 +35,7 @@ export default async function ParametresPage() {
         <SettingsForm
           settings={
             settings || {
-              company_name: 'CF Réseau',
+              company_name: 'CF Réseaux',
               company_address: null,
               default_session_duration_hours: 7,
               notify_on_conflict: true,

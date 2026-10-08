@@ -57,7 +57,7 @@ export function CreateAccessPanel({ serviceReady }: { serviceReady: boolean }) {
         <div role="status" className="alert alert-success" style={{ flexDirection: 'column' }}>
           <span>
             Accès créé pour <strong>{result.email}</strong>
-            {result.trainerLinked && ' — lié à sa fiche formateur'}. Transmets-lui ces identifiants ; il pourra changer
+            {result.trainerLinked && ', lié à sa fiche formateur'}. Transmets-lui ces identifiants ; il pourra changer
             son mot de passe dans « Mon profil ».
           </span>
           <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -209,7 +209,7 @@ export function CrudTable({
                   ) : (
                     <>
                       {columns.map((c) => (
-                        <td key={c.key}>{c.render ? c.render(row) : (row[c.key] ?? '—')}</td>
+                        <td key={c.key}>{c.render ? c.render(row) : (row[c.key] ?? '-')}</td>
                       ))}
                     </>
                   )}

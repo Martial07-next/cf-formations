@@ -1,4 +1,4 @@
-// Client pour l'API GraphQL de Digiforma — SERVEUR UNIQUEMENT.
+// Client pour l'API GraphQL de Digiforma : SERVEUR UNIQUEMENT.
 // La clé DIGIFORMA_API_TOKEN est lue ici depuis les variables d'environnement
 // du serveur (Vercel) : elle n'est jamais envoyée au navigateur ni stockée en base.
 // Endpoint et authentification confirmés par leur documentation publique ;
@@ -90,7 +90,7 @@ export type DigiformaSession = {
 
 /**
  * Liste les sessions de formation Digiforma, avec leurs stagiaires inscrits.
- * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect) —
+ * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect) -
  * en particulier le nom exact des champs de dates, qui varie souvent d'une API à l'autre.
  */
 export async function digiformaListTrainingSessions(): Promise<DigiformaSession[]> {

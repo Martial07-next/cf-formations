@@ -91,7 +91,7 @@ export function PasteImport({ sessionId }: { sessionId?: string }) {
                 {i < Math.min(preview.length, 4) - 1 ? ' · ' : ''}
               </span>
             ))}
-            {preview.length > 4 && ' …'} — vérifie que le nom (en gras) est au bon endroit.
+            {preview.length > 4 && ' …'}. Vérifie que le nom (en gras) est au bon endroit.
           </p>
         )}
 

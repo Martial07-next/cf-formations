@@ -21,7 +21,7 @@ export type SyncResult =
 export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncResult> {
   const { data: holdingRoom } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
   if (!holdingRoom) {
-    return { ok: false, error: "Salle d'attente introuvable — exécute migration_phase6.sql." };
+    return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
   }
 
   let sessions;
@@ -70,7 +70,7 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
         end_at: end.toISOString(),
         status: 'planifiee',
         digiforma_ref: s.id,
-        notes: 'Importée automatiquement de Digiforma — salle à affecter.',
+        notes: 'Importée automatiquement de Digiforma, salle à affecter.',
       })
       .select('id')
       .single();

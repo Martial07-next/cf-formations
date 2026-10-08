@@ -34,7 +34,7 @@ export function DigiformaSyncPanel({
       <div className="counters" style={{ margin: '14px 0' }}>
         <div className="counter-chip" style={{ minWidth: 160 }}>
           <strong style={{ fontSize: 14 }}>
-            {lastSync.status === 'ok' ? 'OK' : lastSync.status === 'error' ? 'Erreur' : '—'}
+            {lastSync.status === 'ok' ? 'OK' : lastSync.status === 'error' ? 'Erreur' : '-'}
           </strong>
           <span>Dernier statut</span>
         </div>

@@ -27,7 +27,7 @@ export function AbsencesPanel({ trainerId, absences, canEdit }: { trainerId: str
     <tr>
       <td><span className="badge en_attente">{ABSENCE_LABEL[a.kind]}</span></td>
       <td>{a.start_date === a.end_date ? `le ${frDate(a.start_date)}` : `du ${frDate(a.start_date)} au ${frDate(a.end_date)}`}</td>
-      <td>{a.note || <span className="hint">—</span>}</td>
+      <td>{a.note || <span className="hint">-</span>}</td>
       {canEdit && (
         <td className="row-actions">
           <button

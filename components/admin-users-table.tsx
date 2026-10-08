@@ -59,7 +59,7 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
               return (
                 <tr key={u.id}>
                   <td>{u.full_name} {self && <em className="hint">(vous)</em>}</td>
-                  <td>{u.email || <span className="hint">—</span>}</td>
+                  <td>{u.email || <span className="hint">-</span>}</td>
                   <td>
                     <select
                       className="input"

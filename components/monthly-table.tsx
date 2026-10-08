@@ -14,7 +14,7 @@ export type MonthlyRow = {
 
 function Cell({ done, planned }: { done: number; planned: number }) {
   const total = done + planned;
-  if (total === 0) return <span className="hint">—</span>;
+  if (total === 0) return <span className="hint">-</span>;
   return (
     <>
       <strong>{formatHours(total)}</strong>

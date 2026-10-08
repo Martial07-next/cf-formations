@@ -65,7 +65,7 @@ export type ImportResult =
 
 /**
  * Importe des stagiaires depuis un CSV dans l'annuaire (sans les lier à une
- * session — ça se fait ensuite depuis la fiche de la session concernée).
+ * session : ça se fait ensuite depuis la fiche de la session concernée).
  * Colonnes attendues (insensibles à la casse) : Prénom, Nom (requis), Email, Entreprise.
  */
 export async function importTraineesCsvGlobal(formData: FormData): Promise<ImportResult> {
@@ -194,7 +194,7 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
         const conflict = await findTraineeConflict(supabase, trainee.id, session.start_at, session.end_at, session.id);
         if (conflict) {
           status = 'en_attente';
-          errors.push(`${label} : déjà validé sur « ${conflict.title} » sur ce créneau — mis en attente.`);
+          errors.push(`${label} : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
         }
       }
       const { error } = await supabase

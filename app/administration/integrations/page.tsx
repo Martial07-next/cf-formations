@@ -39,7 +39,7 @@ export default async function IntegrationsPage() {
         <AdminTabs active="/administration/integrations" />
 
         <div className="panel">
-          <h2>Digiforma — clé API (à faire par toi)</h2>
+          <h2>Digiforma : clé API (à faire par toi)</h2>
           <p className="panel-intro">
             La clé n’est <strong>jamais</strong> saisie dans cette interface ni enregistrée dans la base : elle reste dans
             les variables d’environnement du serveur, invisible pour les navigateurs.
@@ -114,7 +114,7 @@ export default async function IntegrationsPage() {
           <h2>Import direct par session</h2>
           <p className="panel-intro" style={{ margin: 0 }}>
             Chaque fiche session propose aussi un champ « référence Digiforma » et un bouton pour récupérer ses stagiaires
-            inscrits, sans ressaisie — utile pour relancer l’import quand un stagiaire est ajouté côté Digiforma.
+            inscrits, sans ressaisie, utile pour relancer l’import quand un stagiaire est ajouté côté Digiforma.
           </p>
         </div>
 

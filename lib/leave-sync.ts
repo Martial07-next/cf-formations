@@ -96,7 +96,7 @@ export async function handleLeaveEvent(supabase: SupabaseClient, payload: any): 
     return {
       ok: true,
       action: 'ignoré',
-      detail: `aucun formateur correspondant (e-mail « ${email ?? '—'} ») — normal s'il ne s'agit pas d'un formateur`,
+      detail: `aucun formateur correspondant (e-mail « ${email ?? '-'} »), normal s'il ne s'agit pas d'un formateur`,
     };
   }
 

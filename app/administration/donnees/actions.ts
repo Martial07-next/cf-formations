@@ -61,7 +61,7 @@ export async function purgeData(formData: FormData): Promise<PurgeResult> {
     }
   } catch (e: any) {
     revalidatePath('/', 'layout');
-    return { ok: false, error: `Suppression interrompue — ${e.message}. Déjà supprimé : ${done.join(', ') || 'rien'}.` };
+    return { ok: false, error: `Suppression interrompue : ${e.message}. Déjà supprimé : ${done.join(', ') || 'rien'}.` };
   }
 
   revalidatePath('/', 'layout');

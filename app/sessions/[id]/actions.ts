@@ -223,7 +223,7 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
       const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
       if (conflict) {
         status = 'en_attente';
-        errors.push(`Ligne ${i + 2} (${full_name}) : déjà validé sur "${conflict.title}" sur ce créneau — mis en attente.`);
+        errors.push(`Ligne ${i + 2} (${full_name}) : déjà validé sur "${conflict.title}" sur ce créneau, mis en attente.`);
       }
     }
 
@@ -260,7 +260,7 @@ export type DigiformaImportResult =
 
 /**
  * Récupère les stagiaires d'une session Digiforma (via son id/référence) et les
- * inscrit directement dans cette session — pas de ressaisie manuelle.
+ * inscrit directement dans cette session : pas de ressaisie manuelle.
  * Un stagiaire Digiforma est considéré confirmé, donc inscrit en statut "validée".
  */
 export async function importFromDigiforma(sessionId: string, digiformaRef: string): Promise<DigiformaImportResult> {

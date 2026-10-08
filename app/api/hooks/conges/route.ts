@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const result = await handleLeaveEvent(supabase, payload);
   await supabase
     .from('app_settings')
-    .update({ absences_last_sync: new Date().toISOString(), absences_last_log: `${result.action} — ${result.detail}` })
+    .update({ absences_last_sync: new Date().toISOString(), absences_last_log: `${result.action} : ${result.detail}` })
     .eq('id', true);
 
   revalidatePath('/');

@@ -202,7 +202,7 @@ export function TraineeModuleToggles({
             aria-pressed={effective.includes(m.id)}
             disabled={isPending}
             onClick={() => toggle(m.id)}
-            title={`${m.name} — ${frDay(m.start_day)}`}
+            title={`${m.name} : ${frDay(m.start_day)}`}
           >
             {m.name}
           </button>

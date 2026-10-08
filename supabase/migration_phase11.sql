@@ -4,7 +4,8 @@
 --      les sessions ; chaque stagiaire suit tout ou partie des modules.
 --   2. Formateurs habilités par formation.
 --   3. Journal de la synchronisation avec la plateforme de congés.
--- À exécuter dans Supabase Dashboard > SQL Editor. Ne supprime aucune donnée.
+-- À exécuter dans Supabase Dashboard > SQL Editor :
+-- coller TOUT le fichier, appuyer sur Ctrl+A (tout sélectionner), puis Run. Ne supprime aucune donnée.
 -- ============================================================
 
 -- ------------------------------------------------------------

@@ -27,7 +27,7 @@ export function DigiformaPanel({ sessionId, digiformaRef }: { sessionId: string;
       <h2>Digiforma</h2>
       <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-8px 0 14px' }}>
         Colle l'identifiant (ou la référence) de la session correspondante côté Digiforma, puis récupère directement
-        ses stagiaires inscrits — sans ressaisie. Nécessite qu'un administrateur ait configuré la clé API Digiforma
+        ses stagiaires inscrits, sans ressaisie. Nécessite qu'un administrateur ait configuré la clé API Digiforma
         côté serveur.
       </p>
       {message && (

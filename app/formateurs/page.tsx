@@ -33,8 +33,8 @@ export default async function FormateursPage() {
         {t.full_name}
       </Link>
     ),
-    referent_cell: t.referent_id ? byId.get(t.referent_id)?.full_name ?? '—' : <span className="hint">Aucun</span>,
-    account_cell: t.profile_id ? byId.get(t.profile_id)?.full_name ?? '—' : <span className="hint">Non lié</span>,
+    referent_cell: t.referent_id ? byId.get(t.referent_id)?.full_name ?? '-' : <span className="hint">Aucun</span>,
+    account_cell: t.profile_id ? byId.get(t.profile_id)?.full_name ?? '-' : <span className="hint">Non lié</span>,
   }));
 
   return (
@@ -71,7 +71,7 @@ export default async function FormateursPage() {
               label: 'Référent cadre',
               type: 'select',
               options: [
-                { value: '', label: '— Aucun —' },
+                { value: '', label: 'Aucun' },
                 ...referents.map((p: any) => ({ value: p.id, label: `${p.full_name} (${ROLE_LABELS[p.role as Role]})` })),
               ],
             },
@@ -80,7 +80,7 @@ export default async function FormateursPage() {
               label: 'Compte utilisateur lié',
               type: 'select',
               options: [
-                { value: '', label: '— Aucun —' },
+                { value: '', label: 'Aucun' },
                 ...(profiles || []).map((p: any) => ({ value: p.id, label: `${p.full_name} (${ROLE_LABELS[p.role as Role] ?? p.role})` })),
               ],
             },

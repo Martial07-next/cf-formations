@@ -12,7 +12,7 @@ export function DigiformaTestButton() {
     startTransition(async () => {
       const res = await testDigiformaConnection();
       if (res.ok) {
-        setResult({ text: `Connexion réussie — ${res.typeCount} types détectés dans le schéma Digiforma.`, error: false });
+        setResult({ text: `Connexion réussie : ${res.typeCount} types détectés dans le schéma Digiforma.`, error: false });
       } else {
         setResult({ text: res.error, error: true });
       }

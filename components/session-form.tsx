@@ -141,7 +141,7 @@ export function SessionForm({
   // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
   const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
   const qualified = template?.trainer_ids?.length ? template.trainer_ids : null;
-  // Seuls les formateurs actifs — et, si la formation en définit, habilités — sont proposés.
+  // Seuls les formateurs actifs : et, si la formation en définit, habilités : sont proposés.
   const activeTrainers = trainers.filter(
     (t) => (t.status !== 'inactif' && (!qualified || qualified.includes(t.id))) || t.id === defaults.trainer_id
   );
@@ -172,7 +172,7 @@ export function SessionForm({
             Salle
             <select name="room_id" required defaultValue={defaults.room_id || physicalRooms[0]?.id || ''}>
               {physicalRooms.map((r) => (
-                <option key={r.id} value={r.id}>{r.location ? `${r.location} — ` : ''}{r.name} ({r.capacity} places)</option>
+                <option key={r.id} value={r.id}>{r.location ? `${r.location} · ` : ''}{r.name} ({r.capacity} places)</option>
               ))}
               {holdingRooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
@@ -185,12 +185,12 @@ export function SessionForm({
               {trainer && <span className="swatch" style={{ background: trainer.color || undefined }} aria-hidden />}
             </span>
             <select name="trainer_id" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
-              <option value="">— Non attribué —</option>
+              <option value="">Non attribué</option>
               {activeTrainers.map((t) => {
                 const off = startDate ? absenceFor(absences, t.id, startDate, endDate || startDate) : null;
                 return (
                   <option key={t.id} value={t.id} disabled={Boolean(off) && t.id !== defaults.trainer_id}>
-                    {t.full_name}{off ? ` — ${absenceText(off)}` : ''}
+                    {t.full_name}{off ? ` (${absenceText(off)})` : ''}
                   </option>
                 );
               })}

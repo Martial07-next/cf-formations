@@ -43,7 +43,7 @@ export default async function SallesPage() {
               name: 'location',
               label: 'Bâtiment',
               type: 'select',
-              options: [...BUILDINGS.map((b) => ({ value: b, label: b })), { value: '', label: '— Non renseigné —' }],
+              options: [...BUILDINGS.map((b) => ({ value: b, label: b })), { value: '', label: 'Non renseigné' }],
             },
             { name: 'equipment', label: 'Équipements' },
             {

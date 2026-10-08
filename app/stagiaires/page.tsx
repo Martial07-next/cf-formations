@@ -50,7 +50,7 @@ export default async function StagiairesPage({
 
   // Important : on pré-calcule ici le contenu affiché (un élément React, pas
   // une fonction) car un Server Component ne peut pas passer de fonction à un
-  // Client Component (CrudTable) — seuls des éléments/données sérialisables le peuvent.
+  // Client Component (CrudTable) : seuls des éléments/données sérialisables le peuvent.
   const now = new Date().toISOString();
   const rows = (trainees || []).map((t: any) => {
     const n = nameFields(t);
@@ -63,7 +63,7 @@ export default async function StagiairesPage({
       ...t,
       ...n,
       name_cell: <Link href={`/stagiaires/${t.id}`}>{n.last_name}</Link>,
-      first_cell: n.first_name || <span className="hint">—</span>,
+      first_cell: n.first_name || <span className="hint">-</span>,
       done_cell: done,
       next_cell: next ? (
         <Link href={`/sessions/${next.sessions.id}`} style={{ fontWeight: 600 }}>
@@ -71,7 +71,7 @@ export default async function StagiairesPage({
           <span className={`badge ${next.status}`}>{next.status === 'validee' ? 'validé' : 'en attente'}</span>
         </Link>
       ) : (
-        <span className="hint">—</span>
+        <span className="hint">-</span>
       ),
     };
   });
@@ -84,7 +84,7 @@ export default async function StagiairesPage({
           <div>
             <p className="eyebrow">Ressources</p>
             <h1>Stagiaires</h1>
-            <p>L’annuaire des stagiaires — clique sur un nom pour voir son historique de formations.</p>
+            <p>L’annuaire des stagiaires : clique sur un nom pour voir son historique de formations.</p>
           </div>
           {canManage(profile?.role) && (
             <div className="header-actions">

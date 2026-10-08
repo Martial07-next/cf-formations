@@ -155,10 +155,10 @@ export function SessionsTable({ isAdmin, myTrainerId, rows }: { isAdmin: boolean
                           {trainer.full_name}
                         </span>
                       ) : (
-                        <span className="hint">—</span>
+                        <span className="hint">-</span>
                       )}
                     </td>
-                    <td>{room?.is_holding ? <span className="badge en_attente">À affecter</span> : room?.name || '—'}</td>
+                    <td>{room?.is_holding ? <span className="badge en_attente">À affecter</span> : room?.name || '-'}</td>
                     <td>{fmt(s.start_at)}</td>
                     <td>{fmt(s.end_at)}</td>
                     <td className="num">{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>

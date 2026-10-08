@@ -60,7 +60,7 @@ function TemplateFields({
       </div>
 
       <div className="field" style={{ marginBottom: 14 }}>
-        Modules (facultatif) — ex. MA1, MA2, MA3 : un stagiaire peut ne suivre qu’une partie des modules
+        Modules (facultatif), ex. MA1, MA2, MA3 : un stagiaire peut ne suivre qu’une partie des modules
         <input type="hidden" name="modules_json" value={modulesJson} />
         <div className="module-rows">
           {modules.map((m, i) => (
@@ -284,7 +284,7 @@ export function TemplateCatalog({ templates, canEdit, trainers }: { templates: T
                             {t.description && <div className="hint">{t.description}</div>}
                           </td>
                           <td className="num">{formatHours(Number(t.duration_hours))}</td>
-                          <td className="num">{t.max_trainees ?? '—'}</td>
+                          <td className="num">{t.max_trainees ?? '-'}</td>
                           <td className="num">{t.sessions_count}</td>
                           {canEdit && (
                             <td className="row-actions">

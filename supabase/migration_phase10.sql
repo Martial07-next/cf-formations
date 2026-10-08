@@ -4,7 +4,8 @@
 --   2. Ateliers des salles (équipements / modules possibles)
 --   3. Congés et absences des formateurs (blocage du planning)
 --   4. Un formateur peut modifier les horaires de SES sessions
--- À exécuter dans Supabase Dashboard > SQL Editor.
+-- À exécuter dans Supabase Dashboard > SQL Editor :
+-- coller TOUT le fichier, appuyer sur Ctrl+A (tout sélectionner), puis Run.
 -- ============================================================
 
 -- ------------------------------------------------------------

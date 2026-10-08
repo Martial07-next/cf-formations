@@ -16,7 +16,7 @@ export default async function LoginPage({
             <Zap size={18} fill="currentColor" />
           </span>
           <span className="brand-text" style={{ color: 'var(--ink)' }}>
-            CF Réseau
+            CF Réseaux
             <small style={{ color: 'var(--muted)' }}>FORMATIONS</small>
           </span>
         </div>

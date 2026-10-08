@@ -93,7 +93,7 @@ function NavContent({ active, profile }: { active: string; profile: Profile }) {
         <div className="profile-block">
           <span className="avatar" aria-hidden>{initials(profile?.full_name || '')}</span>
           <span className="profile-meta">
-            <strong>{profile?.full_name || '—'}</strong>
+            <strong>{profile?.full_name || '-'}</strong>
             <small>{profile?.role ? ROLE_LABELS[profile.role as Role] ?? profile.role : ''}</small>
           </span>
           <form action={logout}>
@@ -114,7 +114,7 @@ function Brand() {
         <Zap size={18} fill="currentColor" aria-hidden />
       </span>
       <span className="brand-text">
-        CF Réseau
+        CF Réseaux
         <small>FORMATIONS</small>
       </span>
     </Link>

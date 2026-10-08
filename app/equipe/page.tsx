@@ -137,7 +137,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
 
         {trainers.length > 0 && (
           <MonthlyTable
-            title={`Suivi mois par mois — ${isAdmin ? 'tous les formateurs' : 'mon équipe'}`}
+            title={`Suivi mois par mois : ${isAdmin ? 'tous les formateurs' : 'mon équipe'}`}
             year={year}
             yearHref={(y) => `/equipe?annee=${y}`}
             rows={trainers.map((t) => ({
@@ -191,7 +191,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
                         <span style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                           <CalendarClock size={14} aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
                           <span>
-                            <strong>{st.next.title}</strong> — {st.next.start_at.slice(0, 10).split('-').reverse().join('/')}{' '}
+                            <strong>{st.next.title}</strong> · {st.next.start_at.slice(0, 10).split('-').reverse().join('/')}{' '}
                             {formatSessionPeriod(st.next.start_at, st.next.end_at)}{' '}
                             <span className={`status-pill ${st.next.status}`}>{SESSION_STATUS_LABEL[st.next.status]}</span>
                           </span>

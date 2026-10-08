@@ -228,7 +228,7 @@ export function SessionDetailView({
               <select value={selectedTraineeId} onChange={(e) => setSelectedTraineeId(e.target.value)}>
                 <option value="">Sélectionner…</option>
                 {availableTrainees.map((t) => (
-                  <option key={t.id} value={t.id}>{t.full_name}{t.company ? ` — ${t.company}` : ''}</option>
+                  <option key={t.id} value={t.id}>{t.full_name}{t.company ? ` (${t.company})` : ''}</option>
                 ))}
               </select>
             </label>
@@ -260,8 +260,8 @@ export function SessionDetailView({
                       />
                     </td>
                   )}
-                  <td>{t.email || '—'}</td>
-                  <td>{t.company || '—'}</td>
+                  <td>{t.email || '-'}</td>
+                  <td>{t.company || '-'}</td>
                   {isAdmin && (
                     <td className="row-actions">
                       <button className="small" onClick={() => handleStatusChange(t.id, 'en_attente')} disabled={isPending}>Mettre en attente</button>
@@ -295,8 +295,8 @@ export function SessionDetailView({
                       />
                     </td>
                   )}
-                  <td>{t.email || '—'}</td>
-                  <td>{t.company || '—'}</td>
+                  <td>{t.email || '-'}</td>
+                  <td>{t.company || '-'}</td>
                   {isAdmin && (
                     <td className="row-actions">
                       <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>
@@ -404,10 +404,10 @@ function DayTimeRow({
     <tr>
       <td style={{ fontWeight: 700 }}>{label}</td>
       <td>
-        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Début — ${label}`} />
+        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Début, ${label}`} />
       </td>
       <td>
-        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Fin — ${label}`} />
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Fin, ${label}`} />
       </td>
       {isAdmin && (
         <td className="row-actions">

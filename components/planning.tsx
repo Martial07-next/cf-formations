@@ -79,7 +79,7 @@ function SessionCard({
       href={`/sessions/${s.id}`}
       className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}
       style={{ ['--c' as any]: colorOf(s) }}
-      title={`${s.title} — ${SESSION_STATUS_LABEL[s.status]}`}
+      title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})`}
     >
       <span className="sc-top">
         <StatusPill status={s.status} />
@@ -430,7 +430,7 @@ export function Planning({
                           <button
                             type="button"
                             className="cell-add"
-                            aria-label={`Ajouter une session — ${r.name}, ${d.full} ${d.dateLabel}`}
+                            aria-label={`Ajouter une session : ${r.name}, ${d.full} ${d.dateLabel}`}
                             onClick={() => openForm({ room_id: r.id, start_date: d.iso, end_date: d.iso })}
                           >
                             <Plus size={14} aria-hidden />
@@ -444,7 +444,7 @@ export function Planning({
 
               {gridRooms.length === 0 && (
                 <div className="plan-cell" style={{ gridColumn: '2 / -1' }}>
-                  Aucune salle enregistrée — <Link href="/salles">ajoutes-en une</Link>.
+                  Aucune salle enregistrée : <Link href="/salles">ajoutes-en une</Link>.
                 </div>
               )}
             </div>
@@ -472,7 +472,7 @@ export function Planning({
                   >
                     <span className="date-num">{fullDateLabel(day).split(' ').slice(0, 2).join(' ')}</span>
                     {daySessions.map((s) => {
-                      const room = one(s.rooms)?.name || '—';
+                      const room = one(s.rooms)?.name || '-';
                       const trainer = one(s.trainers)?.full_name;
                       const count = validatedCount(s);
                       return (
@@ -481,7 +481,7 @@ export function Planning({
                           href={`/sessions/${s.id}`}
                           className="month-chip"
                           style={{ ['--c' as any]: colorOf(s) }}
-                          title={`${s.title} — ${SESSION_STATUS_LABEL[s.status]}`}
+                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})`}
                         >
                           <span className="chip-top">
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
@@ -537,7 +537,7 @@ export function Planning({
       )}
       <dialog ref={workshopRef} className="modal" aria-labelledby="workshop-title" onClose={() => setWorkshopRoom(null)}>
         <div className="modal-head">
-          <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> Ateliers — {workshopRoom?.name}</h2>
+          <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> Ateliers : {workshopRoom?.name}</h2>
           <button className="icon ghost" onClick={() => workshopRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ paddingBottom: 18 }}>
