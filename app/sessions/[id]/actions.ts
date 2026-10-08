@@ -308,3 +308,111 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
   revalidatePath(`/sessions/${sessionId}`);
   return { ok: true, imported, heldBack };
 }
+
+// ------------------------------------------------------------
+// Modules d'une session (ex. MA1, MA2, MA3) et modules suivis par stagiaire
+// ------------------------------------------------------------
+
+function refreshSession(sessionId: string) {
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+}
+
+/** Choisit les modules suivis par un stagiaire. Tous (ou aucun) = session complète. */
+export async function setTraineeModules(sessionId: string, traineeId: string, moduleIds: string[]): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: all } = await supabase.from('session_modules').select('id').eq('session_id', sessionId);
+  const allIds = (all || []).map((m: any) => m.id as string);
+  const chosen = [...new Set(moduleIds)].filter((id) => allIds.includes(id));
+  if (allIds.length && chosen.length === 0) return { ok: false, error: 'Un stagiaire doit suivre au moins un module.' };
+
+  const { error: delError } = await supabase
+    .from('session_trainee_modules')
+    .delete()
+    .eq('session_id', sessionId)
+    .eq('trainee_id', traineeId);
+  if (delError) return { ok: false, error: delError.message };
+
+  // Tous les modules = session complète : aucune ligne à enregistrer.
+  if (chosen.length && chosen.length < allIds.length) {
+    const { error } = await supabase
+      .from('session_trainee_modules')
+      .insert(chosen.map((module_id) => ({ session_id: sessionId, trainee_id: traineeId, module_id })));
+    if (error) return { ok: false, error: error.message };
+  }
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+function readModule(formData: FormData) {
+  const get = (k: string) => String(formData.get(k) ?? '').trim();
+  const h = Number.parseInt(get('duration_h') || '0', 10) || 0;
+  const m = Number.parseInt(get('duration_min') || '0', 10) || 0;
+  return {
+    name: get('name').slice(0, 80),
+    start_day: get('start_day'),
+    end_day: get('end_day') || get('start_day'),
+    duration_hours: h || m ? h + m / 60 : null,
+  };
+}
+
+function validModule(m: ReturnType<typeof readModule>) {
+  if (!m.name) return 'Indique le nom du module.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(m.start_day) || !/^\d{4}-\d{2}-\d{2}$/.test(m.end_day)) return 'Jours invalides.';
+  if (m.end_day < m.start_day) return 'Le jour de fin doit être après le jour de début.';
+  return null;
+}
+
+export async function addSessionModule(sessionId: string, formData: FormData): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const m = readModule(formData);
+  const invalid = validModule(m);
+  if (invalid) return { ok: false, error: invalid };
+  const supabase = await createClient();
+  const { count } = await supabase.from('session_modules').select('id', { count: 'exact', head: true }).eq('session_id', sessionId);
+  const { error } = await supabase.from('session_modules').insert({ ...m, session_id: sessionId, position: count ?? 0 });
+  if (error) return { ok: false, error: error.message };
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+export async function updateSessionModule(sessionId: string, moduleId: string, formData: FormData): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const m = readModule(formData);
+  const invalid = validModule(m);
+  if (invalid) return { ok: false, error: invalid };
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_modules').update(m).eq('id', moduleId).eq('session_id', sessionId);
+  if (error) return { ok: false, error: error.message };
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+export async function deleteSessionModule(sessionId: string, moduleId: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_modules').delete().eq('id', moduleId).eq('session_id', sessionId);
+  if (error) return { ok: false, error: error.message };
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+/** Découpe rapide : un module par jour ouvré (« Jour 1 », « Jour 2 »…). */
+export async function splitSessionByDay(sessionId: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: session } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).maybeSingle();
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+  const { count } = await supabase.from('session_modules').select('id', { count: 'exact', head: true }).eq('session_id', sessionId);
+  if (count) return { ok: false, error: 'Cette session a déjà des modules.' };
+  const { weekdaysBetween } = await import('@/lib/week');
+  const days = weekdaysBetween(session.start_at, session.end_at);
+  if (days.length < 2) return { ok: false, error: 'La session ne dure qu’une journée.' };
+  const { error } = await supabase
+    .from('session_modules')
+    .insert(days.map((day, position) => ({ session_id: sessionId, position, name: `Jour ${position + 1}`, start_day: day, end_day: day })));
+  if (error) return { ok: false, error: error.message };
+  refreshSession(sessionId);
+  return { ok: true };
+}

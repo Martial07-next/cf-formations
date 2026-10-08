@@ -13,6 +13,8 @@ import {
 import { deleteSession } from '@/app/sessions/actions';
 import { CsvImportTrainees } from '@/components/csv-import';
 import { PasteImport } from '@/components/paste-import';
+import { SessionModulesPanel, TraineeModuleToggles } from '@/components/session-modules';
+import type { SessionModule } from '@/lib/modules';
 import { DigiformaPanel } from '@/components/digiforma-panel';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
@@ -40,6 +42,8 @@ export function SessionDetailView({
   template,
   digiformaEnabled,
   isOwnTrainer = false,
+  modules = [],
+  traineeModules = {},
   rooms,
   trainers,
   enrolled,
@@ -51,6 +55,8 @@ export function SessionDetailView({
   digiformaEnabled: boolean;
   /** Le formateur connecté anime cette session : il peut ajuster ses horaires. */
   isOwnTrainer?: boolean;
+  modules?: SessionModule[];
+  traineeModules?: Record<string, string[]>;
   template: { title: string; category: string | null; duration_hours: number } | null;
   rooms: FormRoom[];
   trainers: FormTrainer[];
@@ -177,6 +183,16 @@ export function SessionDetailView({
         overrides={dayOverrides}
       />
 
+      <SessionModulesPanel
+        sessionId={session.id}
+        startAt={session.start_at}
+        endAt={session.end_at}
+        modules={modules}
+        traineeModules={traineeModules}
+        validatedIds={validated.map((t) => t.id)}
+        canEdit={isAdmin}
+      />
+
       {isAdmin && <PasteImport sessionId={session.id} />}
       {isAdmin && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
       {isAdmin && <CsvImportTrainees sessionId={session.id} />}
@@ -228,11 +244,22 @@ export function SessionDetailView({
           <p className="empty">Aucun stagiaire validé pour l'instant.</p>
         ) : (
           <table className="data">
-            <thead><tr><th>Nom</th><th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
             <tbody>
               {validated.map((t) => (
                 <tr key={t.id}>
                   <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
+                  {modules.length > 0 && (
+                    <td>
+                      <TraineeModuleToggles
+                        sessionId={session.id}
+                        traineeId={t.id}
+                        modules={modules}
+                        chosen={traineeModules[t.id] || []}
+                        canEdit={isAdmin}
+                      />
+                    </td>
+                  )}
                   <td>{t.email || '—'}</td>
                   <td>{t.company || '—'}</td>
                   {isAdmin && (
@@ -252,11 +279,22 @@ export function SessionDetailView({
           <p className="empty">Aucun stagiaire en attente.</p>
         ) : (
           <table className="data">
-            <thead><tr><th>Nom</th><th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
             <tbody>
               {waiting.map((t) => (
                 <tr key={t.id}>
                   <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
+                  {modules.length > 0 && (
+                    <td>
+                      <TraineeModuleToggles
+                        sessionId={session.id}
+                        traineeId={t.id}
+                        modules={modules}
+                        chosen={traineeModules[t.id] || []}
+                        canEdit={isAdmin}
+                      />
+                    </td>
+                  )}
                   <td>{t.email || '—'}</td>
                   <td>{t.company || '—'}</td>
                   {isAdmin && (

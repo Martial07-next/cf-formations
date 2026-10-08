@@ -56,10 +56,23 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`status-pill ${status}`}>{SESSION_STATUS_LABEL[status] ?? status}</span>;
 }
 
-function SessionCard({ s, dIso, overrides, absence }: { s: SessionRow; dIso: string; overrides: DayOverride[]; absence: Absence | null }) {
+function SessionCard({
+  s,
+  dIso,
+  overrides,
+  absence,
+  info,
+}: {
+  s: SessionRow;
+  dIso: string;
+  overrides: DayOverride[];
+  absence: Absence | null;
+  info?: { modules: string[]; present: number };
+}) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const trainer = one(s.trainers)?.full_name;
-  const count = validatedCount(s);
+  // Avec des modules : stagiaires réellement présents ce jour-là.
+  const count = info ? info.present : validatedCount(s);
   const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
   return (
     <Link
@@ -77,6 +90,7 @@ function SessionCard({ s, dIso, overrides, absence }: { s: SessionRow; dIso: str
       <span className="sc-title">
         {!isStart && <CornerDownRight size={12} aria-label="suite" style={{ verticalAlign: '-2px', marginRight: 3 }} />}
         {s.title}
+        {info && info.modules.length > 0 && <span className="sc-module">{info.modules.join(' · ')}</span>}
       </span>
       <span className="sc-meta">
         <span><Clock size={11} aria-hidden /> {start} – {end}</span>
@@ -104,6 +118,7 @@ export function Planning({
   todayIso,
   workshops,
   absences,
+  dayInfo = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -119,6 +134,7 @@ export function Planning({
   todayIso: string;
   workshops: { id: string; room_id: string; name: string; equipment: string | null; modules: string | null }[];
   absences: Absence[];
+  dayInfo?: Record<string, Record<string, { modules: string[]; present: number }>>;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -408,7 +424,7 @@ export function Planning({
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => (
-                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} />
+                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} info={dayInfo[s.id]?.[d.iso]} />
                         ))}
                         {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
                           <button

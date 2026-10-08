@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { formatHours } from '@/lib/week';
 import { TemplatePicker } from '@/components/template-picker';
+import { placeModules, frDay } from '@/lib/modules';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
 
@@ -15,6 +16,9 @@ export type FormTemplate = {
   category: string | null;
   duration_hours: number;
   max_trainees: number | null;
+  /** Formateurs habilités (vide = tous). */
+  trainer_ids?: string[];
+  modules?: { name: string; duration_hours: number }[];
 };
 
 export type SessionFormDefaults = {
@@ -129,12 +133,19 @@ export function SessionForm({
     setTitle(t.title);
     setMaxTrainees(t.max_trainees != null ? String(t.max_trainees) : '');
     setDuration(Number(t.duration_hours));
+    // Le formateur choisi n'est pas habilité pour cette formation : on le retire.
+    if (t.trainer_ids?.length && trainerId && !t.trainer_ids.includes(trainerId)) setTrainerId('');
   }
 
   const physicalRooms = rooms.filter((r) => !r.is_holding);
   // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
   const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
-  const activeTrainers = trainers.filter((t) => t.status !== 'inactif' || t.id === defaults.trainer_id);
+  const qualified = template?.trainer_ids?.length ? template.trainer_ids : null;
+  // Seuls les formateurs actifs — et, si la formation en définit, habilités — sont proposés.
+  const activeTrainers = trainers.filter(
+    (t) => (t.status !== 'inactif' && (!qualified || qualified.includes(t.id))) || t.id === defaults.trainer_id
+  );
+  const modulePlan = template?.modules?.length && startDate ? placeModules(startDate, startTime, template.modules) : [];
 
   return (
     <form id={formId} action={onSubmit}>
@@ -184,6 +195,9 @@ export function SessionForm({
                 );
               })}
             </select>
+            {qualified && (
+              <span className="hint">{activeTrainers.length} formateur{activeTrainers.length > 1 ? 's' : ''} habilité{activeTrainers.length > 1 ? 's' : ''} pour cette formation</span>
+            )}
             {trainerAbsence && (
               <span className="field-error" role="alert">Indisponible : {trainer?.full_name} est {absenceText(trainerAbsence)}.</span>
             )}
@@ -281,6 +295,16 @@ export function SessionForm({
                 </span>
               ))}
               <span className="hint"> (pause 12h–13h déduite)</span>
+              {modulePlan.length > 0 && (
+                <span className="module-plan">
+                  Modules :{' '}
+                  {modulePlan.map((m, i) => (
+                    <span key={m.name + i} className="badge brouillon">
+                      {m.name} · {m.start_day === m.end_day ? frDay(m.start_day) : `${frDay(m.start_day)} → ${frDay(m.end_day)}`}
+                    </span>
+                  ))}
+                </span>
+              )}
             </>
           ) : plannedHours > 0 ? (
             <>

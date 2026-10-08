@@ -40,6 +40,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   if (!session) notFound();
 
+  const [{ data: modules }, { data: moduleLinks }] = await Promise.all([
+    supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').eq('session_id', id).order('position'),
+    supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', id),
+  ]);
+  const traineeModules: Record<string, string[]> = {};
+  for (const l of moduleLinks || []) (traineeModules[l.trainee_id] ||= []).push(l.module_id);
+
   const enrolled = (links || [])
     .map((l: any) => {
       const t = one(l.trainees);
@@ -89,6 +96,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
         <SessionDetailView
           isAdmin={editable}
+          modules={(modules as any) || []}
+          traineeModules={traineeModules}
           isOwnTrainer={Boolean(profile?.trainer_id) && profile?.trainer_id === (session as any).trainer_id}
           digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}

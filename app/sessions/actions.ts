@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { isSessionStatus } from '@/lib/status';
+import { placeModules } from '@/lib/modules';
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -19,6 +20,21 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   if (!parsed.ok) return parsed;
 
   const supabase = await createClient();
+
+  // Formation du catalogue : formateurs habilités et modules.
+  let templateModules: { name: string; duration_hours: number }[] = [];
+  if (parsed.value.template_id) {
+    const [{ data: qualified }, { data: mods }] = await Promise.all([
+      supabase.from('template_trainers').select('trainer_id').eq('template_id', parsed.value.template_id),
+      supabase.from('template_modules').select('name, duration_hours, position').eq('template_id', parsed.value.template_id).order('position'),
+    ]);
+    const ids = (qualified || []).map((q: any) => q.trainer_id);
+    if (parsed.value.trainer_id && ids.length && !ids.includes(parsed.value.trainer_id)) {
+      return { ok: false, error: "Ce formateur n'est pas habilité pour cette formation." };
+    }
+    templateModules = (mods || []).map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) }));
+  }
+
   const conflict = await findSessionConflict(supabase, parsed.value);
   if (conflict) return { ok: false, error: conflict };
 
@@ -36,6 +52,18 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
         .from('session_days')
         .upsert({ session_id: data.id, day: endDate, start_time: startTime, end_time: lastDayEnd }, { onConflict: 'session_id,day' });
     }
+  }
+
+  // Modules (ex. MA1 lundi, MA2 mardi, MA3 mercredi), placés sur les jours de la session.
+  if (templateModules.length) {
+    const endDay = parsed.value.end_at.slice(0, 10);
+    const placed = placeModules(startDate, parsed.value.start_at.slice(11, 16), templateModules).map((m) => ({
+      ...m,
+      session_id: data.id,
+      start_day: m.start_day > endDay ? endDay : m.start_day,
+      end_day: m.end_day > endDay ? endDay : m.end_day,
+    }));
+    await supabase.from('session_modules').insert(placed);
   }
 
   refresh();

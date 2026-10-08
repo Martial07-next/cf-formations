@@ -6,7 +6,8 @@ import { Sidebar } from '@/components/sidebar';
 import { TraineeInfoForm } from '@/components/trainee-info-form';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursOf, one } from '@/lib/history';
-import { formatHours } from '@/lib/week';
+import { formatHours, dayHours } from '@/lib/week';
+import { attendsDay, modulesLabel } from '@/lib/modules';
 import { nameFields } from '@/lib/trainee-name';
 
 export default async function TraineeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,10 +26,19 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
   if (!trainee) notFound();
 
   const sessions = (links || []).map((l: any) => ({ link: l, s: one<any>(l.sessions) })).filter((x) => x.s);
-  const overrides = await loadDayOverrides(supabase, sessions.map((x) => x.s.id));
+  const sessionIds = sessions.map((x) => x.s.id);
+  const [overrides, { data: moduleRows }, { data: chosenRows }] = await Promise.all([
+    loadDayOverrides(supabase, sessionIds),
+    sessionIds.length
+      ? supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').in('session_id', sessionIds).order('position')
+      : Promise.resolve({ data: [] as any[] }),
+    supabase.from('session_trainee_modules').select('session_id, module_id').eq('trainee_id', id),
+  ]);
 
   const entries: HistoryEntry[] = sessions.map(({ link, s }) => {
     const trainer = one<{ full_name: string; color: string | null }>(s.trainers);
+    const modules = ((moduleRows as any[]) || []).filter((m) => m.session_id === s.id);
+    const chosen = ((chosenRows as any[]) || []).filter((c) => c.session_id === s.id).map((c) => c.module_id);
     return {
       id: s.id,
       title: s.title,
@@ -38,7 +48,15 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
       roomName: one<{ name: string }>(s.rooms)?.name || null,
       trainerName: trainer?.full_name || null,
       color: trainer?.color || null,
-      hours: hoursOf(s, overrides),
+      // Avec des modules : seules les heures des jours où le stagiaire est présent comptent.
+      hours: modules.length
+        ? Math.round(
+            dayHours(s.start_at, s.end_at, overrides[s.id] || [])
+              .filter((d) => attendsDay(modules, chosen, d.day))
+              .reduce((n, d) => n + d.minutes, 0) / 6
+          ) / 10
+        : hoursOf(s, overrides),
+      extra: modules.length ? modulesLabel(modules, chosen) : null,
       enrollmentStatus: link.status,
     };
   });

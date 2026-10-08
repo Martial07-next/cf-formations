@@ -17,6 +17,43 @@ function readTemplate(formData: FormData) {
   };
 }
 
+/** Modules (JSON du formulaire) et formateurs habilités. */
+function readExtras(formData: FormData) {
+  let modules: { name: string; duration_hours: number }[] = [];
+  try {
+    const raw = JSON.parse(String(formData.get('modules_json') || '[]'));
+    if (Array.isArray(raw)) {
+      modules = raw
+        .map((m: any) => ({ name: String(m?.name || '').trim().slice(0, 80), duration_hours: Number(m?.duration_hours) }))
+        .filter((m) => m.name && m.duration_hours > 0)
+        .slice(0, 30);
+    }
+  } catch {
+    /* champ absent ou invalide : pas de modules */
+  }
+  const trainerIds = [...new Set(formData.getAll('trainer_ids').map(String).filter(Boolean))];
+  return { modules, trainerIds };
+}
+
+async function saveExtras(supabase: Awaited<ReturnType<typeof createClient>>, templateId: string, formData: FormData) {
+  const { modules, trainerIds } = readExtras(formData);
+  const del1 = await supabase.from('template_modules').delete().eq('template_id', templateId);
+  if (del1.error) return del1.error.message;
+  if (modules.length) {
+    const { error } = await supabase
+      .from('template_modules')
+      .insert(modules.map((m, position) => ({ ...m, position, template_id: templateId })));
+    if (error) return error.message;
+  }
+  const del2 = await supabase.from('template_trainers').delete().eq('template_id', templateId);
+  if (del2.error) return del2.error.message;
+  if (trainerIds.length) {
+    const { error } = await supabase.from('template_trainers').insert(trainerIds.map((trainer_id) => ({ template_id: templateId, trainer_id })));
+    if (error) return error.message;
+  }
+  return null;
+}
+
 function refresh() {
   revalidatePath('/modeles');
   revalidatePath('/');
@@ -27,9 +64,11 @@ export async function createTemplate(formData: FormData) {
   const t = readTemplate(formData);
   if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('templates').insert(t);
+  const { data, error } = await supabase.from('templates').insert(t).select('id').single();
   if (error) return { ok: false, error: error.message };
+  const extraError = await saveExtras(supabase, data.id, formData);
   refresh();
+  if (extraError) return { ok: false, error: `Formation créée, mais modules/formateurs non enregistrés : ${extraError}` };
   return { ok: true };
 }
 
@@ -40,7 +79,9 @@ export async function updateTemplate(id: string, formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from('templates').update(t).eq('id', id);
   if (error) return { ok: false, error: error.message };
+  const extraError = await saveExtras(supabase, id, formData);
   refresh();
+  if (extraError) return { ok: false, error: `Formation enregistrée, mais modules/formateurs non enregistrés : ${extraError}` };
   return { ok: true };
 }
 

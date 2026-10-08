@@ -21,7 +21,7 @@ export default async function IntegrationsPage() {
 
   const { data: settings } = await supabase
     .from('app_settings')
-    .select('digiforma_last_sync, digiforma_last_sync_status, digiforma_last_sync_log')
+    .select('digiforma_last_sync, digiforma_last_sync_status, digiforma_last_sync_log, absences_last_sync, absences_last_log')
     .eq('id', true)
     .maybeSingle();
 
@@ -62,6 +62,44 @@ export default async function IntegrationsPage() {
             field… », les noms de champs du code doivent être ajustés au schéma réel de ton compte : envoie-moi le message
             exact.
           </p>
+        </div>
+
+        <div className="panel">
+          <h2>Plateforme de congés → planning</h2>
+          <p className="panel-intro">
+            Quand un congé est <strong>validé</strong> dans ta plateforme de congés, il arrive ici automatiquement et
+            bloque le formateur sur ces dates. Un congé refusé, annulé ou supprimé est retiré. Aucune API à développer :
+            c’est Supabase (côté plateforme de congés) qui envoie l’information.
+          </p>
+          <ol style={{ fontSize: 13.5, lineHeight: 1.8, paddingLeft: 20, margin: '0 0 10px' }}>
+            <li>
+              Dans <strong>Vercel</strong> (projet cf-formations) : ajoute la variable <code>CONGES_WEBHOOK_SECRET</code>{' '}
+              (une longue chaîne aléatoire), puis redéploie.
+            </li>
+            <li>
+              Dans le <strong>Supabase de la plateforme de congés</strong> : Database → Webhooks → Create a new hook.
+              Table : celle des demandes de congés · Événements : Insert, Update, Delete · Type : HTTP Request, méthode
+              POST · URL : <code>https://cf-formations.vercel.app/api/hooks/conges</code> · En-tête HTTP :{' '}
+              <code>Authorization</code> = <code>Bearer</code> suivi d’un espace et du secret.
+            </li>
+            <li>
+              Le formateur est reconnu par son <strong>e-mail</strong> (ou son nom) : il doit être identique dans les deux
+              plateformes (fiche formateur → E-mail).
+            </li>
+            <li>
+              Pour envoyer les congés déjà validés, modifie-les une fois (ou demande-moi la requête SQL à lancer côté
+              congés).
+            </li>
+          </ol>
+          <div className="counters" style={{ margin: '12px 0' }}>
+            <div className="counter-chip" style={{ minWidth: 200 }}>
+              <strong style={{ fontSize: 14 }}>
+                {settings?.absences_last_sync ? new Date(settings.absences_last_sync).toLocaleString('fr-FR') : 'Jamais'}
+              </strong>
+              <span>Dernier congé reçu</span>
+            </div>
+          </div>
+          {settings?.absences_last_log && <p className="log-box">{settings.absences_last_log}</p>}
         </div>
 
         <DigiformaSyncPanel
