@@ -438,3 +438,21 @@ button.tiny{width:24px;min-height:24px;padding:0}
 .folder-add{padding:16px 18px;border-top:1px solid var(--line);background:var(--surface-2)}
 .check-chip[hidden]{display:none !important}
 .input:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
+
+/* ---------- Évènements du planning (aperçu compact) ---------- */
+.day-chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;padding:0;border:none;background:transparent;min-height:0;border-radius:6px;text-align:left;cursor:pointer;justify-content:flex-start}
+.day-chips:hover{background:transparent;border:none}
+.day-chips:hover .day-chip{filter:brightness(.96)}
+.day-chip{--k:#475569;display:inline-flex;align-items:center;gap:3px;max-width:100%;font-size:10.5px;font-weight:700;line-height:1.4;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--k) 12%,#fff);color:color-mix(in srgb,var(--k) 80%,#000);border:1px solid color-mix(in srgb,var(--k) 30%,#fff)}
+.day-chip-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92px}
+.day-chip.more{--k:#475569}
+.day-chip.absent{--k:#c2410c}
+.day-chip.icon-only{padding:2px 4px}
+.day-chips.compact{margin-top:0}
+.month-cell-head{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.event-list{display:grid;gap:8px}
+.event-item{--k:#475569;display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-left:4px solid var(--k);border-radius:10px;padding:9px 12px}
+.event-item-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.event-kind{--k:#475569;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:color-mix(in srgb,var(--k) 80%,#000)}
+.event-people{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.form-row label.radio-inline{flex-direction:row;align-items:center;gap:8px}

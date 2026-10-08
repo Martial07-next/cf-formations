@@ -3,12 +3,14 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus } from 'lucide-react';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
+import { eventOnDay, type PlanningEvent } from '@/lib/events';
+import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
 import {
   addDays,
   isoDate,
@@ -128,6 +130,7 @@ export function Planning({
   workshops,
   absences,
   dayInfo = {},
+  events = [],
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -144,6 +147,8 @@ export function Planning({
   workshops: { id: string; room_id: string; name: string }[];
   absences: Absence[];
   dayInfo?: Record<string, Record<string, { modules: string[]; present: number }>>;
+  /** Évènements (repas, CACES/SST, recrutement, forums…) : aperçu, sans blocage. */
+  events?: PlanningEvent[];
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -161,6 +166,20 @@ export function Planning({
   const [isPending, startTransition] = useTransition();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const workshopRef = useRef<HTMLDialogElement>(null);
+  const eventRef = useRef<HTMLDialogElement>(null);
+  const [eventPanel, setEventPanel] = useState<
+    { mode: 'day'; day: string } | { mode: 'form'; event: PlanningEvent | null; day?: string } | null
+  >(null);
+  const eventsOn = (day: string) => events.filter((e) => eventOnDay(e, day));
+  const absentOn = (day: string) => absences.filter((a) => a.start_date <= day && a.end_date >= day);
+  function openDay(day: string) {
+    setEventPanel({ mode: 'day', day });
+    eventRef.current?.showModal();
+  }
+  function openEventForm(event: PlanningEvent | null, day?: string) {
+    setEventPanel({ mode: 'form', event, day });
+    if (!eventRef.current?.open) eventRef.current?.showModal();
+  }
   const [workshopRoom, setWorkshopRoom] = useState<Room | null>(null);
 
   const shown = useMemo(
@@ -259,15 +278,6 @@ export function Planning({
     view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
   const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  // Période visible (pour signaler les formateurs en congé).
-  const periodStart = view === 'day' ? dayIso : view === 'week' ? mondayIso : isoDate(weeks[0][0]);
-  const periodEnd =
-    view === 'day' ? dayIso : view === 'week' ? isoDate(addDays(monday, 4)) : isoDate(weeks[weeks.length - 1][4]);
-  const periodAbsences = absences
-    .filter((a) => a.start_date <= periodEnd && a.end_date >= periodStart)
-    .map((a) => ({ a, t: trainers.find((t) => t.id === a.trainer_id) }))
-    .filter((x) => x.t);
-
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
@@ -290,6 +300,9 @@ export function Planning({
         </div>
         {canEdit && (
           <div className="header-actions">
+            <button onClick={() => openEventForm(null, view === 'day' ? dayIso : todayIso)}>
+              <CalendarPlus size={16} aria-hidden /> Évènement
+            </button>
             <button className="primary" onClick={() => openForm({ start_date: view === 'day' ? dayIso : undefined })}>
               <Plus size={16} aria-hidden /> Nouvelle session
             </button>
@@ -362,25 +375,6 @@ export function Planning({
         </div>
       )}
 
-      {periodAbsences.length > 0 && (
-        <div className="absence-banner" role="note">
-          <CalendarOff size={15} aria-hidden />
-          <span>
-            <strong>Indisponibles :</strong>{' '}
-            {periodAbsences.map(({ a, t }, i) => (
-              <span key={a.id}>
-                <span className="trainer-tag" style={{ fontWeight: 700 }}>
-                  <span className="swatch" style={{ background: t!.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
-                  {t!.full_name}
-                </span>{' '}
-                {absenceText(a)}
-                {i < periodAbsences.length - 1 ? ' · ' : ''}
-              </span>
-            ))}
-          </span>
-        </div>
-      )}
-
       {message && (
         <div role="status" className={`alert ${message.isError ? 'alert-error' : 'alert-success'}`}>
           {message.text}
@@ -429,6 +423,7 @@ export function Planning({
                     <div className={`plan-day-label${isToday ? ' today' : ''}`}>
                       {view === 'day' ? (isToday ? 'Aujourd’hui' : 'Jour') : d.full}
                       <small>{view === 'day' ? d.iso.split('-').reverse().join('/') : d.dateLabel}</small>
+                      <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                     </div>
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
@@ -476,10 +471,13 @@ export function Planning({
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
                   <div
-                    className={`month-cell${muted ? ' muted' : ''}${dIso === todayIso ? ' today' : ''}${daySessions.length === 0 ? ' empty-day' : ''}`}
+                    className={`month-cell${muted ? ' muted' : ''}${dIso === todayIso ? ' today' : ''}${daySessions.length === 0 && !eventsOn(dIso).length && !absentOn(dIso).length ? ' empty-day' : ''}`}
                     key={dIso}
                   >
-                    <span className="date-num">{fullDateLabel(day).split(' ').slice(0, 2).join(' ')}</span>
+                    <span className="month-cell-head">
+                      <span className="date-num">{fullDateLabel(day).split(' ').slice(0, 2).join(' ')}</span>
+                      <DayChips compact events={eventsOn(dIso)} absentCount={absentOn(dIso).length} onOpen={() => openDay(dIso)} />
+                    </span>
                     {daySessions.map((s) => {
                       const room = one(s.rooms)?.name || '-';
                       const trainer = one(s.trainers)?.full_name;
@@ -544,6 +542,34 @@ export function Planning({
           </div>
         </dialog>
       )}
+      <dialog ref={eventRef} className="modal" aria-label="Évènements" onClose={() => setEventPanel(null)}>
+        {eventPanel?.mode === 'day' && (
+          <DayDetails
+            day={eventPanel.day}
+            events={eventsOn(eventPanel.day)}
+            absences={absentOn(eventPanel.day)}
+            trainers={trainers}
+            canEdit={canEdit}
+            onEdit={(e) => openEventForm(e)}
+            onAdd={() => openEventForm(null, eventPanel.day)}
+            onClose={() => eventRef.current?.close()}
+          />
+        )}
+        {eventPanel?.mode === 'form' && (
+          <EventForm
+            key={eventPanel.event?.id || `new-${eventPanel.day}`}
+            event={eventPanel.event}
+            defaultDay={eventPanel.day}
+            trainers={trainers}
+            onDone={() => {
+              eventRef.current?.close();
+              setMessage({ text: 'Évènement enregistré.', isError: false });
+            }}
+            onCancel={() => eventRef.current?.close()}
+          />
+        )}
+      </dialog>
+
       <dialog ref={workshopRef} className="modal" aria-labelledby="workshop-title" onClose={() => setWorkshopRoom(null)}>
         <div className="modal-head">
           <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> {workshopRoom?.name}</h2>

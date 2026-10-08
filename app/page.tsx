@@ -73,6 +73,18 @@ export default async function Page({
     supabase.from('room_templates').select('room_id, template_id'),
   ]);
 
+  // Évènements de la période (repas, CACES/SST, recrutement, forums…) : aperçu seulement.
+  const { data: eventRows } = await supabase
+    .from('planning_events')
+    .select('id, kind, title, start_date, end_date, start_time, end_time, location, participants, notes, planning_event_trainers(trainer_id)')
+    .lte('start_date', isoDate(addDays(rangeEnd, -1)))
+    .gte('end_date', isoDate(rangeStart))
+    .order('start_date');
+  const events = ((eventRows as any[]) || []).map((e) => ({
+    ...e,
+    trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
+  }));
+
   const sessionIds = (sessions || []).map((s: any) => s.id);
   const { data: dayRows } = sessionIds.length
     ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIds)
@@ -132,6 +144,7 @@ export default async function Page({
         workshops={(workshops as any) || []}
         absences={(absences as any) || []}
         dayInfo={dayInfo}
+        events={events}
       />
     </main>
   );
