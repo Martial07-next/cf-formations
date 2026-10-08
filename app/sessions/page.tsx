@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { canEditSessions } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionsTable } from '@/components/sessions-table';
 import { Download } from 'lucide-react';
@@ -30,7 +29,7 @@ export default async function SessionsPage() {
             </div>
           )}
         </header>
-        <SessionsTable isAdmin={editable} canEditStatus={canEditSessions(profile?.role)} myTrainerId={profile?.trainer_id || null} rows={(sessions as any) || []} />
+        <SessionsTable isAdmin={editable} myTrainerId={profile?.trainer_id || null} rows={(sessions as any) || []} />
       </section>
     </main>
   );

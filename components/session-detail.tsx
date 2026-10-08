@@ -43,6 +43,7 @@ export function SessionDetailView({
   digiformaEnabled,
   isOwnTrainer = false,
   canEditSession = false,
+  canEditStartTimes = false,
   modules = [],
   traineeModules = {},
   rooms,
@@ -58,6 +59,8 @@ export function SessionDetailView({
   isOwnTrainer?: boolean;
   /** Peut modifier la session (bureau, admin, référent cadre) ; isAdmin = gestion complète. */
   canEditSession?: boolean;
+  /** Référent cadre : peut seulement changer l'heure de début, jour par jour. */
+  canEditStartTimes?: boolean;
   modules?: SessionModule[];
   traineeModules?: Record<string, string[]>;
   template: { title: string; category: string | null; duration_hours: number } | null;
@@ -178,8 +181,8 @@ export function SessionDetailView({
       </div>
 
       <DayTimesPanel
-        isAdmin={canEditSession || isOwnTrainer}
-        ownTrainer={!canEditSession && isOwnTrainer}
+        isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
+        ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}
@@ -341,7 +344,7 @@ function DayTimesPanel({
       <h2>Horaires par jour</h2>
       <p className="panel-intro">
         {ownTrainer
-          ? 'Tu animes cette session : tu peux ajuster tes horaires jour par jour (la pause 12h–13h est déduite automatiquement).'
+          ? 'Tu peux changer l’heure de début de chaque jour. Les autres informations de la session sont gérées par le bureau administratif.'
           : 'Par défaut, chaque jour reprend l’horaire global de la session. Modifie une ligne pour donner un horaire différent à ce jour précis.'}
       </p>
       <table className="data">
@@ -358,6 +361,7 @@ function DayTimesPanel({
               endAt={endAt}
               overrides={overrides}
               isAdmin={isAdmin}
+              startOnly={ownTrainer}
             />
           ))}
         </tbody>
@@ -373,6 +377,7 @@ function DayTimeRow({
   endAt,
   overrides,
   isAdmin,
+  startOnly = false,
 }: {
   sessionId: string;
   day: string;
@@ -380,6 +385,7 @@ function DayTimeRow({
   endAt: string;
   overrides: DayOverride[];
   isAdmin: boolean;
+  startOnly?: boolean;
 }) {
   const effective = effectiveDayTime(day, startAt, endAt, overrides);
   const label = fullDateLabel(new Date(day + 'T00:00:00Z'));
@@ -410,7 +416,7 @@ function DayTimeRow({
         <input type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Début, ${label}`} />
       </td>
       <td>
-        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin} className="input" aria-label={`Fin, ${label}`} />
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!isAdmin || startOnly} className="input" aria-label={`Fin, ${label}`} />
       </td>
       {isAdmin && (
         <td className="row-actions">

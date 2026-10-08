@@ -5,8 +5,8 @@ import { UserPlus, Copy, Check } from 'lucide-react';
 import { createUserAccess, type CreateAccessResult } from '@/app/administration/actions';
 
 const ACCESS_TYPES = [
-  { value: 'formateur', label: 'Formateur', desc: 'Consulte le planning, ajuste les horaires de ses sessions.' },
-  { value: 'referent', label: 'Référent cadre', desc: 'Modifie les sessions (sans créer ni supprimer), suit son équipe.' },
+  { value: 'formateur', label: 'Formateur', desc: 'Consulte le planning, peut changer l’heure de début de ses sessions.' },
+  { value: 'referent', label: 'Référent cadre', desc: 'Suit son équipe, peut changer l’heure de début des sessions.' },
   { value: 'bureau', label: 'Bureau administratif', desc: 'Gère sessions, stagiaires, formateurs, salles et formations.' },
   { value: 'consultation', label: 'Consultation', desc: 'Voit le planning, sans rien modifier.' },
   { value: 'admin', label: 'Administrateur', desc: 'Gère la plateforme : accès, paramètres, intégrations.' },

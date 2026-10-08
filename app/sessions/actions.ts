@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
+import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { isSessionStatus } from '@/lib/status';
 import { placeModules } from '@/lib/modules';
@@ -71,7 +71,7 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateSessionStatus(sessionId: string, status: string): Promise<ActionResult> {
-  if (!(await requireSessionEditor())) return FORBIDDEN;
+  if (!(await requireManager())) return FORBIDDEN;
   if (!isSessionStatus(status)) return { ok: false, error: 'Statut inconnu.' };
   const supabase = await createClient();
   const { error } = await supabase.from('sessions').update({ status }).eq('id', sessionId);

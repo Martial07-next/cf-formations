@@ -1,5 +1,5 @@
 import { getCurrentProfile } from '@/lib/supabase/server';
-import { canManage, canEditSessions } from '@/lib/roles';
+import { canManage } from '@/lib/roles';
 
 export const FORBIDDEN = { ok: false as const, error: "Action non autorisée pour ton compte." };
 
@@ -11,12 +11,6 @@ export const FORBIDDEN = { ok: false as const, error: "Action non autorisée pou
 export async function requireManager() {
   const profile = await getCurrentProfile();
   return profile && canManage(profile.role) ? profile : null;
-}
-
-/** Modification de sessions existantes : + référent cadre. */
-export async function requireSessionEditor() {
-  const profile = await getCurrentProfile();
-  return profile && canEditSessions(profile.role) ? profile : null;
 }
 
 /** Administrateur uniquement (comptes, paramètres, intégrations, données). */

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Wrench, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
 import { createWorkshop, updateWorkshop, deleteWorkshop, setRoomTemplates } from '@/app/salles/actions';
+import { groupByFolder } from '@/components/session-form';
 
 export type Workshop = { id: string; room_id: string; name: string };
 type Room = { id: string; name: string; location: string | null };
@@ -23,12 +24,7 @@ function RoomTemplatesEditor({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [filter, setFilter] = useState('');
-  const sorted = [...templates].sort((a, b) => a.title.localeCompare(b.title, 'fr'));
-  const names = sorted.filter((t) => selected.includes(t.id)).map((t) => t.title);
-  // Filtre sans re-créer les cases (les cases masquées restent cochées dans le formulaire).
-  const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const matches = (t: Template) => !filter || norm(t.title).includes(norm(filter));
+  const names = templates.filter((t) => selected.includes(t.id)).map((t) => t.title);
 
   return (
     <div className="room-templates">
@@ -59,32 +55,26 @@ function RoomTemplatesEditor({
             });
           }}
         >
-          <p className="hint" style={{ margin: '4px 0 8px' }}>
-            Coche les formations qu’on peut faire dans {room.name} : à la création d’une session, cette salle sera proposée
-            en premier pour ces formations.
+          <p className="hint">
+            Coche les formations qu’on peut faire dans {room.name} : à la création d’une session, cette salle sera
+            proposée en premier pour ces formations (les autres salles restent possibles).
           </p>
-          <input
-            className="input"
-            placeholder="Filtrer les formations…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filtrer les formations"
-            style={{ marginBottom: 8, maxWidth: 280 }}
-          />
-          <div className="check-grid">
-            {sorted.map((t) => (
-              <label key={t.id} className="check-chip" hidden={!matches(t)}>
-                <input type="checkbox" name="template_ids" value={t.id} defaultChecked={selected.includes(t.id)} />
-                {t.title}
-              </label>
-            ))}
-          </div>
-          <div className="row-actions" style={{ marginTop: 10 }}>
-            <button type="submit" className="primary small" disabled={isPending}>
-              {isPending ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-            <button type="button" className="small" onClick={() => setOpen(false)}>Annuler</button>
-          </div>
+          {groupByFolder(templates).map(([folder, items]) => (
+            <fieldset key={folder} className="plain" style={{ marginBottom: 10 }}>
+              <legend className="hint" style={{ fontWeight: 800, marginBottom: 4 }}>{folder}</legend>
+              <div className="check-grid">
+                {items.map((t) => (
+                  <label key={t.id} className="check-chip">
+                    <input type="checkbox" name="template_ids" value={t.id} defaultChecked={selected.includes(t.id)} />
+                    {t.title}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+          <button type="submit" className="primary small" disabled={isPending}>
+            {isPending ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
         </form>
       )}
     </div>

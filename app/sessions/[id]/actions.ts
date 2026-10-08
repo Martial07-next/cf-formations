@@ -1,17 +1,18 @@
 'use server';
 
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { canEditSessions } from '@/lib/roles';
+import { canManage, canEditStartTimes } from '@/lib/roles';
+import { effectiveDayTime } from '@/lib/week';
 import { revalidatePath } from 'next/cache';
-import { requireManager, requireSessionEditor, FORBIDDEN } from '@/lib/auth';
+import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee } from '@/lib/trainee-conflict';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function updateSessionDetails(sessionId: string, formData: FormData): Promise<ActionResult> {
-  // Bureau administratif, administrateur et référent cadre peuvent modifier une session.
-  if (!(await requireSessionEditor())) return FORBIDDEN;
+  // Seuls le bureau administratif et l'administrateur modifient une session.
+  if (!(await requireManager())) return FORBIDDEN;
   const parsed = parseSessionForm(formData);
   if (!parsed.ok) return parsed;
 
@@ -103,17 +104,19 @@ export async function setTraineeStatus(
 
 
 /**
- * Horaires d'une session : modifiables par l'admin / un référent, ou par le
- * formateur de la session lui-même (dates, salle et stagiaires restent hors de sa portée).
+ * Horaires par jour : 'all' pour le bureau / l'admin (début et fin) ;
+ * 'start' pour un référent cadre ou le formateur de la session (heure de
+ * début seulement) ; null sinon.
  */
-async function canEditTimes(sessionId: string): Promise<boolean> {
+async function timeRights(sessionId: string): Promise<'all' | 'start' | null> {
   const profile = await getCurrentProfile();
-  if (!profile) return false;
-  if (canEditSessions(profile.role)) return true;
-  if (!profile.trainer_id) return false;
+  if (!profile) return null;
+  if (canManage(profile.role)) return 'all';
+  if (canEditStartTimes(profile.role)) return 'start';
+  if (!profile.trainer_id) return null;
   const supabase = await createClient();
   const { data } = await supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle();
-  return data?.trainer_id === profile.trainer_id;
+  return data?.trainer_id === profile.trainer_id ? 'start' : null;
 }
 
 export async function setSessionDayTime(
@@ -122,12 +125,23 @@ export async function setSessionDayTime(
   startTime: string,
   endTime: string
 ): Promise<ActionResult> {
-  if (!(await canEditTimes(sessionId))) return FORBIDDEN;
+  const rights = await timeRights(sessionId);
+  if (!rights) return FORBIDDEN;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'Jour invalide.' };
+
+  const supabase = await createClient();
+  if (rights === 'start') {
+    // Heure de fin inchangée : on reprend l'horaire actuel de ce jour.
+    const [{ data: s }, { data: o }] = await Promise.all([
+      supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).maybeSingle(),
+      supabase.from('session_days').select('day, start_time, end_time').eq('session_id', sessionId).eq('day', day),
+    ]);
+    if (!s) return { ok: false, error: 'Session introuvable.' };
+    endTime = effectiveDayTime(day, s.start_at, s.end_at, (o as any) || []).end;
+  }
   if (!startTime || !endTime) return { ok: false, error: 'Heure de début et de fin requises.' };
   if (endTime <= startTime) return { ok: false, error: "L'heure de fin doit être après l'heure de début." };
 
-  const supabase = await createClient();
   const { error } = await supabase
     .from('session_days')
     .upsert(
@@ -141,7 +155,7 @@ export async function setSessionDayTime(
 }
 
 export async function resetSessionDayTime(sessionId: string, day: string): Promise<ActionResult> {
-  if (!(await canEditTimes(sessionId))) return FORBIDDEN;
+  if (!(await timeRights(sessionId))) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('session_days').delete().eq('session_id', sessionId).eq('day', day);
   if (error) return { ok: false, error: error.message };

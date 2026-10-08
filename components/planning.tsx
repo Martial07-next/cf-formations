@@ -565,7 +565,7 @@ export function Planning({
               templates
                 .filter((t) => workshopRoom?.template_ids?.includes(t.id))
                 .map((t) => (
-                  <span key={t.id} className="badge brouillon">{t.category ? `${t.category} › ` : ''}{t.title}</span>
+                  <span key={t.id} className="badge brouillon">{t.title}</span>
                 ))
             )}
           </div>
