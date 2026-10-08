@@ -60,21 +60,47 @@ create table if not exists template_trainers (
 );
 
 -- RLS : lecture pour tout utilisateur connecté, écriture admin / référents.
-do $$
-declare t text;
-begin
-  foreach t in array array['template_modules', 'session_modules', 'session_trainee_modules', 'template_trainers'] loop
-    execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists "%s: read" on %I', t, t);
-    execute format('drop policy if exists "%s: manage insert" on %I', t, t);
-    execute format('drop policy if exists "%s: manage update" on %I', t, t);
-    execute format('drop policy if exists "%s: manage delete" on %I', t, t);
-    execute format('create policy "%s: read" on %I for select using (auth.role() = ''authenticated'')', t, t);
-    execute format('create policy "%s: manage insert" on %I for insert with check (can_manage())', t, t);
-    execute format('create policy "%s: manage update" on %I for update using (can_manage())', t, t);
-    execute format('create policy "%s: manage delete" on %I for delete using (can_manage())', t, t);
-  end loop;
-end $$;
+-- (Instructions explicites, sans boucle, pour l'éditeur SQL de Supabase.)
+
+alter table template_modules enable row level security;
+drop policy if exists "template_modules: read" on template_modules;
+drop policy if exists "template_modules: manage insert" on template_modules;
+drop policy if exists "template_modules: manage update" on template_modules;
+drop policy if exists "template_modules: manage delete" on template_modules;
+create policy "template_modules: read" on template_modules for select using (auth.role() = 'authenticated');
+create policy "template_modules: manage insert" on template_modules for insert with check (can_manage());
+create policy "template_modules: manage update" on template_modules for update using (can_manage());
+create policy "template_modules: manage delete" on template_modules for delete using (can_manage());
+
+alter table session_modules enable row level security;
+drop policy if exists "session_modules: read" on session_modules;
+drop policy if exists "session_modules: manage insert" on session_modules;
+drop policy if exists "session_modules: manage update" on session_modules;
+drop policy if exists "session_modules: manage delete" on session_modules;
+create policy "session_modules: read" on session_modules for select using (auth.role() = 'authenticated');
+create policy "session_modules: manage insert" on session_modules for insert with check (can_manage());
+create policy "session_modules: manage update" on session_modules for update using (can_manage());
+create policy "session_modules: manage delete" on session_modules for delete using (can_manage());
+
+alter table session_trainee_modules enable row level security;
+drop policy if exists "session_trainee_modules: read" on session_trainee_modules;
+drop policy if exists "session_trainee_modules: manage insert" on session_trainee_modules;
+drop policy if exists "session_trainee_modules: manage update" on session_trainee_modules;
+drop policy if exists "session_trainee_modules: manage delete" on session_trainee_modules;
+create policy "session_trainee_modules: read" on session_trainee_modules for select using (auth.role() = 'authenticated');
+create policy "session_trainee_modules: manage insert" on session_trainee_modules for insert with check (can_manage());
+create policy "session_trainee_modules: manage update" on session_trainee_modules for update using (can_manage());
+create policy "session_trainee_modules: manage delete" on session_trainee_modules for delete using (can_manage());
+
+alter table template_trainers enable row level security;
+drop policy if exists "template_trainers: read" on template_trainers;
+drop policy if exists "template_trainers: manage insert" on template_trainers;
+drop policy if exists "template_trainers: manage update" on template_trainers;
+drop policy if exists "template_trainers: manage delete" on template_trainers;
+create policy "template_trainers: read" on template_trainers for select using (auth.role() = 'authenticated');
+create policy "template_trainers: manage insert" on template_trainers for insert with check (can_manage());
+create policy "template_trainers: manage update" on template_trainers for update using (can_manage());
+create policy "template_trainers: manage delete" on template_trainers for delete using (can_manage());
 
 -- ------------------------------------------------------------
 -- 3. Synchronisation des congés (dernière réception, affichée dans
