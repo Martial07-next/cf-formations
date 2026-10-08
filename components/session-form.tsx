@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { formatHours } from '@/lib/week';
+import { TemplatePicker } from '@/components/template-picker';
+import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
 
 export type FormRoom = { id: string; name: string; capacity: number; is_holding?: boolean | null; location?: string | null };
@@ -66,6 +68,7 @@ export function SessionForm({
   disabled = false,
   showTemplate = true,
   formId,
+  absences = [],
   onSubmit,
 }: {
   rooms: FormRoom[];
@@ -75,6 +78,7 @@ export function SessionForm({
   disabled?: boolean;
   showTemplate?: boolean;
   formId?: string;
+  absences?: Absence[];
   onSubmit: (fd: FormData) => void;
 }) {
   const [templateId, setTemplateId] = useState(defaults.template_id || '');
@@ -91,7 +95,6 @@ export function SessionForm({
   const [trainerId, setTrainerId] = useState(defaults.trainer_id || '');
 
   const template = templates.find((t) => t.id === templateId) || null;
-  const folders = useMemo(() => groupByFolder(templates), [templates]);
   const trainer = trainers.find((t) => t.id === trainerId);
 
   const durationMinutes = (Number(durH) || 0) * 60 + (Number(durM) || 0);
@@ -100,6 +103,7 @@ export function SessionForm({
   const fullDayEnd = plan.length ? plan[0].end : null;
   const endDate = plan.length ? plan[plan.length - 1].day : manualEndDate;
   const endTime = plan.length ? plan[0].end : manualEndTime;
+  const trainerAbsence = trainerId && startDate ? absenceFor(absences, trainerId, startDate, endDate || startDate) : null;
   const lastDayEnd = plan.length > 1 && plan[plan.length - 1].end !== fullDayEnd ? plan[plan.length - 1].end : '';
 
   const days = countWeekdays(startDate, endDate);
@@ -137,21 +141,11 @@ export function SessionForm({
       <fieldset className="plain" disabled={disabled}>
         {showTemplate && (
           <div className="form-row">
-            <label>
+            <div className="field">
               Formation du catalogue
-              <select name="template_id" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-                <option value="">— Formation libre —</option>
-                {folders.map(([folder, items]) => (
-                  <optgroup key={folder} label={folder}>
-                    {items.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title} · {formatHours(Number(t.duration_hours))}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
+              <TemplatePicker templates={templates} value={templateId} onChange={applyTemplate} />
+              <input type="hidden" name="template_id" value={templateId} />
+            </div>
           </div>
         )}
 
@@ -181,10 +175,18 @@ export function SessionForm({
             </span>
             <select name="trainer_id" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
               <option value="">— Non attribué —</option>
-              {activeTrainers.map((t) => (
-                <option key={t.id} value={t.id}>{t.full_name}</option>
-              ))}
+              {activeTrainers.map((t) => {
+                const off = startDate ? absenceFor(absences, t.id, startDate, endDate || startDate) : null;
+                return (
+                  <option key={t.id} value={t.id} disabled={Boolean(off) && t.id !== defaults.trainer_id}>
+                    {t.full_name}{off ? ` — ${absenceText(off)}` : ''}
+                  </option>
+                );
+              })}
             </select>
+            {trainerAbsence && (
+              <span className="field-error" role="alert">Indisponible : {trainer?.full_name} est {absenceText(trainerAbsence)}.</span>
+            )}
           </label>
           <label>
             Places (max. stagiaires)

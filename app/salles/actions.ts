@@ -53,3 +53,44 @@ export async function updateRoomStatus(id: string, status: string) {
   revalidatePath('/salles');
   return { ok: true };
 }
+
+function readWorkshop(formData: FormData) {
+  const get = (k: string) => String(formData.get(k) ?? '').trim();
+  return { name: get('name'), equipment: get('equipment') || null, modules: get('modules') || null };
+}
+
+function refreshWorkshops() {
+  revalidatePath('/salles');
+  revalidatePath('/');
+}
+
+export async function createWorkshop(roomId: string, formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
+  const w = readWorkshop(formData);
+  if (!w.name) return { ok: false, error: "Le nom de l'atelier est requis." };
+  const supabase = await createClient();
+  const { error } = await supabase.from('room_workshops').insert({ ...w, room_id: roomId });
+  if (error) return { ok: false, error: error.message };
+  refreshWorkshops();
+  return { ok: true };
+}
+
+export async function updateWorkshop(id: string, formData: FormData) {
+  if (!(await requireManager())) return FORBIDDEN;
+  const w = readWorkshop(formData);
+  if (!w.name) return { ok: false, error: "Le nom de l'atelier est requis." };
+  const supabase = await createClient();
+  const { error } = await supabase.from('room_workshops').update(w).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  refreshWorkshops();
+  return { ok: true };
+}
+
+export async function deleteWorkshop(id: string) {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('room_workshops').delete().eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  refreshWorkshops();
+  return { ok: true };
+}

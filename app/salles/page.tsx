@@ -2,6 +2,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { BUILDINGS, compareRooms } from '@/lib/buildings';
+import { RoomWorkshops } from '@/components/room-workshops';
 import { createRoom, deleteRoom, updateRoom, updateRoomStatus } from './actions';
 
 export default async function SallesPage() {
@@ -12,6 +13,7 @@ export default async function SallesPage() {
     .select('id, name, capacity, location, equipment, status')
     .eq('is_holding', false) // la salle virtuelle « À affecter » n'est pas une vraie salle
     .order('name');
+  const { data: workshops } = await supabase.from('room_workshops').select('id, room_id, name, equipment, modules').order('name');
   const rows = [...(rooms || [])].sort(compareRooms).map((r: any) => ({ ...r, location: r.location || '' }));
 
   return (
@@ -70,6 +72,7 @@ export default async function SallesPage() {
             onChange: updateRoomStatus,
           }}
         />
+        <RoomWorkshops rooms={rows as any} workshops={(workshops as any) || []} canEdit={canManage(profile?.role)} />
       </section>
     </main>
   );

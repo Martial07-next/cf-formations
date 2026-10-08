@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { parseNameList } from '@/lib/name-list';
-import { buildFullName, readTraineeName } from '@/lib/trainee-name';
+import { buildFullName, readTraineeName, duplicateMessage, isDuplicateError } from '@/lib/trainee-name';
 
 export async function createTrainee(formData: FormData) {
   if (!(await requireManager())) return FORBIDDEN;
@@ -14,7 +14,9 @@ export async function createTrainee(formData: FormData) {
   const email = String(formData.get('email') || '').trim() || null;
   const company = String(formData.get('company') || '').trim() || null;
   if (!name.last_name) return { ok: false, error: 'Le nom est requis.' };
-  const { error } = await supabase.from('trainees').insert({ ...name, full_name: buildFullName(name), email, company });
+  const full_name = buildFullName(name);
+  const { error } = await supabase.from('trainees').insert({ ...name, full_name, email, company });
+  if (isDuplicateError(error)) return { ok: false, error: duplicateMessage(full_name) };
   if (error) return { ok: false, error: error.message };
   revalidatePath('/stagiaires');
   return { ok: true };
@@ -40,6 +42,7 @@ export async function updateTrainee(id: string, formData: FormData) {
     .from('trainees')
     .update({ ...name, full_name: buildFullName(name), email, company })
     .eq('id', id);
+  if (isDuplicateError(error)) return { ok: false, error: duplicateMessage(buildFullName(name)) };
   if (error) return { ok: false, error: error.message };
   revalidatePath('/stagiaires');
   revalidatePath(`/stagiaires/${id}`);

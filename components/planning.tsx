@@ -3,11 +3,12 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff } from 'lucide-react';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
+import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import {
   addDays,
   isoDate,
@@ -55,7 +56,7 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`status-pill ${status}`}>{SESSION_STATUS_LABEL[status] ?? status}</span>;
 }
 
-function SessionCard({ s, dIso, overrides }: { s: SessionRow; dIso: string; overrides: DayOverride[] }) {
+function SessionCard({ s, dIso, overrides, absence }: { s: SessionRow; dIso: string; overrides: DayOverride[]; absence: Absence | null }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const trainer = one(s.trainers)?.full_name;
   const count = validatedCount(s);
@@ -81,6 +82,9 @@ function SessionCard({ s, dIso, overrides }: { s: SessionRow; dIso: string; over
         <span><Clock size={11} aria-hidden /> {start} – {end}</span>
         <span className="sc-trainer">{trainer || 'Formateur à définir'}</span>
       </span>
+      {absence && (
+        <span className="sc-absence"><CalendarOff size={11} aria-hidden /> Formateur {absenceText(absence)}</span>
+      )}
     </Link>
   );
 }
@@ -98,6 +102,8 @@ export function Planning({
   monthAnchorIso,
   dayIso,
   todayIso,
+  workshops,
+  absences,
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -111,6 +117,8 @@ export function Planning({
   monthAnchorIso: string;
   dayIso: string;
   todayIso: string;
+  workshops: { id: string; room_id: string; name: string; equipment: string | null; modules: string | null }[];
+  absences: Absence[];
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -127,6 +135,8 @@ export function Planning({
   const [formKey, setFormKey] = useState(0);
   const [isPending, startTransition] = useTransition();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const workshopRef = useRef<HTMLDialogElement>(null);
+  const [workshopRoom, setWorkshopRoom] = useState<Room | null>(null);
 
   const shown = useMemo(
     () =>
@@ -224,12 +234,26 @@ export function Planning({
     view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
   const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+  // Période visible (pour signaler les formateurs en congé).
+  const periodStart = view === 'day' ? dayIso : view === 'week' ? mondayIso : isoDate(weeks[0][0]);
+  const periodEnd =
+    view === 'day' ? dayIso : view === 'week' ? isoDate(addDays(monday, 4)) : isoDate(weeks[weeks.length - 1][4]);
+  const periodAbsences = absences
+    .filter((a) => a.start_date <= periodEnd && a.end_date >= periodStart)
+    .map((a) => ({ a, t: trainers.find((t) => t.id === a.trainer_id) }))
+    .filter((x) => x.t);
+
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
-  function sessionsFor(dIso: string, roomId: string) {
+  // Toutes les sessions de la case (même filtrées) : sert à savoir si le créneau est déjà pris.
+  function cellSessions(dIso: string, roomId: string) {
     return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
   }
+  function isTaken(dIso: string, roomId: string) {
+    return sessions.some((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
+  }
+
 
   return (
     <section className="content">
@@ -313,6 +337,25 @@ export function Planning({
         </div>
       )}
 
+      {periodAbsences.length > 0 && (
+        <div className="absence-banner" role="note">
+          <CalendarOff size={15} aria-hidden />
+          <span>
+            <strong>Indisponibles :</strong>{' '}
+            {periodAbsences.map(({ a, t }, i) => (
+              <span key={a.id}>
+                <span className="trainer-tag" style={{ fontWeight: 700 }}>
+                  <span className="swatch" style={{ background: t!.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
+                  {t!.full_name}
+                </span>{' '}
+                {absenceText(a)}
+                {i < periodAbsences.length - 1 ? ' · ' : ''}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
+
       {message && (
         <div role="status" className={`alert ${message.isError ? 'alert-error' : 'alert-success'}`}>
           {message.text}
@@ -334,6 +377,20 @@ export function Planning({
                   ) : (
                     <>
                       {r.name}
+                      {workshops.some((w) => w.room_id === r.id) && (
+                        <button
+                          type="button"
+                          className="workshop-btn small"
+                          aria-label={`Voir les ateliers de ${r.name}`}
+                          title="Ateliers de la salle"
+                          onClick={() => {
+                            setWorkshopRoom(r);
+                            workshopRef.current?.showModal();
+                          }}
+                        >
+                          <Wrench size={12} aria-hidden /> {workshops.filter((w) => w.room_id === r.id).length}
+                        </button>
+                      )}
                       <small>{r.location ? `${r.location} · ` : ''}{r.capacity} places{r.status === 'indisponible' ? ' · indisponible' : ''}</small>
                     </>
                   )}
@@ -350,10 +407,10 @@ export function Planning({
                     </div>
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
-                        {sessionsFor(d.iso, r.id).map((s) => (
-                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} />
+                        {cellSessions(d.iso, r.id).map((s) => (
+                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} />
                         ))}
-                        {canEdit && !r.is_holding && (
+                        {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
                           <button
                             type="button"
                             className="cell-add"
@@ -450,6 +507,7 @@ export function Planning({
               trainers={trainers}
               templates={templates}
               defaults={formDefaults}
+              absences={absences}
               onSubmit={handleCreate}
             />
           </div>
@@ -461,6 +519,25 @@ export function Planning({
           </div>
         </dialog>
       )}
+      <dialog ref={workshopRef} className="modal" aria-labelledby="workshop-title" onClose={() => setWorkshopRoom(null)}>
+        <div className="modal-head">
+          <h2 id="workshop-title"><Wrench size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> Ateliers — {workshopRoom?.name}</h2>
+          <button className="icon ghost" onClick={() => workshopRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ paddingBottom: 18 }}>
+          <div className="workshop-list">
+            {workshops
+              .filter((w) => w.room_id === workshopRoom?.id)
+              .map((w) => (
+                <article key={w.id}>
+                  <h3>{w.name}</h3>
+                  {w.equipment && <p><span className="hint">Équipements :</span> {w.equipment}</p>}
+                  {w.modules && <p><span className="hint">Modules réalisables :</span> {w.modules}</p>}
+                </article>
+              ))}
+          </div>
+        </div>
+      </dialog>
     </section>
   );
 }

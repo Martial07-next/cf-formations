@@ -1,6 +1,7 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { canManage } from '@/lib/roles';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
@@ -100,13 +101,28 @@ export async function setTraineeStatus(
 }
 
 
+/**
+ * Horaires d'une session : modifiables par l'admin / un référent, ou par le
+ * formateur de la session lui-même (dates, salle et stagiaires restent hors de sa portée).
+ */
+async function canEditTimes(sessionId: string): Promise<boolean> {
+  const profile = await getCurrentProfile();
+  if (!profile) return false;
+  if (canManage(profile.role)) return true;
+  if (!profile.trainer_id) return false;
+  const supabase = await createClient();
+  const { data } = await supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle();
+  return data?.trainer_id === profile.trainer_id;
+}
+
 export async function setSessionDayTime(
   sessionId: string,
   day: string,
   startTime: string,
   endTime: string
 ): Promise<ActionResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await canEditTimes(sessionId))) return FORBIDDEN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'Jour invalide.' };
   if (!startTime || !endTime) return { ok: false, error: 'Heure de début et de fin requises.' };
   if (endTime <= startTime) return { ok: false, error: "L'heure de fin doit être après l'heure de début." };
 
@@ -124,7 +140,7 @@ export async function setSessionDayTime(
 }
 
 export async function resetSessionDayTime(sessionId: string, day: string): Promise<ActionResult> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await canEditTimes(sessionId))) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('session_days').delete().eq('session_id', sessionId).eq('day', day);
   if (error) return { ok: false, error: error.message };

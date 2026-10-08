@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildFullName, type TraineeName } from '@/lib/trainee-name';
+import { buildFullName, isDuplicateError, type TraineeName } from '@/lib/trainee-name';
 
 /**
  * Cherche si `traineeId` est déjà VALIDÉ sur une autre session dont le
@@ -57,6 +57,11 @@ export async function findOrCreateTrainee(
     .insert({ full_name: fullName, first_name: name.first_name, last_name: name.last_name, email, company })
     .select('id')
     .single();
+  if (isDuplicateError(error)) {
+    // Créé entre-temps (ou nom identique à des espaces/majuscules près) : on réutilise la fiche.
+    const { data: again } = await supabase.from('trainees').select('id').ilike('full_name', exact(fullName)).limit(1).maybeSingle();
+    return again ? { id: again.id, created: false } : null;
+  }
   if (error || !data) return null;
   return { id: data.id, created: true };
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSessionStatus, type SessionStatus } from '@/lib/status';
+import { absenceText, type Absence } from '@/lib/absences';
 
 export type SessionInput = {
   title: string;
@@ -89,6 +90,20 @@ export async function findSessionConflict(
   if (input.trainer_id) {
     const trainerClash = data?.find((s) => s.trainer_id === input.trainer_id);
     if (trainerClash) return `Conflit : ce formateur anime déjà « ${trainerClash.title} » sur ce créneau.`;
+
+    // Congés / absences du formateur (la base bloque aussi, migration_phase10).
+    const { data: off } = await supabase
+      .from('trainer_absences')
+      .select('id, trainer_id, start_date, end_date, kind')
+      .eq('trainer_id', input.trainer_id)
+      .lte('start_date', input.end_at.slice(0, 10))
+      .gte('end_date', input.start_at.slice(0, 10))
+      .order('start_date')
+      .limit(1);
+    if (off && off.length) {
+      const { data: t } = await supabase.from('trainers').select('full_name').eq('id', input.trainer_id).maybeSingle();
+      return `Formateur indisponible : ${t?.full_name ?? 'ce formateur'} est ${absenceText(off[0] as Absence)}.`;
+    }
   }
   return null;
 }

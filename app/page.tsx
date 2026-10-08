@@ -57,6 +57,18 @@ export default async function Page({
     .gt('end_at', isoDate(addDays(rangeStart, -1)))
     .order('start_at');
 
+  // Ateliers (bouton sur le planning) et congés des formateurs (à partir du début de la période visible).
+  const absencesFrom = isoDate(rangeStart) < isoDate(new Date()) ? isoDate(rangeStart) : isoDate(new Date());
+  const [{ data: workshops }, { data: absences }] = await Promise.all([
+    supabase.from('room_workshops').select('id, room_id, name, equipment, modules').order('name'),
+    supabase
+      .from('trainer_absences')
+      .select('id, trainer_id, start_date, end_date, kind, note')
+      .gte('end_date', absencesFrom)
+      .order('start_date')
+      .limit(2000),
+  ]);
+
   const sessionIds = (sessions || []).map((s: any) => s.id);
   const { data: dayRows } = sessionIds.length
     ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIds)
@@ -83,6 +95,8 @@ export default async function Page({
         monthAnchorIso={isoDate(monthAnchor)}
         dayIso={isoDate(dayAnchor)}
         todayIso={isoDate(new Date())}
+        workshops={(workshops as any) || []}
+        absences={(absences as any) || []}
       />
     </main>
   );

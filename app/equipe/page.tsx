@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, CalendarOff } from 'lucide-react';
+import { absenceText, type Absence } from '@/lib/absences';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { loadDayOverrides, hoursByMonth } from '@/lib/history';
@@ -60,6 +61,20 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
     : { data: [] as Session[] };
   const sessions = (sessionsData || []) as Session[];
   const overrides = await loadDayOverrides(supabase, sessions.map((s) => s.id));
+
+  // Congés en cours ou dans les 30 prochains jours.
+  const today = nowIso.slice(0, 10);
+  const in30 = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+  const { data: absencesData } = ids.length
+    ? await supabase
+        .from('trainer_absences')
+        .select('id, trainer_id, start_date, end_date, kind')
+        .in('trainer_id', ids)
+        .gte('end_date', today)
+        .lte('start_date', in30)
+        .order('start_date')
+    : { data: [] as any[] };
+  const absences = (absencesData || []) as Absence[];
 
   const total = (a: number[]) => a.reduce((n, x) => n + x, 0);
 
@@ -159,6 +174,13 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
                       {t.status === 'inactif' && <span className="badge inactif">Inactif</span>}
                     </h3>
                     {t.specialty && <span className="hint">{t.specialty}</span>}
+                    {absences
+                      .filter((a) => a.trainer_id === t.id)
+                      .map((a) => (
+                        <span key={a.id} className="sc-absence" style={{ fontSize: 12 }}>
+                          <CalendarOff size={13} aria-hidden /> {a.start_date <= today ? 'Actuellement' : 'Bientôt'} {absenceText(a)}
+                        </span>
+                      ))}
                     <div className="mini-stats">
                       <div><strong>{formatHours(st.month)}</strong><span>ce mois</span></div>
                       <div><strong>{formatHours(st.year)}</strong><span>réalisées {currentYear}</span></div>

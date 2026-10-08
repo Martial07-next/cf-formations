@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, Phone } from 'lucide-react';
-import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursOf, one, hoursByMonth } from '@/lib/history';
 import { MonthlyTable } from '@/components/monthly-table';
+import { AbsencesPanel } from '@/components/absences-panel';
 import { formatHours } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 
@@ -22,7 +23,7 @@ export default async function TrainerDetailPage({
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
-  const [{ data: trainer }, { data: sessions }] = await Promise.all([
+  const [{ data: trainer }, { data: sessions }, { data: absences }] = await Promise.all([
     supabase
       .from('trainers')
       .select('id, full_name, email, phone, specialty, availability, status, color, referent_id, profiles!trainers_referent_id_fkey(full_name)')
@@ -33,6 +34,11 @@ export default async function TrainerDetailPage({
       .select('id, title, status, start_at, end_at, rooms(name), session_trainees(status)')
       .eq('trainer_id', id)
       .order('start_at', { ascending: false }),
+    supabase
+      .from('trainer_absences')
+      .select('id, trainer_id, start_date, end_date, kind, note')
+      .eq('trainer_id', id)
+      .order('start_date', { ascending: false }),
   ]);
 
   if (!trainer) notFound();
@@ -94,6 +100,8 @@ export default async function TrainerDetailPage({
           <div className="stat"><span>Heures planifiées</span><strong>{formatHours(sum(upcoming))}</strong><small>{upcoming.length} session{upcoming.length > 1 ? 's' : ''} à venir</small></div>
           <div className="stat"><span>Sessions réalisées</span><strong>{done.length}</strong><small>{traineesTrained} stagiaire{traineesTrained > 1 ? 's' : ''} formé{traineesTrained > 1 ? 's' : ''}</small></div>
         </div>
+
+        <AbsencesPanel trainerId={id} absences={((absences as any[]) || []).reverse()} canEdit={canManage(profile?.role)} />
 
         <MonthlyTable
           title="Suivi mensuel"

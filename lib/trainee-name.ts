@@ -2,7 +2,16 @@ export type TraineeName = { first_name: string | null; last_name: string };
 
 /** Nom affiché : « Prénom Nom ». */
 export function buildFullName(n: TraineeName): string {
-  return [n.first_name?.trim(), n.last_name.trim()].filter(Boolean).join(' ');
+  return [n.first_name?.trim(), n.last_name.trim()].filter(Boolean).join(' ').replace(/\s+/g, ' ');
+}
+
+/** Message affiché quand la base refuse un doublon (index trainees_name_key). */
+export function duplicateMessage(fullName: string) {
+  return `« ${fullName} » existe déjà dans les stagiaires : un même stagiaire ne peut pas être enregistré deux fois.`;
+}
+
+export function isDuplicateError(error: { code?: string; message?: string } | null) {
+  return !!error && (error.code === '23505' || /trainees_name_key/.test(error.message || ''));
 }
 
 /** Lit Prénom / Nom d'un formulaire. */

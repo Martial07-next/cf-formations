@@ -39,6 +39,7 @@ export function SessionDetailView({
   session,
   template,
   digiformaEnabled,
+  isOwnTrainer = false,
   rooms,
   trainers,
   enrolled,
@@ -48,6 +49,8 @@ export function SessionDetailView({
   isAdmin: boolean;
   session: SessionDetail;
   digiformaEnabled: boolean;
+  /** Le formateur connecté anime cette session : il peut ajuster ses horaires. */
+  isOwnTrainer?: boolean;
   template: { title: string; category: string | null; duration_hours: number } | null;
   rooms: FormRoom[];
   trainers: FormTrainer[];
@@ -166,7 +169,8 @@ export function SessionDetailView({
       </div>
 
       <DayTimesPanel
-        isAdmin={isAdmin}
+        isAdmin={isAdmin || isOwnTrainer}
+        ownTrainer={!isAdmin && isOwnTrainer}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}
@@ -273,26 +277,31 @@ export function SessionDetailView({
 
 function DayTimesPanel({
   isAdmin,
+  ownTrainer,
   sessionId,
   startAt,
   endAt,
   overrides,
 }: {
   isAdmin: boolean;
+  ownTrainer: boolean;
   sessionId: string;
   startAt: string;
   endAt: string;
   overrides: DayOverride[];
 }) {
-  const days = weekdaysBetween(startAt, endAt);
-  if (days.length < 2) return null; // session d'un seul jour : rien à personnaliser
+  const weekdays = weekdaysBetween(startAt, endAt);
+  const days = weekdays.length ? weekdays : [startAt.slice(0, 10)];
+  // Session d'une journée : panneau utile seulement à qui peut modifier les horaires.
+  if (days.length < 2 && !isAdmin) return null;
 
   return (
     <div className="panel">
       <h2>Horaires par jour</h2>
-      <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-8px 0 14px' }}>
-        Par défaut, chaque jour reprend l'horaire global de la session. Modifie une ligne pour donner un horaire
-        différent à ce jour précis (comme un emploi du temps de cours).
+      <p className="panel-intro">
+        {ownTrainer
+          ? 'Tu animes cette session : tu peux ajuster tes horaires jour par jour (la pause 12h–13h est déduite automatiquement).'
+          : 'Par défaut, chaque jour reprend l’horaire global de la session. Modifie une ligne pour donner un horaire différent à ce jour précis.'}
       </p>
       <table className="data">
         <thead>

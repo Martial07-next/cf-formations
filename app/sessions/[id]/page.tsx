@@ -89,6 +89,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
         <SessionDetailView
           isAdmin={editable}
+          isOwnTrainer={Boolean(profile?.trainer_id) && profile?.trainer_id === (session as any).trainer_id}
           digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}
           template={template}
