@@ -165,96 +165,79 @@ export async function resetSessionDayTime(sessionId: string, day: string): Promi
 }
 
 export type CsvImportResult =
-  | { ok: true; added: number; updated: number; skipped: number; errors: string[] }
+  | { ok: true; added: number; updated: number; already?: number; skipped: number; duplicates?: number; errors: string[] }
   | { ok: false; error: string };
 
 /**
- * Importe des stagiaires depuis un CSV et les inscrit à cette session.
- * Colonnes attendues (insensibles à la casse) : Prénom, Nom (requis), Email, Entreprise, Statut.
- * Statut accepte "validé"/"validee" ou "en attente"/"en_attente" (défaut : en attente).
- * Un stagiaire existant est reconnu par e-mail (prioritaire) ou par nom exact ;
- * sinon une nouvelle fiche stagiaire est créée.
+ * Importe un fichier de stagiaires (Excel .xlsx ou CSV) et les inscrit à cette session.
+ * Colonnes : NOM, PRENOM, ENTREPRISE, EMAIL (+ STATUT facultatif : « validé » /
+ * « en attente », défaut en attente). Doublons du fichier retirés ; un
+ * stagiaire déjà connu est réutilisé (et complété), jamais recréé.
  */
 export async function importTraineesCsv(sessionId: string, formData: FormData): Promise<CsvImportResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const file = formData.get('file');
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: 'Choisis un fichier CSV.' };
-  }
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Choisis un fichier Excel (.xlsx) ou CSV.' };
 
-  const Papa = (await import('papaparse')).default;
-  const text = await file.text();
-  const parsed = Papa.parse<Record<string, string>>(text, {
-    header: true,
-    skipEmptyLines: true,
-    delimiter: '', // auto-détection ; / ,
-  });
-
-  if (parsed.errors.length > 0 && parsed.data.length === 0) {
-    return { ok: false, error: 'Fichier CSV illisible. Vérifie le format (colonnes séparées par , ou ;).' };
+  let parsed;
+  try {
+    const { parseTraineeFile } = await import('@/lib/trainee-file');
+    parsed = await parseTraineeFile(file);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Fichier illisible.' };
   }
-
-  const norm = (s: string) => s.trim().toLowerCase();
-  function getField(row: Record<string, string>, ...names: string[]): string {
-    for (const key of Object.keys(row)) {
-      if (names.includes(norm(key))) return (row[key] || '').trim();
-    }
-    return '';
-  }
+  if (!parsed.rows.length) return { ok: false, error: parsed.errors[0] || 'Aucun stagiaire trouvé dans le fichier.' };
 
   const supabase = await createClient();
   const { data: sessionRow } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).single();
   let added = 0;
   let updated = 0;
-  let skipped = 0;
-  const errors: string[] = [];
+  let already = 0;
+  const errors = [...parsed.errors];
 
-  for (let i = 0; i < parsed.data.length; i++) {
-    const row = parsed.data[i];
-    // « Prénom » + « Nom », ou un seul « Nom complet ».
-    const first_name = getField(row, 'prénom', 'prenom', 'first name', 'firstname') || null;
-    const last_name = getField(row, 'nom', 'nom complet', 'name', 'last name', 'lastname');
-    const full_name = [first_name, last_name].filter(Boolean).join(' ');
-    const email = getField(row, 'email', 'e-mail', 'mail') || null;
-    const company = getField(row, 'entreprise', 'société', 'company') || null;
-    const statutRaw = norm(getField(row, 'statut', 'status'));
-    let status: 'validee' | 'en_attente' = statutRaw.startsWith('valid') ? 'validee' : 'en_attente';
-
-    if (!last_name) {
-      skipped++;
-      errors.push(`Ligne ${i + 2} : nom manquant, ignorée.`);
-      continue;
-    }
-
-    const trainee = await findOrCreateTrainee(supabase, { first_name, last_name }, email, company);
+  for (const row of parsed.rows) {
+    const label = [row.name.first_name, row.name.last_name].filter(Boolean).join(' ');
+    const trainee = await findOrCreateTrainee(supabase, row.name, row.email, row.company);
     if (!trainee) {
-      errors.push(`Ligne ${i + 2} (${full_name}) : création impossible.`);
+      errors.push(`Ligne ${row.line} (${label}) : création impossible.`);
       continue;
     }
-    const traineeId = trainee.id;
     if (!trainee.created) updated++;
 
-    if (status === 'validee' && sessionRow && traineeId) {
-      const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
+    // Déjà inscrit : réimporter ne change rien (sauf si le fichier indique « validé »).
+    const { data: link } = await supabase
+      .from('session_trainees')
+      .select('status')
+      .eq('session_id', sessionId)
+      .eq('trainee_id', trainee.id)
+      .maybeSingle();
+    if (link && (link.status === 'validee' || row.status !== 'validee')) {
+      already++;
+      continue;
+    }
+
+    let status: 'validee' | 'en_attente' = row.status || 'en_attente';
+    if (status === 'validee' && sessionRow) {
+      const conflict = await findTraineeConflict(supabase, trainee.id, sessionRow.start_at, sessionRow.end_at, sessionId);
       if (conflict) {
         status = 'en_attente';
-        errors.push(`Ligne ${i + 2} (${full_name}) : déjà validé sur "${conflict.title}" sur ce créneau, mis en attente.`);
+        errors.push(`Ligne ${row.line} (${label}) : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
       }
     }
 
     const { error: linkError } = await supabase
       .from('session_trainees')
-      .upsert({ session_id: sessionId, trainee_id: traineeId, status }, { onConflict: 'session_id,trainee_id' });
-
+      .upsert({ session_id: sessionId, trainee_id: trainee.id, status }, { onConflict: 'session_id,trainee_id' });
     if (linkError) {
-      errors.push(`Ligne ${i + 2} (${full_name}) : ${linkError.message}`);
+      errors.push(`Ligne ${row.line} (${label}) : ${linkError.message}`);
       continue;
     }
     added++;
   }
 
   revalidatePath(`/sessions/${sessionId}`);
-  return { ok: true, added, updated, skipped, errors };
+  const skipped = parsed.errors.filter((e) => e.includes('ignorée')).length;
+  return { ok: true, added, updated, already, skipped, duplicates: parsed.duplicates, errors };
 }
 
 export async function saveDigiformaRef(sessionId: string, digiformaRef: string): Promise<ActionResult> {

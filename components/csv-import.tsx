@@ -19,17 +19,20 @@ export function CsvImportTrainees({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="panel">
-      <h2>Importer des stagiaires (CSV)</h2>
-      <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-8px 0 14px' }}>
-        Colonnes : <code>Nom</code> (requis), <code>Prénom</code> ; facultatives : <code>Email</code>, <code>Entreprise</code>, <code>Statut</code>{' '}
-        (« validé » ou « en attente », défaut en attente). Un stagiaire déjà connu (par e-mail ou par nom) est
-        réutilisé, sinon une nouvelle fiche est créée.
+      <h2>Importer des stagiaires (Excel ou CSV)</h2>
+      <p className="panel-intro">
+        Colonnes : <code>NOM</code>, <code>PRENOM</code>, <code>ENTREPRISE</code>, <code>EMAIL</code> (et{' '}
+        <code>STATUT</code> facultatif : « validé » ou « en attente », défaut en attente). Les doublons du fichier sont
+        retirés, un stagiaire déjà connu n’est jamais recréé et un stagiaire déjà inscrit à la session n’est pas modifié :
+        tu peux réimporter un fichier mis à jour sans risque.
       </p>
 
       {result && !result.ok && <div role="alert" className="alert alert-error">{result.error}</div>}
       {result && result.ok && (
         <div role="status" className={`alert ${result.errors.length ? '' : 'alert-success'}`}>
-          {result.added} stagiaire{result.added > 1 ? 's' : ''} importé{result.added > 1 ? 's' : ''}.
+          {result.added} stagiaire{result.added > 1 ? 's' : ''} inscrit{result.added > 1 ? 's' : ''}.
+          {(result.already ?? 0) > 0 && ` ${result.already} déjà inscrit(s), inchangé(s).`}
+          {(result.duplicates ?? 0) > 0 && ` ${result.duplicates} doublon(s) retiré(s) du fichier.`}
           {result.skipped > 0 && ` ${result.skipped} ligne(s) ignorée(s).`}
           {result.errors.length > 0 && (
             <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
@@ -42,7 +45,7 @@ export function CsvImportTrainees({ sessionId }: { sessionId: string }) {
       )}
 
       <form ref={formRef} action={handleImport} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input type="file" name="file" accept=".csv,text/csv" required />
+        <input type="file" name="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
         <button type="submit" className="primary" disabled={isPending}>
           {isPending ? 'Import…' : 'Importer'}
         </button>

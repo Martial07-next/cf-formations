@@ -6,9 +6,10 @@ import { importTraineesCsvGlobal, importTraineesFromDigiforma, type ImportResult
 function summarize(result: ImportResult): { text: string; error: boolean } {
   if (!result.ok) return { text: result.error, error: true };
   const parts = [];
-  if (result.created) parts.push(`${result.created} créé(s)`);
-  if (result.matched) parts.push(`${result.matched} déjà connu(s)`);
-  if (result.skipped) parts.push(`${result.skipped} ignoré(s)`);
+  if (result.created) parts.push(`${result.created} nouveau(x) stagiaire(s)`);
+  if (result.matched) parts.push(`${result.matched} déjà connu(s), non recréé(s)${result.completed ? ` (${result.completed} complété(s))` : ''}`);
+  if (result.duplicates) parts.push(`${result.duplicates} doublon(s) retiré(s) du fichier`);
+  if (result.skipped) parts.push(`${result.skipped} ligne(s) ignorée(s)`);
   return { text: parts.join(', ') || 'Rien à importer.', error: false };
 }
 
@@ -65,14 +66,16 @@ export function QuickImportPanel({ digiformaEnabled }: { digiformaEnabled: boole
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div>
-          <p style={{ fontSize: 12.5, fontWeight: 700, margin: '0 0 8px' }}>Depuis un CSV</p>
+          <p style={{ fontSize: 12.5, fontWeight: 700, margin: '0 0 8px' }}>Depuis un fichier Excel ou CSV</p>
           <form ref={formRef} action={handleCsv} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="file" name="file" accept=".csv,text/csv" required />
+            <input type="file" name="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
             <button type="submit" className="primary" disabled={isPending}>
               {isPending ? '…' : 'Importer'}
             </button>
           </form>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Colonnes : Nom, Prénom (Email et Entreprise facultatifs).</p>
+          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
+            Colonnes : NOM, PRENOM, ENTREPRISE, EMAIL. Les doublons sont retirés, y compris lors d’un nouvel import.
+          </p>
         </div>
 
         {digiformaEnabled && <div>

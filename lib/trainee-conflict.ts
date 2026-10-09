@@ -36,21 +36,56 @@ function exact(v: string): string {
   return v.replace(/[\\%_]/g, (c) => '\\' + c);
 }
 
-/** Retrouve un stagiaire par e-mail puis par nom exact, sinon le crée. */
+/**
+ * Retrouve un stagiaire (par e-mail, puis par nom : « Prénom Nom » ou « Nom Prénom »),
+ * sinon le crée. Une fiche retrouvée est complétée avec les informations
+ * manquantes (e-mail, entreprise, prénom/nom séparés) : jamais de doublon.
+ */
 export async function findOrCreateTrainee(
   supabase: SupabaseClient,
   name: TraineeName,
   email: string | null,
   company: string | null = null
-): Promise<{ id: string; created: boolean } | null> {
+): Promise<{ id: string; created: boolean; completed?: boolean } | null> {
   const fullName = buildFullName(name);
   if (!fullName) return null;
+  const reversed = name.first_name ? `${name.last_name} ${name.first_name}`.replace(/\s+/g, ' ').trim() : null;
+  const cols = 'id, full_name, email, company, first_name, last_name';
+  const sameKey = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(Boolean).sort().join(' ');
+
+  let found: any = null;
   if (email) {
-    const { data } = await supabase.from('trainees').select('id').ilike('email', exact(email)).limit(1).maybeSingle();
-    if (data) return { id: data.id, created: false };
+    const { data } = await supabase.from('trainees').select(cols).ilike('email', exact(email)).limit(1).maybeSingle();
+    // E-mail déjà porté par une autre personne : on ne fusionne pas, et on ne réutilise pas l'e-mail.
+    if (data && sameKey(data.full_name || '') !== sameKey(fullName)) email = null;
+    else found = data;
   }
-  const { data: byName } = await supabase.from('trainees').select('id').ilike('full_name', exact(fullName)).limit(1).maybeSingle();
-  if (byName) return { id: byName.id, created: false };
+  if (!found) {
+    const { data } = await supabase.from('trainees').select(cols).ilike('full_name', exact(fullName)).limit(1).maybeSingle();
+    found = data;
+  }
+  if (!found && reversed) {
+    const { data } = await supabase.from('trainees').select(cols).ilike('full_name', exact(reversed)).limit(1).maybeSingle();
+    found = data;
+  }
+
+  if (found) {
+    // Complète la fiche existante sans écraser ce qui est déjà renseigné.
+    const patch: Record<string, string> = {};
+    if (!found.email && email) patch.email = email;
+    if (!found.company && company) patch.company = company;
+    if (!found.first_name && !found.last_name && name.last_name) {
+      patch.last_name = name.last_name;
+      if (name.first_name) patch.first_name = name.first_name;
+      patch.full_name = fullName;
+    }
+    let completed = false;
+    if (Object.keys(patch).length) {
+      const { error } = await supabase.from('trainees').update(patch).eq('id', found.id);
+      completed = !error;
+    }
+    return { id: found.id, created: false, completed };
+  }
 
   const { data, error } = await supabase
     .from('trainees')

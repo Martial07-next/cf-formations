@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { parseNameList } from '@/lib/name-list';
+import { parseTraineeFile } from '@/lib/trainee-file';
 import { buildFullName, readTraineeName, duplicateMessage, isDuplicateError } from '@/lib/trainee-name';
 
 export async function createTrainee(formData: FormData) {
@@ -60,58 +61,49 @@ function getField(row: Record<string, string>, ...names: string[]): string {
 }
 
 export type ImportResult =
-  | { ok: true; created: number; matched: number; skipped: number; errors: string[] }
+  | { ok: true; created: number; matched: number; skipped: number; duplicates?: number; completed?: number; errors: string[] }
   | { ok: false; error: string };
 
 /**
- * Importe des stagiaires depuis un CSV dans l'annuaire (sans les lier à une
- * session : ça se fait ensuite depuis la fiche de la session concernée).
- * Colonnes attendues (insensibles à la casse) : Prénom, Nom (requis), Email, Entreprise.
+ * Importe un fichier de stagiaires (Excel .xlsx ou CSV) dans l'annuaire.
+ * Colonnes : NOM, PRENOM, ENTREPRISE, EMAIL. Les doublons du fichier sont
+ * retirés ; un stagiaire déjà connu n'est jamais recréé (il est complété).
  */
 export async function importTraineesCsvGlobal(formData: FormData): Promise<ImportResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const file = formData.get('file');
-  if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Choisis un fichier CSV.' };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Choisis un fichier Excel (.xlsx) ou CSV.' };
 
-  const Papa = (await import('papaparse')).default;
-  const text = await file.text();
-  const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
-
-  if (parsed.errors.length > 0 && parsed.data.length === 0) {
-    return { ok: false, error: 'Fichier CSV illisible. Vérifie le format (colonnes séparées par , ou ;).' };
+  let parsed;
+  try {
+    parsed = await parseTraineeFile(file);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Fichier illisible.' };
   }
+  if (!parsed.rows.length) return { ok: false, error: parsed.errors[0] || 'Aucun stagiaire trouvé dans le fichier.' };
 
   const supabase = await createClient();
   let created = 0;
   let matched = 0;
-  let skipped = 0;
-  const errors: string[] = [];
+  let completed = 0;
+  const errors = [...parsed.errors];
 
-  for (let i = 0; i < parsed.data.length; i++) {
-    const row = parsed.data[i];
-    // « Prénom » + « Nom », ou un seul « Nom complet ».
-    const first_name = getField(row, 'prénom', 'prenom', 'first name', 'firstname') || null;
-    const last_name = getField(row, 'nom', 'nom complet', 'name', 'last name', 'lastname');
-    const full_name = [first_name, last_name].filter(Boolean).join(' ');
-    const email = getField(row, 'email', 'e-mail', 'mail') || null;
-    const company = getField(row, 'entreprise', 'société', 'company') || null;
-
-    if (!last_name) {
-      skipped++;
-      errors.push(`Ligne ${i + 2} : nom manquant, ignorée.`);
-      continue;
-    }
-    const result = await findOrCreateTrainee(supabase, { first_name, last_name }, email, company);
+  for (const row of parsed.rows) {
+    const result = await findOrCreateTrainee(supabase, row.name, row.email, row.company);
     if (!result) {
-      errors.push(`Ligne ${i + 2} (${full_name}) : import impossible.`);
+      errors.push(`Ligne ${row.line} (${buildFullName(row.name)}) : import impossible.`);
       continue;
     }
     if (result.created) created++;
-    else matched++;
+    else {
+      matched++;
+      if (result.completed) completed++;
+    }
   }
 
   revalidatePath('/stagiaires');
-  return { ok: true, created, matched, skipped, errors };
+  const skipped = parsed.errors.filter((e) => e.includes('ignorée')).length;
+  return { ok: true, created, matched, completed, skipped, duplicates: parsed.duplicates, errors };
 }
 
 /** Récupère tous les stagiaires connus de Digiforma et les ajoute/reconnaît dans l'annuaire. */
