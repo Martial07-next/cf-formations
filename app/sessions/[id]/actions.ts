@@ -6,7 +6,7 @@ import { effectiveDayTime } from '@/lib/week';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
-import { findTraineeConflict, findOrCreateTrainee } from '@/lib/trainee-conflict';
+import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTraineeConflictsBulk, sessionLinks, upsertSessionLinks } from '@/lib/trainee-conflict';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -195,44 +195,49 @@ export async function importTraineesCsv(sessionId: string, formData: FormData): 
   let already = 0;
   const errors = [...parsed.errors];
 
-  for (const row of parsed.rows) {
-    const label = [row.name.first_name, row.name.last_name].filter(Boolean).join(' ');
-    const trainee = await findOrCreateTrainee(supabase, row.name, row.email, row.company);
+  let results;
+  try {
+    results = await resolveTraineesBulk(supabase, parsed.rows);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Import impossible.' };
+  }
+  const existingLinks = await sessionLinks(supabase, sessionId);
+  const label = (i: number) => [parsed.rows[i].name.first_name, parsed.rows[i].name.last_name].filter(Boolean).join(' ');
+
+  const toLink: { id: string; i: number; status: 'validee' | 'en_attente' }[] = [];
+  parsed.rows.forEach((row, i) => {
+    const trainee = results[i];
     if (!trainee) {
-      errors.push(`Ligne ${row.line} (${label}) : création impossible.`);
-      continue;
+      errors.push(`Ligne ${row.line} (${label(i)}) : création impossible.`);
+      return;
     }
     if (!trainee.created) updated++;
-
     // Déjà inscrit : réimporter ne change rien (sauf si le fichier indique « validé »).
-    const { data: link } = await supabase
-      .from('session_trainees')
-      .select('status')
-      .eq('session_id', sessionId)
-      .eq('trainee_id', trainee.id)
-      .maybeSingle();
-    if (link && (link.status === 'validee' || row.status !== 'validee')) {
+    const link = existingLinks.get(trainee.id);
+    if ((link && (link === 'validee' || row.status !== 'validee')) || toLink.some((x) => x.id === trainee.id)) {
       already++;
-      continue;
+      return;
     }
+    toLink.push({ id: trainee.id, i, status: row.status || 'en_attente' });
+  });
 
-    let status: 'validee' | 'en_attente' = row.status || 'en_attente';
-    if (status === 'validee' && sessionRow) {
-      const conflict = await findTraineeConflict(supabase, trainee.id, sessionRow.start_at, sessionRow.end_at, sessionId);
-      if (conflict) {
-        status = 'en_attente';
-        errors.push(`Ligne ${row.line} (${label}) : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
-      }
+  const wantValid = toLink.filter((x) => x.status === 'validee').map((x) => x.id);
+  const conflicts =
+    wantValid.length && sessionRow
+      ? await findTraineeConflictsBulk(supabase, wantValid, sessionRow.start_at, sessionRow.end_at, sessionId)
+      : new Map<string, { sessionId: string; title: string }>();
+  for (const x of toLink) {
+    const conflict = x.status === 'validee' ? conflicts.get(x.id) : undefined;
+    if (conflict) {
+      x.status = 'en_attente';
+      errors.push(`Ligne ${parsed.rows[x.i].line} (${label(x.i)}) : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
     }
-
-    const { error: linkError } = await supabase
-      .from('session_trainees')
-      .upsert({ session_id: sessionId, trainee_id: trainee.id, status }, { onConflict: 'session_id,trainee_id' });
-    if (linkError) {
-      errors.push(`Ligne ${row.line} (${label}) : ${linkError.message}`);
-      continue;
-    }
-    added++;
+  }
+  const failed = await upsertSessionLinks(supabase, sessionId, toLink.map((x) => ({ trainee_id: x.id, status: x.status })));
+  for (const x of toLink) {
+    const msg = failed.get(x.id);
+    if (msg) errors.push(`Ligne ${parsed.rows[x.i].line} (${label(x.i)}) : ${msg}`);
+    else added++;
   }
 
   revalidatePath(`/sessions/${sessionId}`);

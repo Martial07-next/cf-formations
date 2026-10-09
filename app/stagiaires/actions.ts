@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
+import { resolveTraineesBulk, findTraineeConflictsBulk, upsertSessionLinks } from '@/lib/trainee-conflict';
 import { parseNameList } from '@/lib/name-list';
 import { parseTraineeFile } from '@/lib/trainee-file';
 import { buildFullName, readTraineeName, duplicateMessage, isDuplicateError } from '@/lib/trainee-name';
@@ -88,18 +88,24 @@ export async function importTraineesCsvGlobal(formData: FormData): Promise<Impor
   let completed = 0;
   const errors = [...parsed.errors];
 
-  for (const row of parsed.rows) {
-    const result = await findOrCreateTrainee(supabase, row.name, row.email, row.company);
+  let results;
+  try {
+    results = await resolveTraineesBulk(supabase, parsed.rows);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Import impossible.' };
+  }
+  parsed.rows.forEach((row, i) => {
+    const result = results[i];
     if (!result) {
       errors.push(`Ligne ${row.line} (${buildFullName(row.name)}) : import impossible.`);
-      continue;
+      return;
     }
     if (result.created) created++;
     else {
       matched++;
       if (result.completed) completed++;
     }
-  }
+  });
 
   revalidatePath('/stagiaires');
   const skipped = parsed.errors.filter((e) => e.includes('ignorée')).length;
@@ -126,15 +132,21 @@ export async function importTraineesFromDigiforma(): Promise<ImportResult> {
   let matched = 0;
   const errors: string[] = [];
 
-  for (const t of trainees) {
-    const result = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
-    if (!result) {
-      errors.push(`${t.fullName} : import impossible.`);
-      continue;
-    }
-    if (result.created) created++;
-    else matched++;
+  let results;
+  try {
+    results = await resolveTraineesBulk(
+      supabase,
+      trainees.map((t) => ({ name: { first_name: t.firstName, last_name: t.lastName }, email: t.email }))
+    );
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Import impossible.' };
   }
+  trainees.forEach((t, i) => {
+    const result = results[i];
+    if (!result) errors.push(`${t.fullName} : import impossible.`);
+    else if (result.created) created++;
+    else matched++;
+  });
 
   revalidatePath('/stagiaires');
   return { ok: true, created, matched, skipped: 0, errors };
@@ -157,7 +169,7 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
 
   const rows = parseNameList(text, order);
   if (rows.length === 0) return { ok: false, error: 'Aucun nom trouvé. Colle une personne par ligne (Nom et Prénom).' };
-  if (rows.length > 1000) return { ok: false, error: 'Trop de lignes d’un coup (1000 maximum).' };
+  if (rows.length > 5000) return { ok: false, error: 'Trop de lignes d’un coup (5000 maximum).' };
 
   const supabase = await createClient();
   const session = sessionId
@@ -170,29 +182,39 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
   let enrolled = 0;
   const errors: string[] = [];
 
-  for (const row of rows) {
-    const label = [row.name.first_name, row.name.last_name].filter(Boolean).join(' ');
-    const trainee = await findOrCreateTrainee(supabase, row.name, row.email);
+  let results;
+  try {
+    results = await resolveTraineesBulk(supabase, rows);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Import impossible.' };
+  }
+  const label = (i: number) => [rows[i].name.first_name, rows[i].name.last_name].filter(Boolean).join(' ');
+  const ids: { id: string; i: number }[] = [];
+  rows.forEach((row, i) => {
+    const trainee = results[i];
     if (!trainee) {
-      errors.push(`Ligne ${row.line} (${label}) : création impossible.`);
-      continue;
+      errors.push(`Ligne ${row.line} (${label(i)}) : création impossible.`);
+      return;
     }
     if (trainee.created) created++;
     else matched++;
+    if (!ids.some((x) => x.id === trainee.id)) ids.push({ id: trainee.id, i });
+  });
 
-    if (session) {
-      let status: 'validee' | 'en_attente' = enrollStatus;
-      if (status === 'validee') {
-        const conflict = await findTraineeConflict(supabase, trainee.id, session.start_at, session.end_at, session.id);
-        if (conflict) {
-          status = 'en_attente';
-          errors.push(`${label} : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
-        }
-      }
-      const { error } = await supabase
-        .from('session_trainees')
-        .upsert({ session_id: session.id, trainee_id: trainee.id, status }, { onConflict: 'session_id,trainee_id' });
-      if (error) errors.push(`${label} : ${error.message}`);
+  if (session && ids.length) {
+    const conflicts =
+      enrollStatus === 'validee'
+        ? await findTraineeConflictsBulk(supabase, ids.map((x) => x.id), session.start_at, session.end_at, session.id)
+        : new Map();
+    const links = ids.map(({ id, i }) => {
+      const conflict = conflicts.get(id);
+      if (conflict) errors.push(`${label(i)} : déjà validé sur « ${conflict.title} » sur ce créneau, mis en attente.`);
+      return { trainee_id: id, status: (conflict ? 'en_attente' : enrollStatus) as 'validee' | 'en_attente' };
+    });
+    const failed = await upsertSessionLinks(supabase, session.id, links);
+    for (const { id, i } of ids) {
+      const msg = failed.get(id);
+      if (msg) errors.push(`${label(i)} : ${msg}`);
       else enrolled++;
     }
   }

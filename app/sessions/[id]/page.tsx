@@ -10,6 +10,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
+// Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
+export const maxDuration = 60;
+
 function one<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null;
   return Array.isArray(v) ? v[0] ?? null : v;

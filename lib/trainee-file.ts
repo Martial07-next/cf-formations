@@ -89,6 +89,7 @@ export async function parseTraineeFile(file: File): Promise<{ rows: TraineeRow[]
 
   const get = (row: string[], field: keyof typeof HEADERS) => (col[field] != null ? row[col[field]!] || '' : '');
   const byKey = new Map<string, TraineeRow>();
+  const emails = new Set<string>();
   let duplicates = 0;
 
   matrix.slice(headerIndex + 1).forEach((row) => {
@@ -122,19 +123,23 @@ export async function parseTraineeFile(file: File): Promise<{ rows: TraineeRow[]
     const k = personKey(entry.name);
     const existing = byKey.get(k);
     // Même e-mail pour deux personnes différentes : on garde les deux, sans l'e-mail en double.
-    if (!existing && email && [...byKey.values()].some((r) => r.email === email)) {
+    if (!existing && email && emails.has(email)) {
       errors.push(`Ligne ${line} : l’e-mail ${email} est déjà utilisé par une autre personne du fichier, ignoré.`);
       entry.email = null;
     }
     if (existing) {
       duplicates++;
-      if (!existing.email && entry.email && ![...byKey.values()].some((r) => r.email === entry.email)) existing.email = entry.email;
+      if (!existing.email && entry.email && !emails.has(entry.email)) {
+        existing.email = entry.email;
+        emails.add(entry.email);
+      }
       existing.company ||= entry.company;
       existing.name.first_name ||= entry.name.first_name;
       if (entry.status === 'validee') existing.status = 'validee';
       return;
     }
     byKey.set(k, entry);
+    if (entry.email) emails.add(entry.email);
   });
 
   return { rows: [...byKey.values()], duplicates, errors };

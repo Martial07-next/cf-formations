@@ -4,6 +4,9 @@ import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
+// Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
+export const maxDuration = 60;
+
 const SESSION_SELECT =
   'id, title, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status, trainee_id)';
 

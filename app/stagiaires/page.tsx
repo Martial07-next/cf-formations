@@ -9,6 +9,9 @@ import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
 import { PasteImport } from '@/components/paste-import';
 
+// Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
+export const maxDuration = 60;
+
 const PAGE_SIZE = 50;
 
 /** Nettoie un texte de recherche pour un filtre PostgREST `or(...)`. */
