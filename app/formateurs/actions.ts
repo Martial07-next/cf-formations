@@ -15,8 +15,19 @@ function readTrainer(formData: FormData) {
     color: get('color'),
     referent_id: get('referent_id') || null,
     profile_id: get('profile_id') || null,
+    // Formateur externe et sa période d'intervention (migration 15).
+    is_external: get('is_external') === 'externe',
+    mission_start: get('is_external') === 'externe' ? get('mission_start') || null : null,
+    mission_end: get('is_external') === 'externe' ? get('mission_end') || null : null,
   };
 }
+
+/** Sans la migration 15, on enregistre le reste de la fiche (sans le type externe). */
+function withoutExternal<T extends Record<string, any>>(t: T) {
+  const { is_external, mission_start, mission_end, ...rest } = t;
+  return rest;
+}
+const missingExternal = (msg: string) => /is_external|mission_(start|end)/.test(msg);
 
 function refresh(id?: string) {
   revalidatePath('/formateurs');
@@ -44,7 +55,9 @@ export async function createTrainer(formData: FormData) {
     t.color = nextTrainerColor((used || []).map((r: any) => r.color));
   }
 
-  const { error } = await supabase.from('trainers').insert({ ...t, status });
+  if (t.mission_start && t.mission_end && t.mission_end < t.mission_start) return { ok: false, error: 'La fin de la période d’intervention est avant son début.' };
+  let { error } = await supabase.from('trainers').insert({ ...t, status });
+  if (error && missingExternal(error.message)) ({ error } = await supabase.from('trainers').insert({ ...withoutExternal(t), status }));
   if (error) return { ok: false, error: friendly(error.message) };
   refresh();
   return { ok: true };
@@ -64,11 +77,11 @@ export async function updateTrainer(id: string, formData: FormData) {
   const supabase = await createClient();
   const t = readTrainer(formData);
   if (!t.full_name) return { ok: false, error: 'Le nom est requis.' };
+  if (t.mission_start && t.mission_end && t.mission_end < t.mission_start) return { ok: false, error: 'La fin de la période d’intervention est avant son début.' };
   const { color, ...rest } = t;
-  const { error } = await supabase
-    .from('trainers')
-    .update(isHexColor(color) ? { ...rest, color } : rest)
-    .eq('id', id);
+  const patch = isHexColor(color) ? { ...rest, color } : rest;
+  let { error } = await supabase.from('trainers').update(patch).eq('id', id);
+  if (error && missingExternal(error.message)) ({ error } = await supabase.from('trainers').update(withoutExternal(patch)).eq('id', id));
   if (error) return { ok: false, error: friendly(error.message) };
   refresh(id);
   return { ok: true };

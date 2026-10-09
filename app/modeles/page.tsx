@@ -15,6 +15,9 @@ export default async function ModelesPage() {
     supabase.from('template_folders').select('id, name, parent_id, position').order('position'),
   ]);
 
+  // Liens des formations (supports de cours…). Erreur ignorée si la migration 15 manque.
+  const { data: links } = await supabase.from('template_links').select('id, template_id, label, url, position').order('position');
+
   const rows = (templates || []).map((t: any) => ({
     ...t,
     sessions_count: Array.isArray(t.sessions) ? t.sessions[0]?.count ?? 0 : 0,
@@ -22,6 +25,7 @@ export default async function ModelesPage() {
       .sort((a: any, b: any) => a.position - b.position)
       .map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) })),
     trainer_ids: (t.template_trainers || []).map((x: any) => x.trainer_id),
+    links: ((links as any[]) || []).filter((l) => l.template_id === t.id),
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

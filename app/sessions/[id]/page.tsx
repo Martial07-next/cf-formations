@@ -18,8 +18,26 @@ function one<T>(v: T | T[] | null | undefined): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+/** Tout l'annuaire des stagiaires (l'API renvoie 1000 lignes maximum par requête). */
+async function allTraineesOf(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const out: any[] = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data } = await supabase.from('trainees').select('id, full_name, email, company').order('full_name').range(from, from + 999);
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+export default async function SessionDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ nouvelle?: string }>;
+}) {
   const { id } = await params;
+  const isNew = (await searchParams).nouvelle === '1';
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   const editable = canManage(profile?.role);
@@ -34,10 +52,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         .eq('id', id)
         .maybeSingle(),
       supabase.from('rooms').select('id, name, capacity, is_holding, location').order('name'),
-      supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
-      editable
-        ? supabase.from('trainees').select('id, full_name, email, company').order('full_name')
-        : Promise.resolve({ data: [] as any[] }),
+      supabase.from('trainers').select('*').order('full_name'),
+      editable ? allTraineesOf(supabase).then((data) => ({ data })) : Promise.resolve({ data: [] as any[] }),
       supabase.from('session_trainees').select('status, trainees(id, full_name, email, company)').eq('session_id', id),
       supabase.from('session_days').select('day, start_time, end_time').eq('session_id', id),
     ]);
@@ -48,6 +64,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').eq('session_id', id).order('position'),
     supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', id),
   ]);
+  // Supports de cours et documents de la formation (fiche du catalogue).
+  let templateId = (session as any).template_id as string | null;
+  if (!templateId) {
+    const { data: same } = await supabase.from('templates').select('id').eq('title', session.title).limit(1);
+    templateId = same?.[0]?.id ?? null;
+  }
+  const { data: formationLinks } = templateId
+    ? await supabase.from('template_links').select('id, label, url').eq('template_id', templateId).order('position')
+    : { data: [] as any[] };
+
   const traineeModules: Record<string, string[]> = {};
   for (const l of moduleLinks || []) (traineeModules[l.trainee_id] ||= []).push(l.module_id);
 
@@ -99,6 +125,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         )}
 
         <SessionDetailView
+          isNew={isNew && editable}
+          formationLinks={(formationLinks as any) || []}
           isAdmin={editable}
           canEditSession={editable}
           canEditStartTimes={canEditStartTimes(profile?.role)}

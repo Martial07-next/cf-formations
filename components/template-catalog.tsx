@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { ArrowDown, ArrowUp, ChevronRight, Folder, FolderPlus, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
   createTemplate,
   updateTemplate,
@@ -27,6 +27,7 @@ type Template = {
   position: number;
   modules: { name: string; duration_hours: number }[];
   trainer_ids: string[];
+  links: { id: string; label: string; url: string }[];
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
 export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
@@ -58,6 +59,10 @@ function TemplateFields({
       .map((m) => ({ name: m.name.trim(), duration_hours: ((Number(m.h) || 0) * 60 + (Number(m.m) || 0)) / 60 }))
   );
   const update = (i: number, patch: Partial<ModuleRow>) => setModules((list) => list.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+  const [links, setLinks] = useState<{ label: string; url: string }[]>((t?.links || []).map((l) => ({ label: l.label, url: l.url })));
+  const linksJson = JSON.stringify(links.filter((l) => l.label.trim() || l.url.trim()));
+  const updateLink = (i: number, patch: Partial<{ label: string; url: string }>) =>
+    setLinks((list) => list.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   return (
     <>
@@ -143,6 +148,26 @@ function TemplateFields({
             </label>
           ))}
           {trainers.length === 0 && <span className="hint">Aucun formateur enregistré.</span>}
+        </div>
+      </div>
+
+      <div className="field" style={{ marginBottom: 14 }}>
+        <span className="trainer-tag"><Link2 size={15} aria-hidden /> Supports de cours et documents utiles</span>
+        <span className="hint">Nomme chaque lien : les formateurs les retrouvent sur la fiche de session et dans « Liens utiles » du planning.</span>
+        <input type="hidden" name="links_json" value={linksJson} />
+        <div className="link-editor">
+          {links.map((l, i) => (
+            <div className="link-editor-row" key={i}>
+              <input aria-label={`Nom du lien ${i + 1}`} placeholder="Ex. Support stagiaire (PDF)" value={l.label} onChange={(e) => updateLink(i, { label: e.target.value })} />
+              <input aria-label={`Adresse du lien ${i + 1}`} placeholder="https://…" inputMode="url" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
+              <button type="button" className="small icon ghost" aria-label={`Retirer le lien ${i + 1}`} onClick={() => setLinks((list) => list.filter((_, j) => j !== i))}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="small" style={{ alignSelf: 'flex-start' }} onClick={() => setLinks((list) => [...list, { label: '', url: '' }])}>
+            <Plus size={14} aria-hidden /> Ajouter un lien
+          </button>
         </div>
       </div>
 
@@ -300,6 +325,15 @@ export function TemplateCatalog({
                           </div>
                         )}
                         {t.description && <div className="hint">{t.description}</div>}
+                        {t.links.length > 0 && (
+                          <div className="link-chips">
+                            {t.links.map((l) => (
+                              <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className="link-chip">
+                                <ExternalLink size={12} aria-hidden /> {l.label}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="num">{formatHours(Number(t.duration_hours))}</td>
                       <td className="num">{t.max_trainees ?? '-'}</td>

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarClock, CalendarOff } from 'lucide-react';
+import { CalendarClock, CalendarOff, ArrowRight } from 'lucide-react';
 import { absenceText, type Absence } from '@/lib/absences';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
@@ -9,7 +9,15 @@ import { formatHours, formatSessionPeriod } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 
-type Trainer = { id: string; full_name: string; color: string | null; status: string; specialty: string | null; referent_id: string | null };
+type Trainer = {
+  id: string;
+  full_name: string;
+  color: string | null;
+  status: string;
+  specialty: string | null;
+  referent_id: string | null;
+  is_external?: boolean | null;
+};
 type Session = { id: string; title: string; status: string; start_at: string; end_at: string; trainer_id: string };
 
 export default async function EquipePage({ searchParams }: { searchParams: Promise<{ annee?: string }> }) {
@@ -32,7 +40,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
 
   let trainersQuery = supabase
     .from('trainers')
-    .select('id, full_name, color, status, specialty, referent_id')
+    .select('*')
     .order('full_name');
   if (!isAdmin) trainersQuery = trainersQuery.eq('referent_id', profile.id);
   const [{ data: trainersData }, { data: profiles }] = await Promise.all([
@@ -172,6 +180,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
                         <span className="swatch" style={{ background: t.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
                         {t.full_name}
                       </span>
+                      {t.is_external && <span className="badge externe">Externe</span>}
                       {t.status === 'inactif' && <span className="badge inactif">Inactif</span>}
                     </h3>
                     {t.specialty && <span className="hint">{t.specialty}</span>}
@@ -201,6 +210,9 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
                         <span className="hint">Aucune session à venir</span>
                       )}
                     </div>
+                    <span className="team-card-cta">
+                      Voir la fiche <ArrowRight size={13} aria-hidden />
+                    </span>
                   </Link>
                 );
               })}

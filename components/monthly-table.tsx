@@ -69,10 +69,15 @@ export function MonthlyTable({
               <tr key={r.label}>
                 <td>
                   {r.href ? (
-                    <Link href={r.href} className="trainer-tag">
-                      {r.color && <span className="swatch" style={{ background: r.color }} aria-hidden />}
-                      {r.label}
-                    </Link>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                      <Link href={r.href} className="trainer-tag">
+                        {r.color && <span className="swatch" style={{ background: r.color }} aria-hidden />}
+                        {r.label}
+                      </Link>
+                      <Link href={r.href} className="btn small" style={{ whiteSpace: 'nowrap' }} aria-label={`Voir la fiche de ${r.label}`}>
+                        Voir la fiche
+                      </Link>
+                    </span>
                   ) : (
                     r.label
                   )}

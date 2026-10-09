@@ -22,7 +22,7 @@ export default async function Page({
 
   const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([
     supabase.from('rooms').select('id, name, capacity, is_holding, status, location').order('name'),
-    supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
+    supabase.from('trainers').select('*').order('full_name'),
     supabase
       .from('templates')
       .select('id, title, category, duration_hours, max_trainees, template_trainers(trainer_id), template_modules(name, duration_hours, position)')
@@ -88,6 +88,21 @@ export default async function Page({
     trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
   }));
 
+  // Liens utiles (bouton du planning) et supports des formations. Erreur ignorée si la migration 15 manque.
+  const [{ data: usefulLinks }, { data: tLinks }] = await Promise.all([
+    supabase.from('useful_links').select('id, category, label, url, description, position').order('position'),
+    supabase.from('template_links').select('id, template_id, label, url, position').order('position'),
+  ]);
+  const templateTitles = new Map(((templates as any[]) || []).map((t) => [t.id, t.title as string]));
+  const templateLinks = [...new Set(((tLinks as any[]) || []).map((l) => l.template_id))]
+    .filter((id) => templateTitles.has(id))
+    .map((id) => ({
+      template_id: id,
+      title: templateTitles.get(id)!,
+      links: ((tLinks as any[]) || []).filter((l) => l.template_id === id),
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+
   const sessionIds = (sessions || []).map((s: any) => s.id);
   const { data: dayRows } = sessionIds.length
     ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIds)
@@ -148,6 +163,8 @@ export default async function Page({
         absences={(absences as any) || []}
         dayInfo={dayInfo}
         events={events}
+        usefulLinks={(usefulLinks as any) || []}
+        templateLinks={templateLinks}
       />
     </main>
   );

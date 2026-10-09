@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSessionStatus, type SessionStatus } from '@/lib/status';
 import { absenceText, type Absence } from '@/lib/absences';
+import { missionText, outsideMission } from '@/lib/external';
 
 export type SessionInput = {
   title: string;
@@ -90,6 +91,12 @@ export async function findSessionConflict(
   if (input.trainer_id) {
     const trainerClash = data?.find((s) => s.trainer_id === input.trainer_id);
     if (trainerClash) return `Conflit : ce formateur anime déjà « ${trainerClash.title} » sur ce créneau.`;
+
+    // Formateur externe : seulement pendant sa période d'intervention.
+    const { data: tr } = await supabase.from('trainers').select('*').eq('id', input.trainer_id).maybeSingle();
+    if (tr && outsideMission(tr as any, input.start_at.slice(0, 10), input.end_at.slice(0, 10))) {
+      return `Formateur externe indisponible : ${tr.full_name} intervient ${missionText(tr as any)}.`;
+    }
 
     // Congés / absences du formateur (la base bloque aussi, migration_phase10).
     const { data: off } = await supabase

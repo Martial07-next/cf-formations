@@ -6,6 +6,7 @@ import { formatHours } from '@/lib/week';
 import { TemplatePicker } from '@/components/template-picker';
 import { placeModules, frDay } from '@/lib/modules';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
+import { missionText, outsideMission } from '@/lib/external';
 import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
 
 export type FormRoom = {
@@ -17,7 +18,15 @@ export type FormRoom = {
   /** Formations réalisables (vide = toutes). */
   template_ids?: string[];
 };
-export type FormTrainer = { id: string; full_name: string; color: string | null; status?: string | null };
+export type FormTrainer = {
+  id: string;
+  full_name: string;
+  color: string | null;
+  status?: string | null;
+  is_external?: boolean | null;
+  mission_start?: string | null;
+  mission_end?: string | null;
+};
 export type FormTemplate = {
   id: string;
   title: string;
@@ -158,6 +167,17 @@ export function SessionForm({
   const activeTrainers = trainers.filter(
     (t) => (t.status !== 'inactif' && (!qualified || qualified.includes(t.id))) || t.id === defaults.trainer_id
   );
+  const trainerOption = (t: FormTrainer) => {
+    const off = startDate ? absenceFor(absences, t.id, startDate, endDate || startDate) : null;
+    const outside = startDate ? outsideMission(t, startDate, endDate || startDate) : false;
+    const note = off ? ` (${absenceText(off)})` : outside ? ` (intervient ${missionText(t)})` : '';
+    return (
+      <option key={t.id} value={t.id} disabled={(Boolean(off) || outside) && t.id !== defaults.trainer_id}>
+        {t.full_name}{note}
+      </option>
+    );
+  };
+  const trainerOutside = trainer && startDate ? outsideMission(trainer, startDate, endDate || startDate) : false;
   const modulePlan = template?.modules?.length && startDate ? placeModules(startDate, startTime, template.modules) : [];
 
   return (
@@ -213,17 +233,18 @@ export function SessionForm({
             </span>
             <select name="trainer_id" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
               <option value="">Non attribué</option>
-              {activeTrainers.map((t) => {
-                const off = startDate ? absenceFor(absences, t.id, startDate, endDate || startDate) : null;
-                return (
-                  <option key={t.id} value={t.id} disabled={Boolean(off) && t.id !== defaults.trainer_id}>
-                    {t.full_name}{off ? ` (${absenceText(off)})` : ''}
-                  </option>
-                );
-              })}
+              {activeTrainers.filter((t) => !t.is_external).map(trainerOption)}
+              {activeTrainers.some((t) => t.is_external) && (
+                <optgroup label="Formateurs externes">
+                  {activeTrainers.filter((t) => t.is_external).map(trainerOption)}
+                </optgroup>
+              )}
             </select>
             {qualified && (
               <span className="hint">{activeTrainers.length} formateur{activeTrainers.length > 1 ? 's' : ''} habilité{activeTrainers.length > 1 ? 's' : ''} pour cette formation</span>
+            )}
+            {trainerOutside && trainer && !trainerAbsence && (
+              <span className="field-error" role="alert">Hors période : {trainer.full_name} (externe) intervient {missionText(trainer)}.</span>
             )}
             {trainerAbsence && (
               <span className="field-error" role="alert">Indisponible : {trainer?.full_name} est {absenceText(trainerAbsence)}.</span>

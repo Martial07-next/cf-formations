@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { ROLE_LABELS, type Role } from '@/lib/roles';
+import { missionText } from '@/lib/external';
 import { createTrainer, deleteTrainer, updateTrainer, updateTrainerStatus } from './actions';
 
 export default async function FormateursPage() {
@@ -12,7 +13,7 @@ export default async function FormateursPage() {
   const [{ data: trainers }, { data: profiles }] = await Promise.all([
     supabase
       .from('trainers')
-      .select('id, full_name, email, specialty, availability, status, color, referent_id, profile_id')
+      .select('*')
       .order('full_name'),
     supabase.from('profiles').select('id, full_name, role').order('full_name'),
   ]);
@@ -26,6 +27,17 @@ export default async function FormateursPage() {
     ...t,
     color: t.color || DEFAULT_TRAINER_COLOR,
     referent_id: t.referent_id || '',
+    is_external: t.is_external ? 'externe' : 'interne',
+    mission_start: t.mission_start || '',
+    mission_end: t.mission_end || '',
+    type_cell: t.is_external ? (
+      <span>
+        <span className="badge externe">Externe</span>
+        <span className="hint" style={{ display: 'block', fontSize: 12 }}>Intervient {missionText(t)}</span>
+      </span>
+    ) : (
+      <span className="hint">Interne</span>
+    ),
     profile_id: t.profile_id || '',
     name_cell: (
       <Link href={`/formateurs/${t.id}`} className="trainer-tag">
@@ -53,6 +65,7 @@ export default async function FormateursPage() {
           title="un formateur"
           columns={[
             { key: 'name_cell', label: 'Formateur' },
+            { key: 'type_cell', label: 'Type' },
             { key: 'specialty', label: 'Spécialité' },
             { key: 'email', label: 'E-mail' },
             { key: 'referent_cell', label: 'Référent' },
@@ -62,6 +75,17 @@ export default async function FormateursPage() {
             { name: 'full_name', label: 'Nom complet', required: true },
             { name: 'email', label: 'E-mail', type: 'email' },
             { name: 'specialty', label: 'Spécialité' },
+            {
+              name: 'is_external',
+              label: 'Type de formateur',
+              type: 'select',
+              options: [
+                { value: 'interne', label: 'Interne (salarié)' },
+                { value: 'externe', label: 'Externe (intervenant ponctuel)' },
+              ],
+            },
+            { name: 'mission_start', label: 'Externe : intervient du', type: 'date' },
+            { name: 'mission_end', label: 'Externe : jusqu’au', type: 'date' },
             { name: 'availability', label: 'Disponibilité', placeholder: 'Ex. lundi–jeudi' },
             { name: 'color', label: 'Couleur planning', type: 'color', editOnly: true },
             {
@@ -111,6 +135,8 @@ export default async function FormateursPage() {
         />
         <p className="hint" style={{ marginTop: 12 }}>
           Une couleur distincte est attribuée automatiquement à chaque nouveau formateur ; elle reste modifiable via « Modifier ».
+          Un formateur externe n’est proposé à la création d’une session que pendant sa période d’intervention (dates facultatives) :
+          inutile de le passer en inactif entre deux missions.
         </p>
       </section>
     </main>

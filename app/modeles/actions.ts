@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { safeUrl, missingTable } from '@/lib/links';
 
 function readTemplate(formData: FormData) {
   const get = (k: string) => String(formData.get(k) ?? '').trim();
@@ -56,6 +57,35 @@ async function saveExtras(supabase: Awaited<ReturnType<typeof createClient>>, te
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
+/** Liens de la formation (supports de cours, documents…) : remplace la liste enregistrée. */
+async function saveLinks(supabase: Client, templateId: string, formData: FormData): Promise<string | null> {
+  if (!formData.has('links_json')) return null;
+  let raw: any[] = [];
+  try {
+    raw = JSON.parse(String(formData.get('links_json') || '[]'));
+  } catch {
+    return 'Liste de liens illisible.';
+  }
+  if (!Array.isArray(raw)) raw = [];
+  const links: { label: string; url: string }[] = [];
+  for (const l of raw.slice(0, 40)) {
+    const label = String(l?.label || '').trim().slice(0, 120);
+    const url = safeUrl(String(l?.url || ''));
+    if (!label && !String(l?.url || '').trim()) continue;
+    if (!url) return `Lien « ${label || l?.url} » : adresse invalide (elle doit commencer par https://).`;
+    links.push({ label: label || new URL(url).hostname, url });
+  }
+  const del = await supabase.from('template_links').delete().eq('template_id', templateId);
+  if (del.error) return links.length ? missingTable(del.error.message) : null;
+  if (links.length) {
+    const { error } = await supabase
+      .from('template_links')
+      .insert(links.map((l, position) => ({ ...l, position, template_id: templateId })));
+    if (error) return missingTable(error.message);
+  }
+  return null;
+}
+
 /** Libellé « Dossier › Sous-dossier » d'un dossier (conservé dans templates.category pour l'affichage et la recherche). */
 async function folderPath(supabase: Client, folderId: string | null): Promise<string | null> {
   if (!folderId) return null;
@@ -92,8 +122,10 @@ export async function createTemplate(formData: FormData) {
     .single();
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, data.id, formData);
+  const linkError = await saveLinks(supabase, data.id, formData);
   refresh();
   if (extraError) return { ok: false, error: `Formation créée, mais modules/formateurs non enregistrés : ${extraError}` };
+  if (linkError) return { ok: false, error: `Formation créée, mais liens non enregistrés : ${linkError}` };
   return { ok: true };
 }
 
@@ -115,8 +147,10 @@ export async function updateTemplate(id: string, formData: FormData) {
     .eq('id', id);
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, id, formData);
+  const linkError = await saveLinks(supabase, id, formData);
   refresh();
   if (extraError) return { ok: false, error: `Formation enregistrée, mais modules/formateurs non enregistrés : ${extraError}` };
+  if (linkError) return { ok: false, error: `Formation enregistrée, mais liens non enregistrés : ${linkError}` };
   return { ok: true };
 }
 

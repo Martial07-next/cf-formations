@@ -11,6 +11,8 @@ import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { eventOnDay, type PlanningEvent } from '@/lib/events';
 import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
+import { UsefulLinksButton, type TemplateLinks } from '@/components/useful-links';
+import type { UsefulLink } from '@/lib/links';
 import {
   addDays,
   isoDate,
@@ -131,6 +133,8 @@ export function Planning({
   absences,
   dayInfo = {},
   events = [],
+  usefulLinks = [],
+  templateLinks = [],
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -149,6 +153,8 @@ export function Planning({
   dayInfo?: Record<string, Record<string, { modules: string[]; present: number }>>;
   /** Évènements (repas, CACES/SST, recrutement, forums…) : aperçu, sans blocage. */
   events?: PlanningEvent[];
+  usefulLinks?: UsefulLink[];
+  templateLinks?: TemplateLinks[];
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -266,8 +272,10 @@ export function Planning({
     startTransition(async () => {
       const result = await createSession(formData);
       if (result.ok) {
+        // La fiche de la nouvelle session s'ouvre pour y ajouter les stagiaires.
         dialogRef.current?.close();
-        setMessage({ text: 'Session enregistrée.', isError: false });
+        setMessage({ text: 'Session enregistrée, ouverture de sa fiche…', isError: false });
+        router.push(result.id ? `/sessions/${result.id}?nouvelle=1` : '/');
       } else {
         setFormError(result.error);
       }
@@ -298,16 +306,19 @@ export function Planning({
           <h1>Planning des salles</h1>
           <p>Une couleur par formateur · la pastille indique le statut de la session.</p>
         </div>
-        {canEdit && (
-          <div className="header-actions">
+        <div className="header-actions">
+          <UsefulLinksButton links={usefulLinks} templateLinks={templateLinks} canEdit={canEdit} />
+          {canEdit && (
+            <>
             <button onClick={() => openEventForm(null, view === 'day' ? dayIso : todayIso)}>
               <CalendarPlus size={16} aria-hidden /> Évènement
             </button>
             <button className="primary" onClick={() => openForm({ start_date: view === 'day' ? dayIso : undefined })}>
               <Plus size={16} aria-hidden /> Nouvelle session
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </header>
 
       <div className="toolbar" role="toolbar" aria-label="Navigation du planning">
