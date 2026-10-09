@@ -70,19 +70,26 @@ export async function findOrCreateTrainee(
   }
 
   if (found) {
-    // Complète la fiche existante sans écraser ce qui est déjà renseigné.
-    const patch: Record<string, string> = {};
-    if (!found.email && email) patch.email = email;
-    if (!found.company && company) patch.company = company;
-    if (!found.first_name && !found.last_name && name.last_name) {
-      patch.last_name = name.last_name;
-      if (name.first_name) patch.first_name = name.first_name;
-      patch.full_name = fullName;
-    }
+    // Complète automatiquement chaque case vide de la fiche avec ce que donne
+    // le fichier (e-mail, entreprise, prénom, nom), sans rien écraser.
     let completed = false;
-    if (Object.keys(patch).length) {
-      const { error } = await supabase.from('trainees').update(patch).eq('id', found.id);
-      completed = !error;
+    const info: Record<string, string> = {};
+    if (!found.email && email) info.email = email;
+    if (!found.company && company) info.company = company;
+    if (Object.keys(info).length) {
+      const { error } = await supabase.from('trainees').update(info).eq('id', found.id);
+      completed ||= !error;
+    }
+
+    // Prénom / nom : enregistrés séparément (le nom complet affiché suit).
+    const first = found.first_name || name.first_name || null;
+    const last = found.last_name || name.last_name || null;
+    if ((first !== found.first_name || last !== found.last_name) && last) {
+      const { error } = await supabase
+        .from('trainees')
+        .update({ first_name: first, last_name: last, full_name: buildFullName({ first_name: first, last_name: last }) })
+        .eq('id', found.id);
+      completed ||= !error;
     }
     return { id: found.id, created: false, completed };
   }
