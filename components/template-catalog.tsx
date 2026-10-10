@@ -14,6 +14,8 @@ import {
 } from '@/app/modeles/actions';
 import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
+import type { DossierDocument } from '@/lib/dossier';
+import { TemplateDossierButton } from '@/components/dossier/document-manager';
 
 type Template = {
   id: string;
@@ -28,6 +30,7 @@ type Template = {
   modules: { name: string; duration_hours: number }[];
   trainer_ids: string[];
   links: { id: string; label: string; url: string }[];
+  documents: DossierDocument[];
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
 export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
@@ -350,6 +353,7 @@ export function TemplateCatalog({
                               </button>
                             </>
                           )}
+                          <TemplateDossierButton templateId={t.id} title={t.title} documents={t.documents} />
                           <button className="small" onClick={() => setEditingId(t.id)} disabled={isPending}>
                             <Pencil size={14} aria-hidden /> Modifier
                           </button>

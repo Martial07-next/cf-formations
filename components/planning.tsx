@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, FolderCheck } from 'lucide-react';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -75,12 +75,14 @@ function SessionCard({
   overrides,
   absence,
   info,
+  dossierDone = false,
 }: {
   s: SessionRow;
   dIso: string;
   overrides: DayOverride[];
   absence: Absence | null;
   info?: { modules: string[]; present: number };
+  dossierDone?: boolean;
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const trainer = one(s.trainers)?.full_name;
@@ -112,6 +114,9 @@ function SessionCard({
       {absence && (
         <span className="sc-absence"><CalendarOff size={11} aria-hidden /> Formateur {absenceText(absence)}</span>
       )}
+      {dossierDone && (
+        <span className="sc-dossier"><FolderCheck size={11} aria-hidden /> Dossier complet</span>
+      )}
     </Link>
   );
 }
@@ -135,6 +140,7 @@ export function Planning({
   events = [],
   usefulLinks = [],
   templateLinks = [],
+  dossierComplete = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -155,6 +161,8 @@ export function Planning({
   events?: PlanningEvent[];
   usefulLinks?: UsefulLink[];
   templateLinks?: TemplateLinks[];
+  /** Sessions dont le dossier (émargement + documents) est complet. */
+  dossierComplete?: Record<string, boolean>;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -272,10 +280,10 @@ export function Planning({
     startTransition(async () => {
       const result = await createSession(formData);
       if (result.ok) {
-        // La fiche de la nouvelle session s'ouvre pour y ajouter les stagiaires.
+        // Normalement l'action redirige vers la fiche de la session ; filet de sécurité.
         dialogRef.current?.close();
         setMessage({ text: 'Session enregistrée, ouverture de sa fiche…', isError: false });
-        router.push(result.id ? `/sessions/${result.id}?nouvelle=1` : '/');
+        if (result.id) window.location.assign(`/sessions/${result.id}?nouvelle=1`);
       } else {
         setFormError(result.error);
       }
@@ -439,7 +447,7 @@ export function Planning({
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => (
-                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} info={dayInfo[s.id]?.[d.iso]} />
+                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} info={dayInfo[s.id]?.[d.iso]} dossierDone={Boolean(dossierComplete[s.id])} />
                         ))}
                         {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
                           <button
@@ -504,6 +512,7 @@ export function Planning({
                           <span className="chip-top">
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
+                            {dossierComplete[s.id] && <FolderCheck size={11} aria-label="Dossier complet" className="chip-dossier" />}
                           </span>
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}

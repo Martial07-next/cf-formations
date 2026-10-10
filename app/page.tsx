@@ -2,13 +2,14 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
+import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
 export const maxDuration = 60;
 
 const SESSION_SELECT =
-  'id, title, status, start_at, end_at, room_id, trainer_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status, trainee_id)';
+  'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status, trainee_id)';
 
 export default async function Page({
   searchParams,
@@ -131,6 +132,46 @@ export default async function Page({
     }
   }
 
+  // Dossiers complets (émargement + documents obligatoires), si la migration 16 est faite.
+  const dossierComplete: Record<string, boolean> = {};
+  if (sessionIds.length) {
+    const sigs: any[] = [];
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data, error } = await supabase
+        .from('attendance_signatures')
+        .select('session_id, signer, trainee_id, day, half')
+        .in('session_id', sessionIds)
+        .range(from, from + 999);
+      if (error || !data) break;
+      sigs.push(...data);
+      if (data.length < 1000) break;
+    }
+    const templateIds = [...new Set(((sessions as any[]) || []).map((x) => x.template_id).filter(Boolean))];
+    const [{ data: docs }, { data: entries }] = await Promise.all([
+      supabase
+        .from('dossier_documents')
+        .select('id, template_id, session_id, required, filled_by')
+        .or([`session_id.in.(${sessionIds.join(',')})`, templateIds.length ? `template_id.in.(${templateIds.join(',')})` : ''].filter(Boolean).join(',')),
+      supabase.from('dossier_entries').select('session_id, document_id, completed').in('session_id', sessionIds),
+    ]);
+    for (const s of (sessions as any[]) || []) {
+      const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
+      if (!traineeIds.length) continue;
+      const traineeModules: Record<string, string[]> = {};
+      for (const l of (linkRows || []).filter((x: any) => x.session_id === s.id)) (traineeModules[l.trainee_id] ||= []).push(l.module_id);
+      const p = dossierProgress({
+        slots: sessionSlots(s.start_at, s.end_at, (dayRows || []).filter((d: any) => d.session_id === s.id) as any),
+        traineeIds,
+        modules: (moduleRows || []).filter((m: any) => m.session_id === s.id),
+        traineeModules,
+        signatures: sigs.filter((x) => x.session_id === s.id),
+        documents: ((docs as any[]) || []).filter((d) => d.session_id === s.id || (s.template_id && d.template_id === s.template_id)),
+        entries: ((entries as any[]) || []).filter((e) => e.session_id === s.id),
+      });
+      if (p.complete) dossierComplete[s.id] = true;
+    }
+  }
+
   const dayOverrides: Record<string, { day: string; start_time: string; end_time: string }[]> = {};
   for (const row of dayRows || []) {
     (dayOverrides[row.session_id] ||= []).push({ day: row.day, start_time: row.start_time, end_time: row.end_time });
@@ -165,6 +206,7 @@ export default async function Page({
         events={events}
         usefulLinks={(usefulLinks as any) || []}
         templateLinks={templateLinks}
+        dossierComplete={dossierComplete}
       />
     </main>
   );

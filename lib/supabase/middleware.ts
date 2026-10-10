@@ -26,7 +26,9 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/login');
+  const isLogin = request.nextUrl.pathname.startsWith('/login');
+  // Émargement par QR code : ouvert aux stagiaires, sans compte.
+  const isPublicRoute = isLogin || request.nextUrl.pathname.startsWith('/emargement/');
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -34,7 +36,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute) {
+  if (user && isLogin) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);

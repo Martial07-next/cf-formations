@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { isSessionStatus } from '@/lib/status';
@@ -67,7 +68,10 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   }
 
   refresh();
-  return { ok: true, id: data.id };
+  // Ouverture directe de la fiche de la nouvelle session (ajout des stagiaires).
+  // Redirection côté serveur : fiable, contrairement à une navigation lancée
+  // côté client juste après l'action.
+  redirect(`/sessions/${data.id}?nouvelle=1`);
 }
 
 export async function updateSessionStatus(sessionId: string, status: string): Promise<ActionResult> {
