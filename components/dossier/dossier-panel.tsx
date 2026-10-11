@@ -23,6 +23,7 @@ import {
   setTraineeAttendance,
   staffTraineeSign,
   dossierExport,
+  documentUrl,
 } from '@/app/dossier/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { PdfFiller } from '@/components/dossier/pdf-filler';
@@ -213,6 +214,45 @@ export function DossierPanel({
     }
   }
 
+  /** Tour de table terminé : PDF à la charte. */
+  async function downloadTdt() {
+    if (!tdt) return;
+    setError(null);
+    setBusy('tdt');
+    try {
+      const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
+      const { downloadPdf } = await import('@/lib/pdf-dossier');
+      const bytes = await buildTourDeTablePdf({
+        title, period, room, trainerName, trainees,
+        data: tdt.data || {},
+        completedAt: tdt.completed ? tdt.completedAt : null,
+      });
+      downloadPdf(bytes, `Tour de table - ${title}.pdf`);
+    } catch (e: any) {
+      setError(e?.message || 'Téléchargement impossible.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Document terminé : le PDF avec tout ce qui a été rempli. */
+  async function downloadDoc(d: DossierDocument) {
+    setError(null);
+    setBusy(d.id);
+    try {
+      const res = await documentUrl(d.id);
+      if (!res.ok) throw new Error(res.error);
+      const file = await fetch(res.url);
+      if (!file.ok) throw new Error('Fichier introuvable.');
+      const { fillDocumentPdf, downloadPdf } = await import('@/lib/pdf-dossier');
+      downloadPdf(await fillDocumentPdf(await file.arrayBuffer(), entryOf(d.id)?.data as EntryData), `${d.title} - ${title}.pdf`);
+    } catch (e: any) {
+      setError(e?.message || 'Téléchargement impossible.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const cellTrainee = cell?.traineeId ? trainees.find((t) => t.id === cell.traineeId) : null;
   const cellRow = cell ? find(cell.traineeId ? 'stagiaire' : 'formateur', cell.traineeId, cell.slot) : undefined;
   const sessionDocs = documents.filter((d) => d.session_id);
@@ -324,7 +364,12 @@ export function DossierPanel({
               <small className="hint">Rempli par le formateur à l’ordinateur · obligatoire</small>
             </span>
             {tdt.completed ? (
-              <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+              <>
+                <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+                <button type="button" className="small primary" onClick={downloadTdt} disabled={busy === 'tdt'}>
+                  {busy === 'tdt' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Télécharger
+                </button>
+              </>
             ) : tdt.data ? (
               <span className="badge en_attente">En cours</span>
             ) : (
@@ -365,7 +410,12 @@ export function DossierPanel({
                 </span>
                 {d.filled_by !== 'aucun' &&
                   (e?.completed ? (
-                    <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+                    <>
+                      <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+                      <button type="button" className="small primary" onClick={() => downloadDoc(d)} disabled={busy === d.id}>
+                        {busy === d.id ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Télécharger
+                      </button>
+                    </>
                   ) : e ? (
                     <span className="badge en_attente">En cours</span>
                   ) : (

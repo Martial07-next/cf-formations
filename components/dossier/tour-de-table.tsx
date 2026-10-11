@@ -161,8 +161,8 @@ export function TourDeTable({
           </span>
         </div>
         <div className="row-actions">
-          <button type="button" className="small" onClick={download} disabled={busy}>
-            {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} PDF
+          <button type="button" className={`small${completed ? ' primary' : ''}`} onClick={download} disabled={busy}>
+            {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} {completed ? 'Télécharger' : 'Aperçu PDF'}
           </button>
           {canEdit &&
             (completed ? (

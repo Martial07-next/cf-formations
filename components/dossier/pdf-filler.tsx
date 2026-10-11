@@ -320,7 +320,9 @@ export function PdfFiller({
           </div>
         )}
         <div className="row-actions">
-          <button type="button" className="small" onClick={download} disabled={!bytes}><Download size={14} aria-hidden /> PDF</button>
+          <button type="button" className={`small${completed ? ' primary' : ''}`} onClick={download} disabled={!bytes}>
+            <Download size={14} aria-hidden /> {completed ? 'Télécharger' : 'PDF'}
+          </button>
           {canEdit &&
             (completed ? (
               <button type="button" className="small" onClick={() => setDone(false)} disabled={isPending}><RotateCcw size={14} aria-hidden /> Rouvrir</button>
