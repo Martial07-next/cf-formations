@@ -178,7 +178,7 @@ export function TourDeTable({
       <div className="tdt-body">
         <div className="tdt-head">
           <div>
-            <p className="tdt-kicker">À compléter à chaque début de formation · Recueil des incidents</p>
+            <p className="tdt-kicker">À compléter à chaque début de formation</p>
             <p className="hint" style={{ margin: 0 }}>
               {[session.period, session.room, session.trainerName && `Formateur : ${session.trainerName}`].filter(Boolean).join(' · ')}
             </p>

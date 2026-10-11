@@ -37,7 +37,7 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
   const pages: PDFPage[] = [];
 
   const open = (withHeader = true) => {
-    const { page, top } = brandPage(doc, b, 'TOUR DE TABLE', 'À compléter à chaque début de formation · Recueil des incidents', input);
+    const { page, top } = brandPage(doc, b, 'TOUR DE TABLE', 'À compléter à chaque début de formation', input);
     pages.push(page);
     return { page, y: withHeader ? headerRow(page, b, x0, top, cols) : top };
   };
