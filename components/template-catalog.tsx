@@ -31,6 +31,7 @@ type Template = {
   trainer_ids: string[];
   links: { id: string; label: string; url: string }[];
   documents: DossierDocument[];
+  tour_de_table?: boolean;
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
 export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
@@ -172,6 +173,14 @@ function TemplateFields({
             <Plus size={14} aria-hidden /> Ajouter un lien
           </button>
         </div>
+      </div>
+
+      <div className="field" style={{ marginBottom: 14 }}>
+        <input type="hidden" name="tdt_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="tour_de_table" defaultChecked={t?.tour_de_table !== false} />
+          Tour de table à remplir par le formateur dans le dossier de chaque session
+        </label>
       </div>
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>

@@ -281,3 +281,33 @@ export async function staffTraineeSign(sessionId: string, traineeId: string, day
   refresh(sessionId);
   return { ok: true };
 }
+
+/** Tour de table : enregistrement automatique (et « terminé » si précisé). */
+export async function saveTourDeTable(sessionId: string, data: unknown, completed?: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const json = JSON.stringify(data ?? {});
+  if (json.length > 500_000) return { ok: false, error: 'Tour de table trop long.' };
+  const row: Record<string, any> = {
+    session_id: sessionId,
+    kind: 'tour_de_table',
+    data: JSON.parse(json),
+    updated_by: r.profile.id,
+    updated_at: new Date().toISOString(),
+  };
+  if (completed !== undefined) {
+    row.completed = completed;
+    row.completed_at = completed ? new Date().toISOString() : null;
+  }
+  const { error } = await r.supabase.from('session_forms').upsert(row, { onConflict: 'session_id,kind' });
+  if (error) {
+    return {
+      ok: false,
+      error: /session_forms|schema cache|does not exist/i.test(error.message)
+        ? 'Exécute d’abord la migration 17 (supabase/migration_phase17.sql) dans Supabase.'
+        : error.message,
+    };
+  }
+  if (completed !== undefined) refresh(sessionId);
+  return { ok: true };
+}

@@ -147,13 +147,16 @@ export default async function Page({
       if (data.length < 1000) break;
     }
     const templateIds = [...new Set(((sessions as any[]) || []).map((x) => x.template_id).filter(Boolean))];
-    const [{ data: docs }, { data: entries }] = await Promise.all([
+    const [{ data: docs }, { data: entries }, { data: forms, error: formsError }, { data: tplOpts }] = await Promise.all([
       supabase
         .from('dossier_documents')
         .select('id, template_id, session_id, required, filled_by')
         .or([`session_id.in.(${sessionIds.join(',')})`, templateIds.length ? `template_id.in.(${templateIds.join(',')})` : ''].filter(Boolean).join(',')),
       supabase.from('dossier_entries').select('session_id, document_id, completed').in('session_id', sessionIds),
+      supabase.from('session_forms').select('session_id, completed').eq('kind', 'tour_de_table').in('session_id', sessionIds),
+      templateIds.length ? supabase.from('templates').select('id, tour_de_table').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
     ]);
+    const tdtOff = new Set(((tplOpts as any[]) || []).filter((t) => t.tour_de_table === false).map((t) => t.id));
     for (const s of (sessions as any[]) || []) {
       const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
       if (!traineeIds.length) continue;
@@ -167,6 +170,11 @@ export default async function Page({
         signatures: sigs.filter((x) => x.session_id === s.id),
         documents: ((docs as any[]) || []).filter((d) => d.session_id === s.id || (s.template_id && d.template_id === s.template_id)),
         entries: ((entries as any[]) || []).filter((e) => e.session_id === s.id),
+        // Tour de table obligatoire (sauf formation qui le désactive, ou migration 17 absente).
+        forms:
+          formsError || (s.template_id && tdtOff.has(s.template_id))
+            ? []
+            : [{ completed: ((forms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }],
       });
       if (p.complete) dossierComplete[s.id] = true;
     }

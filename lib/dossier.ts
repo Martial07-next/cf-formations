@@ -71,6 +71,8 @@ export function dossierProgress(input: {
   signatures: Pick<SignatureRow, 'signer' | 'trainee_id' | 'day' | 'half'>[];
   documents: Pick<DossierDocument, 'id' | 'required' | 'filled_by'>[];
   entries: Pick<DossierEntry, 'document_id' | 'completed'>[];
+  /** Formulaires intégrés obligatoires (tour de table) : terminés ou non. */
+  forms?: { completed: boolean }[];
 }) {
   const signed = new Set(input.signatures.map((s) => `${s.signer}|${s.trainee_id || ''}|${s.day}|${s.half}`));
   let needed = 0;
@@ -85,12 +87,14 @@ export function dossierProgress(input: {
     if (signed.has(`formateur||${slot.day}|${slot.half}`)) done++;
   }
   const required = input.documents.filter((d) => d.required && d.filled_by !== 'aucun');
-  const completedDocs = required.filter((d) => input.entries.some((e) => e.document_id === d.id && e.completed)).length;
+  const forms = input.forms || [];
+  const completedDocs =
+    required.filter((d) => input.entries.some((e) => e.document_id === d.id && e.completed)).length + forms.filter((f) => f.completed).length;
   const emargementDone = input.traineeIds.length > 0 && needed > 0 && done === needed;
   return {
     emargement: { done, needed, complete: emargementDone },
-    documents: { done: completedDocs, needed: required.length },
-    complete: emargementDone && completedDocs === required.length,
+    documents: { done: completedDocs, needed: required.length + forms.length },
+    complete: emargementDone && completedDocs === required.length + forms.length,
   };
 }
 

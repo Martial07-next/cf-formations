@@ -35,7 +35,8 @@ async function renderPages(bytes: ArrayBuffer, targetWidth: number): Promise<Pag
   const pdfjs = await loadPdfJs();
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
   const out: PageView[] = [];
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  // Rendu au moins en 2x (jusqu'à 3x) : texte net, même en zoomant.
+  const ratio = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const base = page.getViewport({ scale: 1 });

@@ -26,6 +26,8 @@ import {
 } from '@/app/dossier/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { PdfFiller } from '@/components/dossier/pdf-filler';
+import { TourDeTable } from '@/components/dossier/tour-de-table';
+import type { TdtData } from '@/lib/tdt';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
 import type { EntryData } from '@/lib/pdf-dossier';
@@ -56,6 +58,7 @@ export function DossierPanel({
   entries,
   canFill,
   canManage,
+  tourDeTable,
 }: {
   sessionId: string;
   title: string;
@@ -70,6 +73,8 @@ export function DossierPanel({
   entries: DossierEntry[];
   canFill: boolean;
   canManage: boolean;
+  /** Tour de table intégré (null si désactivé pour cette formation). */
+  tourDeTable: { data: TdtData | null; completed: boolean; completedAt: string | null } | null;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(signatures);
@@ -84,14 +89,19 @@ export function DossierPanel({
   const cellRef = useRef<HTMLDialogElement>(null);
   const docRef = useRef<HTMLDialogElement>(null);
   const pad = useRef<SignaturePadHandle>(null);
+  const tdtRef = useRef<HTMLDialogElement>(null);
+  const [tdt, setTdt] = useState(tourDeTable);
+  const [tdtOpen, setTdtOpen] = useState(false);
+  useEffect(() => setTdt(tourDeTable), [tourDeTable]);
 
   useEffect(() => setRows(signatures), [signatures]);
   useEffect(() => setLocalEntries(entries), [entries]);
 
   // Documents obligatoires terminés.
   const requiredDocs = documents.filter((d) => d.required && d.filled_by !== 'aucun');
-  const docsDone = requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length;
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length } };
+  const docsDone =
+    requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length + (tdt?.completed ? 1 : 0);
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -177,6 +187,16 @@ export function DossierPanel({
         return;
       }
       const parts: Uint8Array[] = [emarg];
+      if (tdt) {
+        const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
+        parts.push(
+          await buildTourDeTablePdf({
+            title, period, room, trainerName, trainees,
+            data: tdt.data || {},
+            completedAt: tdt.completed ? tdt.completedAt : null,
+          })
+        );
+      }
       for (const d of documents) {
         const url = res.files[d.id];
         if (!url) continue;
@@ -295,8 +315,36 @@ export function DossierPanel({
       <h3 className="sub-heading">
         Documents <span className="hint">({progress.documents.done}/{progress.documents.needed} obligatoires terminés)</span>
       </h3>
+      {tdt && (
+        <div className="doc-list" style={{ marginBottom: documents.length ? 6 : 10 }}>
+          <div className="doc-item">
+            <FileText size={16} aria-hidden />
+            <span className="doc-item-main">
+              <strong>Tour de table · recueil des incidents</strong>
+              <small className="hint">Rempli par le formateur à l’ordinateur · obligatoire</small>
+            </span>
+            {tdt.completed ? (
+              <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+            ) : tdt.data ? (
+              <span className="badge en_attente">En cours</span>
+            ) : (
+              <span className="badge brouillon">À remplir</span>
+            )}
+            <button
+              type="button"
+              className={`small${canFill && !tdt.completed ? ' primary' : ''}`}
+              onClick={() => {
+                setTdtOpen(true);
+                tdtRef.current?.showModal();
+              }}
+            >
+              {canFill && !tdt.completed ? <><PenLine size={14} aria-hidden /> Remplir</> : 'Ouvrir'}
+            </button>
+          </div>
+        </div>
+      )}
       {documents.length === 0 ? (
-        <p className="hint">
+        !tdt && <p className="hint">
           Aucun document à remplir.{canManage ? ' Ajoute-les une fois pour toutes dans Formations disponibles › Dossier, ou pour cette session ci-dessous.' : ''}
         </p>
       ) : (
@@ -338,6 +386,23 @@ export function DossierPanel({
           })}
         </div>
       )}
+
+      {/* Tour de table intégré */}
+      <dialog ref={tdtRef} className="modal modal-full" aria-label="Tour de table" onClose={() => { setTdtOpen(false); router.refresh(); }}>
+        {tdtOpen && tdt && (
+          <TourDeTable
+            session={{ sessionId, title, period, room, trainerName, trainees }}
+            initialData={tdt.data}
+            initialCompleted={tdt.completed}
+            completedAt={tdt.completedAt}
+            canEdit={canFill}
+            onClose={() => tdtRef.current?.close()}
+            onSaved={(data, completed) =>
+              setTdt((x) => (x ? { ...x, data, completed, completedAt: completed ? x.completedAt || new Date().toLocaleDateString('fr-FR') : null } : x))
+            }
+          />
+        )}
+      </dialog>
 
       {canManage && (
         <details className="doc-session-manage">

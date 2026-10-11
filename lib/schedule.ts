@@ -3,10 +3,10 @@
  *
  * Règles :
  *  · pause déjeuner de 12:00 à 13:00, non comptée dans les heures ;
- *  · une journée complète = 7 h de formation (ex. 09:00–17:00 avec la pause) ;
+ *  · une journée complète = 7 h de formation (ex. 08:00–16:00 avec la pause) ;
  *  · une formation plus longue se poursuit les jours ouvrés suivants
  *    (week-ends sautés), le dernier jour pouvant être partiel.
- * Ex. 21 h à partir du lundi 09:00 → lun., mar., mer. 09:00–17:00.
+ * Ex. 21 h à partir du lundi 08:00 → lun., mar., mer. 08:00–16:00.
  */
 export const LUNCH_START = 12 * 60;
 export const LUNCH_END = 13 * 60;

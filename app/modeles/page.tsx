@@ -18,6 +18,7 @@ export default async function ModelesPage() {
   // Liens des formations (supports de cours…). Erreur ignorée si la migration 15 manque.
   const { data: links } = await supabase.from('template_links').select('id, template_id, label, url, position').order('position');
   // Documents du dossier de chaque formation (migration 16).
+  const { data: tdtOpts } = await supabase.from('templates').select('id, tour_de_table');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -29,6 +30,7 @@ export default async function ModelesPage() {
     trainer_ids: (t.template_trainers || []).map((x: any) => x.trainer_id),
     links: ((links as any[]) || []).filter((l) => l.template_id === t.id),
     documents: ((docs as any[]) || []).filter((d) => d.template_id === t.id),
+    tour_de_table: ((tdtOpts as any[]) || []).find((x) => x.id === t.id)?.tour_de_table !== false,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

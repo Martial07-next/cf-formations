@@ -15,7 +15,16 @@ function readTemplate(formData: FormData) {
     duration_hours: Math.max(0, Number.parseInt(get('duration_h') || '0', 10) || 0) + (Number.parseInt(get('duration_min') || '0', 10) || 0) / 60,
     max_trainees: maxRaw ? Number(maxRaw) : null,
     description: get('description') || null,
+    // Tour de table dans le dossier (migration 17) : seulement si le formulaire le propose.
+    ...(formData.has('tdt_present') ? { tour_de_table: formData.get('tour_de_table') === 'on' } : {}),
   };
+}
+
+/** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
+const missingTdt = (msg: string) => /tour_de_table/.test(msg);
+function withoutTdt<T extends Record<string, any>>(t: T) {
+  const { tour_de_table, ...rest } = t;
+  return rest;
 }
 
 /** Modules (JSON du formulaire) et formateurs habilités. */
@@ -115,12 +124,10 @@ export async function createTemplate(formData: FormData) {
   if (!t.title || !(t.duration_hours > 0)) return { ok: false, error: 'Nom et durée (supérieure à 0) requis.' };
   const supabase = await createClient();
   const position = await nextPosition(supabase, 'templates', 'folder_id', t.folder_id);
-  const { data, error } = await supabase
-    .from('templates')
-    .insert({ ...t, category: await folderPath(supabase, t.folder_id), position })
-    .select('id')
-    .single();
-  if (error) return { ok: false, error: error.message };
+  const row = { ...t, category: await folderPath(supabase, t.folder_id), position };
+  let { data, error } = await supabase.from('templates').insert(row).select('id').single();
+  if (error && missingTdt(error.message)) ({ data, error } = await supabase.from('templates').insert(withoutTdt(row)).select('id').single());
+  if (error || !data) return { ok: false, error: error?.message || 'Création impossible.' };
   const extraError = await saveExtras(supabase, data.id, formData);
   const linkError = await saveLinks(supabase, data.id, formData);
   refresh();
@@ -136,15 +143,14 @@ export async function updateTemplate(id: string, formData: FormData) {
   const supabase = await createClient();
   const { data: before } = await supabase.from('templates').select('folder_id').eq('id', id).maybeSingle();
   const moved = (before?.folder_id ?? null) !== t.folder_id;
-  const { error } = await supabase
-    .from('templates')
-    .update({
-      ...t,
-      category: await folderPath(supabase, t.folder_id),
-      // Changement de dossier : la formation se place à la fin de son nouveau dossier.
-      ...(moved ? { position: await nextPosition(supabase, 'templates', 'folder_id', t.folder_id) } : {}),
-    })
-    .eq('id', id);
+  const patch = {
+    ...t,
+    category: await folderPath(supabase, t.folder_id),
+    // Changement de dossier : la formation se place à la fin de son nouveau dossier.
+    ...(moved ? { position: await nextPosition(supabase, 'templates', 'folder_id', t.folder_id) } : {}),
+  };
+  let { error } = await supabase.from('templates').update(patch).eq('id', id);
+  if (error && missingTdt(error.message)) ({ error } = await supabase.from('templates').update(withoutTdt(patch)).eq('id', id));
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, id, formData);
   const linkError = await saveLinks(supabase, id, formData);

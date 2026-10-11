@@ -107,8 +107,8 @@ export function SessionForm({
   const [maxTrainees, setMaxTrainees] = useState(defaults.max_trainees != null ? String(defaults.max_trainees) : '');
   const [startDate, setStartDate] = useState(defaults.start_date || '');
   const [manualEndDate, setManualEndDate] = useState(defaults.end_date || '');
-  const [startTime, setStartTime] = useState(defaults.start_time || '09:00');
-  const [manualEndTime, setManualEndTime] = useState(defaults.end_time || '17:00');
+  const [startTime, setStartTime] = useState(defaults.start_time || '08:00');
+  const [manualEndTime, setManualEndTime] = useState(defaults.end_time || '16:00');
   // Durée totale (heures + minutes) : sert au calcul automatique des dates/horaires.
   const [durH, setDurH] = useState('');
   const [durM, setDurM] = useState('0');

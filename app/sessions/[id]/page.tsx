@@ -94,6 +94,19 @@ export default async function SessionDetailPage({
       : supabase.from('dossier_documents').select('*').eq('session_id', id).order('position'),
     supabase.from('dossier_entries').select('document_id, data, completed, updated_at').eq('session_id', id),
   ]);
+  // Tour de table intégré (migration 17) : activé par défaut, désactivable par formation.
+  const [{ data: formRow, error: formError }, { data: tplOpt }] = await Promise.all([
+    supabase.from('session_forms').select('data, completed, completed_at').eq('session_id', id).eq('kind', 'tour_de_table').maybeSingle(),
+    templateId ? supabase.from('templates').select('tour_de_table').eq('id', templateId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const tourDeTable =
+    formError || (tplOpt as any)?.tour_de_table === false
+      ? null
+      : {
+          data: ((formRow as any)?.data as any) || null,
+          completed: Boolean((formRow as any)?.completed),
+          completedAt: (formRow as any)?.completed_at ? new Date((formRow as any).completed_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : null,
+        };
   const slots = sessionSlots(session.start_at, session.end_at, (dayRows as any) || []);
   const validatedTrainees = enrolled
     .filter((t: any) => t.status === 'validee')
@@ -195,6 +208,7 @@ export default async function SessionDetailPage({
             entries={(entryRows as any) || []}
             canFill={canEditStartTimes(profile?.role) || isOwn}
             canManage={editable}
+            tourDeTable={tourDeTable}
           />
         )}
       </section>
