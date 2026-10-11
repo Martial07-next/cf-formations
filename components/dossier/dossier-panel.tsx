@@ -320,7 +320,7 @@ export function DossierPanel({
           <div className="doc-item">
             <FileText size={16} aria-hidden />
             <span className="doc-item-main">
-              <strong>Tour de table · recueil des incidents</strong>
+              <strong>Tour de table · {title}</strong>
               <small className="hint">Rempli par le formateur à l’ordinateur · obligatoire</small>
             </span>
             {tdt.completed ? (

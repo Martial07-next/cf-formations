@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import {
-  Zap,
   CalendarDays,
   ListChecks,
   GraduationCap,
@@ -109,14 +108,10 @@ function NavContent({ active, profile }: { active: string; profile: Profile }) {
 
 function Brand() {
   return (
-    <Link href="/" className="brand">
-      <span className="brand-mark">
-        <Zap size={18} fill="currentColor" aria-hidden />
-      </span>
-      <span className="brand-text">
-        CF Réseaux
-        <small>FORMATIONS</small>
-      </span>
+    <Link href="/" className="brand" aria-label="CF Réseaux · Formations, accueil">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-cf-reseaux.svg" alt="CF Réseaux" className="brand-logo" width={180} height={29} />
+      <small className="brand-sub">FORMATIONS</small>
     </Link>
   );
 }

@@ -591,3 +591,9 @@ table.tdt-table{border-collapse:collapse;width:100%;min-width:1100px}
 .tdt-general{display:flex;flex-direction:column;gap:6px;margin-top:16px;font-weight:800}
 .tdt-general .tdt-input{border-color:var(--line);background:var(--surface)}
 .tdt-general .tdt-input{font-weight:400}
+.brand{flex-direction:column;align-items:flex-start;gap:6px}
+.brand-logo{display:block;width:180px;max-width:100%;height:auto}
+.brand-sub{font-size:10px;font-weight:700;letter-spacing:1.6px;color:#8fae9c;padding-left:2px}
+.mobile-bar .brand-logo{width:140px}
+.mobile-bar .brand-sub{display:none}
+@media print{.tdt-table tr{break-inside:avoid}}

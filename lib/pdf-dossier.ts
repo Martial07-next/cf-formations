@@ -37,14 +37,8 @@ function safe(font: PDFFont, text: string) {
   return out;
 }
 
-function fit(font: PDFFont, text: string, size: number, width: number) {
-  const t = safe(font, text);
-  if (font.widthOfTextAtSize(t, size) <= width) return t;
-  let cut = t;
-  while (cut.length > 1 && font.widthOfTextAtSize(cut + '...', size) > width) cut = cut.slice(0, -1);
-  return cut + '...';
-}
-
+/** 08:00 → 8h, 12:30 → 12h30 (en-têtes compacts). */
+const hh = (t: string) => t.replace(/^0/, '').replace(':00', 'h').replace(':', 'h');
 const frDate = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 const dayName = (iso: string) => ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'][new Date(iso + 'T00:00:00Z').getUTCDay()];
 
@@ -65,113 +59,126 @@ export type EmargementInput = {
   signatures: SignatureRow[];
 };
 
-/** Feuille d'émargement (A4 paysage) : une colonne par demi-journée, signatures intégrées. */
+/**
+ * Feuille d'émargement à la charte CF Réseaux (A4 paysage) : une colonne par
+ * demi-journée (6 par page), signatures intégrées, ligne du formateur en bas
+ * de chaque page. Un stagiaire n'est jamais coupé entre deux pages.
+ */
 export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8Array> {
+  const { loadBrand, brandPage, brandFooters, headerRow, wrap: wrapText, C, PAGE } = await import('@/lib/pdf-brand');
   const doc = await PDFDocument.create();
   doc.setTitle(`Feuille d'émargement - ${input.title}`);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const W = 842;
-  const H = 595;
-  const M = 28;
-  const nameW = 170;
-  const companyW = 110;
-  const rowH = 34;
+  doc.setAuthor('CF Réseaux');
+  const b = await loadBrand(doc);
+  const numW = 24;
+  const nameW = 140;
+  const companyW = 100;
+  const ROW = 38;
+  const BOTTOM = 40;
   const slotsPerPage = 6;
-  const rowsPerPage = 11;
-  const ink = rgb(0.06, 0.12, 0.2);
-  const grey = rgb(0.45, 0.5, 0.55);
-  const line = rgb(0.75, 0.79, 0.83);
-  const mint = rgb(0.89, 0.97, 0.92);
-
+  const tableW = PAGE.W - 2 * PAGE.M;
+  const x0 = PAGE.M;
+  const pages: PDFPage[] = [];
   const sigCache = new Map<string, any>();
   const find = (signer: string, traineeId: string | null, slot: Slot) =>
     input.signatures.find((x) => x.signer === signer && (x.trainee_id || null) === traineeId && x.day === slot.day && x.half === slot.half);
 
   const slotChunks: Slot[][] = [];
   for (let i = 0; i < Math.max(input.slots.length, 1); i += slotsPerPage) slotChunks.push(input.slots.slice(i, i + slotsPerPage));
-  const rowChunks: (typeof input.trainees)[] = [];
-  for (let i = 0; i < Math.max(input.trainees.length, 1); i += rowsPerPage) rowChunks.push(input.trainees.slice(i, i + rowsPerPage));
-  const total = slotChunks.length * rowChunks.length;
-  let pageNo = 0;
 
   for (const slots of slotChunks) {
-    for (const rows of rowChunks) {
-      pageNo++;
-      const page = doc.addPage([W, H]);
-      // En-tête
-      page.drawText('FEUILLE D\'ÉMARGEMENT', { x: M, y: H - M - 14, size: 15, font: bold, color: ink });
-      page.drawText('CF Réseaux', { x: W - M - bold.widthOfTextAtSize('CF Réseaux', 11), y: H - M - 12, size: 11, font: bold, color: grey });
-      page.drawText(fit(bold, `Formation : ${input.title}`, 11, W - 2 * M), { x: M, y: H - M - 34, size: 11, font: bold, color: ink });
-      const meta = [input.period, input.room && `Lieu : ${input.room}`, input.trainerName && `Formateur : ${input.trainerName}`].filter(Boolean).join('   ·   ');
-      page.drawText(fit(font, meta, 9.5, W - 2 * M), { x: M, y: H - M - 50, size: 9.5, font, color: grey });
+    const slotW = (tableW - numW - nameW - companyW) / Math.max(slots.length, 1);
+    const cols = [
+      { label: 'N°', width: numW },
+      { label: 'Stagiaire (NOM Prénom)', width: nameW },
+      { label: 'Entreprise', width: companyW },
+      ...slots.map((s) => ({
+        label: `${dayName(s.day)} ${frDate(s.day).slice(0, 5)}`,
+        sub: `${HALF_LABEL[s.half]} · ${hh(s.start)}-${hh(s.end)}`,
+        width: slotW,
+      })),
+    ];
 
-      const slotW = (W - 2 * M - nameW - companyW) / slotsPerPage;
-      let y = H - M - 72;
-      const headH = 30;
-      // Ligne d'en-tête du tableau
-      page.drawRectangle({ x: M, y: y - headH, width: nameW + companyW + slotW * slots.length, height: headH, color: mint });
-      page.drawText('Stagiaire (NOM Prénom)', { x: M + 6, y: y - 19, size: 9, font: bold, color: ink });
-      page.drawText('Entreprise', { x: M + nameW + 6, y: y - 19, size: 9, font: bold, color: ink });
-      slots.forEach((s, i) => {
-        const x = M + nameW + companyW + i * slotW;
-        page.drawText(`${dayName(s.day)} ${frDate(s.day).slice(0, 5)}`, { x: x + 5, y: y - 12, size: 8.5, font: bold, color: ink });
-        page.drawText(`${HALF_LABEL[s.half]} ${s.start.replace(':', 'h')}-${s.end.replace(':', 'h')}`, { x: x + 5, y: y - 24, size: 7, font, color: grey });
-      });
-      y -= headH;
+    const open = () => {
+      const { page, top } = brandPage(doc, b, "FEUILLE D'ÉMARGEMENT", 'Signature des stagiaires par demi-journée', input);
+      pages.push(page);
+      return { page, y: headerRow(page, b, x0, top, cols) };
+    };
 
-      const drawRow = async (label: string, company: string, cell: (slot: Slot) => SignatureRow | undefined | 'na', isTrainer = false) => {
-        const rowWidth = nameW + companyW + slotW * slots.length;
-        if (isTrainer) page.drawRectangle({ x: M, y: y - rowH, width: rowWidth, height: rowH, color: rgb(0.96, 0.97, 0.98) });
-        page.drawText(fit(isTrainer ? bold : font, label, 9, nameW - 10), { x: M + 6, y: y - rowH / 2 - 3, size: 9, font: isTrainer ? bold : font, color: ink });
-        page.drawText(fit(font, company, 8, companyW - 10), { x: M + nameW + 6, y: y - rowH / 2 - 3, size: 8, font, color: grey });
-        for (let i = 0; i < slots.length; i++) {
-          const x = M + nameW + companyW + i * slotW;
-          const c = cell(slots[i]);
-          if (c === 'na') {
-            page.drawText('-', { x: x + slotW / 2 - 2, y: y - rowH / 2 - 3, size: 9, font, color: line });
-          } else if (c?.status === 'absent') {
-            page.drawText('Absent', { x: x + 6, y: y - rowH / 2 - 3, size: 8.5, font: bold, color: rgb(0.7, 0.2, 0.2) });
-          } else if (c?.signature) {
-            let img = sigCache.get(c.signature);
-            if (!img) {
-              try {
-                img = await embedSignature(doc, c.signature);
-                sigCache.set(c.signature, img);
-              } catch {
-                img = null;
-              }
+    const drawRow = async (page: PDFPage, y: number, index: string, label: string, company: string, cell: (s: Slot) => SignatureRow | undefined | 'na', shade: any, bold = false) => {
+      page.drawRectangle({ x: x0, y: y - ROW, width: tableW, height: ROW, color: shade, borderColor: C.grey, borderWidth: 0.6 });
+      const mid = y - ROW / 2;
+      page.drawText(index, { x: x0 + 7, y: mid - 3, size: 8.5, font: b.bold, color: C.night });
+      const nameLines = wrapText(b.bold, label, 8.6, nameW - 12).slice(0, 2);
+      nameLines.forEach((l, k) => page.drawText(l, { x: x0 + numW + 6, y: mid - 3 + (nameLines.length - 1) * 5.5 - k * 11, size: 8.6, font: b.bold, color: bold ? C.night : C.night }));
+      const compLines = wrapText(b.regular, company, 8, companyW - 12).slice(0, 2);
+      compLines.forEach((l, k) => page.drawText(l, { x: x0 + numW + nameW + 6, y: mid - 3 + (compLines.length - 1) * 5 - k * 10, size: 8, font: b.regular, color: C.muted }));
+      let x = x0 + numW + nameW + companyW;
+      for (const s of slots) {
+        page.drawLine({ start: { x, y }, end: { x, y: y - ROW }, thickness: 0.6, color: C.grey });
+        const c = cell(s);
+        if (c === 'na') {
+          page.drawText('-', { x: x + slotW / 2 - 2, y: mid - 3, size: 9, font: b.regular, color: C.muted });
+        } else if (c?.status === 'absent') {
+          const t = 'ABSENT';
+          page.drawText(t, { x: x + (slotW - b.bold.widthOfTextAtSize(t, 8)) / 2, y: mid - 3, size: 8, font: b.bold, color: C.red });
+        } else if (c?.signature) {
+          let img = sigCache.get(c.signature);
+          if (img === undefined) {
+            try {
+              img = await embedSignature(doc, c.signature);
+            } catch {
+              img = null;
             }
-            if (img) {
-              const scale = Math.min((slotW - 8) / img.width, (rowH - 6) / img.height);
-              page.drawImage(img, { x: x + (slotW - img.width * scale) / 2, y: y - rowH + (rowH - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
-            }
+            sigCache.set(c.signature, img);
+          }
+          if (img) {
+            const scale = Math.min((slotW - 10) / img.width, (ROW - 8) / img.height);
+            page.drawImage(img, { x: x + (slotW - img.width * scale) / 2, y: y - ROW + (ROW - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
           }
         }
-        // Grille
-        page.drawLine({ start: { x: M, y: y - rowH }, end: { x: M + rowWidth, y: y - rowH }, thickness: 0.6, color: line });
-        y -= rowH;
-      };
+        x += slotW;
+      }
+      page.drawLine({ start: { x: x0 + numW, y }, end: { x: x0 + numW, y: y - ROW }, thickness: 0.6, color: C.grey });
+      page.drawLine({ start: { x: x0 + numW + nameW, y }, end: { x: x0 + numW + nameW, y: y - ROW }, thickness: 0.6, color: C.grey });
+      return y - ROW;
+    };
 
-      for (const t of rows) {
-        await drawRow(t.name, t.company || '', (slot) => {
+    let { page, y } = open();
+    const trainerRow = async () => {
+      y -= 4;
+      y = await drawRow(page, y, '', `Formateur : ${input.trainerName || ''}`, 'Signature du formateur', (s) => find('formateur', null, s), C.grey, true);
+    };
+    for (let i = 0; i < input.trainees.length; i++) {
+      // Place pour ce stagiaire ET la ligne formateur ; sinon page suivante.
+      if (y - ROW - (ROW + 4) < BOTTOM) {
+        await trainerRow();
+        ({ page, y } = open());
+      }
+      const t = input.trainees[i];
+      y = await drawRow(
+        page,
+        y,
+        String(i + 1),
+        t.name,
+        t.company || '',
+        (slot) => {
           const exp = input.expected[`${slot.day}|${slot.half}`];
           if (exp && !exp.includes(t.id)) return 'na';
           return find('stagiaire', t.id, slot);
-        });
-      }
-      await drawRow(`Formateur : ${input.trainerName || ''}`, '', (slot) => find('formateur', null, slot), true);
-
-      // Traits verticaux
-      const top = H - M - 72;
-      const xs = [M, M + nameW, M + nameW + companyW, ...slots.map((_, i) => M + nameW + companyW + (i + 1) * slotW)];
-      for (const x of xs) page.drawLine({ start: { x, y: top }, end: { x, y }, thickness: 0.6, color: line });
-      page.drawLine({ start: { x: M, y: top }, end: { x: xs[xs.length - 1], y: top }, thickness: 0.6, color: line });
-
-      const foot = `Émargement électronique · document généré le ${new Date().toLocaleString('fr-FR')} · page ${pageNo}/${total}`;
-      page.drawText(safe(font, foot), { x: M, y: 16, size: 7.5, font, color: grey });
+        },
+        i % 2 ? C.cream : C.white
+      );
     }
+    await trainerRow();
   }
+
+  brandFooters(
+    pages,
+    b,
+    `CF Réseaux · Émargement · ${input.title}`,
+    `Signatures électroniques horodatées · généré le ${new Date().toLocaleDateString('fr-FR')}`
+  );
   return doc.save();
 }
 
