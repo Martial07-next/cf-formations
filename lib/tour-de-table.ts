@@ -2,7 +2,7 @@
 
 import { PDFDocument, type PDFPage } from 'pdf-lib';
 import { TDT_COLUMNS, type TdtData } from '@/lib/tdt';
-import { C, PAGE, brandFooters, brandPage, headerRow, loadBrand, wrap } from '@/lib/pdf-brand';
+import { C, PAGE, brandFooters, brandPage, drawFaitA, drawPlace, headerRow, legalLine, loadBrand, wrap, type Legal } from '@/lib/pdf-brand';
 export { TDT_COLUMNS } from '@/lib/tdt';
 export type { TdtData, TdtKey, TdtRow } from '@/lib/tdt';
 
@@ -14,6 +14,12 @@ export type TdtInput = {
   trainees: { id: string; name: string; company: string | null }[];
   data: TdtData;
   completedAt?: string | null;
+  /** Lieu de formation complet (salle, bâtiment, adresse). */
+  place?: string | null;
+  /** SIRET, déclaration d'activité, ville du « Fait à ». */
+  legal?: Legal | null;
+  /** Dernier jour de la session (JJ/MM/AAAA), date du « Fait à » si pas encore terminé. */
+  lastDay?: string | null;
 };
 
 /**
@@ -29,7 +35,7 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
   const SIZE = 8.6;
   const LINE = 11.2;
   const PAD = 6;
-  const BOTTOM = 40;
+  const BOTTOM = 58;
   const nameCol = { key: 'name', label: 'Nom Prénom', width: 98 };
   const cols = [{ key: 'num', label: 'N°', width: 26 }, nameCol, ...TDT_COLUMNS];
   const tableW = cols.reduce((n, c) => n + c.width, 0);
@@ -39,7 +45,8 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
   const open = (withHeader = true) => {
     const { page, top } = brandPage(doc, b, 'TOUR DE TABLE', 'À compléter à chaque début de formation', input);
     pages.push(page);
-    return { page, y: withHeader ? headerRow(page, b, x0, top, cols) : top };
+    const y = drawPlace(page, b, x0, top, tableW, input.place);
+    return { page, y: withHeader ? headerRow(page, b, x0, y, cols) : y };
   };
 
   let { page, y } = open();
@@ -87,8 +94,9 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
     y -= blockH + 10;
   }
   const done = input.completedAt ? `Complété${input.trainerName ? ` par ${input.trainerName}` : ''} le ${input.completedAt}` : 'En cours de saisie';
-  page.drawText(wrap(b.bold, done, 8.5, tableW)[0], { x: x0, y: y - 10, size: 8.5, font: b.bold, color: C.night });
+  page.drawText(wrap(b.bold, done, 8.5, tableW / 2)[0], { x: x0, y: y - 10, size: 8.5, font: b.bold, color: C.night });
+  drawFaitA(page, b, x0 + tableW, y - 10, input.legal, input.completedAt || input.lastDay || new Date().toLocaleDateString('fr-FR'));
 
-  brandFooters(pages, b, `CF Réseaux · Tour de table · ${input.title}`);
+  brandFooters(pages, b, `CF Réseaux · Tour de table · ${input.title}`, undefined, legalLine(input.legal));
   return doc.save();
 }

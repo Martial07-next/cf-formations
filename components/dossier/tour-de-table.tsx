@@ -49,6 +49,9 @@ export type TdtSession = {
   room: string | null;
   trainerName: string | null;
   trainees: { id: string; name: string; company: string | null }[];
+  place?: string | null;
+  legal?: import('@/lib/pdf-brand').Legal | null;
+  lastDay?: string | null;
 };
 
 /**

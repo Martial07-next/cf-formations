@@ -29,6 +29,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { PdfFiller } from '@/components/dossier/pdf-filler';
 import { TourDeTable } from '@/components/dossier/tour-de-table';
 import type { TdtData } from '@/lib/tdt';
+import type { Legal } from '@/lib/pdf-brand';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
 import type { EntryData } from '@/lib/pdf-dossier';
@@ -81,7 +82,7 @@ export function DossierPanel({
   /** Lieu de formation complet (feuille d'émargement). */
   place?: string | null;
   /** SIRET, déclaration d'activité, ville du « Fait à ». */
-  legal?: { siret: string | null; nda: string | null; city: string | null } | null;
+  legal?: Legal | null;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(signatures);
@@ -127,6 +128,7 @@ export function DossierPanel({
   const complete = emargement.complete && progress.documents.done === progress.documents.needed;
   const remaining = emargement.needed - emargement.done + (progress.documents.needed - progress.documents.done);
   const now = currentSlot(slots);
+  const lastDay = slots.length ? slots[slots.length - 1].day.split('-').reverse().join('/') : null;
 
   const find = (signer: string, traineeId: string | null, s: Slot) =>
     rows.find((r) => r.signer === signer && (r.trainee_id || null) === traineeId && r.day === s.day && r.half === s.half);
@@ -198,7 +200,7 @@ export function DossierPanel({
         const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
         parts.push(
           await buildTourDeTablePdf({
-            title, period, room, trainerName, trainees,
+            title, period, room, trainerName, trainees, place, legal, lastDay,
             data: tdt.data || {},
             completedAt: tdt.completed ? tdt.completedAt : null,
           })
@@ -212,7 +214,25 @@ export function DossierPanel({
         const entry = res.entries.find((e: any) => e.document_id === d.id);
         parts.push(await fillDocumentPdf(await file.arrayBuffer(), entry?.data as EntryData));
       }
-      downloadPdf(await mergePdfs(parts), `Dossier - ${title} - ${period}.pdf`);
+      // Page de garde : récapitulatif, lieu, mentions légales.
+      const { buildDossierCover } = await import('@/lib/dossier-cover');
+      const cover = await buildDossierCover({
+        title, period, room, trainerName, place, legal, lastDay,
+        complete,
+        items: [
+          { title: 'Feuille d’émargement', detail: `${emargement.done}/${emargement.needed} signatures`, done: emargement.complete },
+          ...(tdt ? [{ title: `Tour de table · ${title}`, detail: tdt.completed ? `Terminé le ${tdt.completedAt || ''}` : 'En cours', done: tdt.completed }] : []),
+          ...documents.map((d) => {
+            const e = entryOf(d.id);
+            return {
+              title: d.title,
+              detail: d.filled_by === 'aucun' ? 'Document à consulter' : FILLED_BY_LABEL[d.filled_by],
+              done: d.filled_by === 'aucun' || Boolean(e?.completed),
+            };
+          }),
+        ],
+      });
+      downloadPdf(await mergePdfs([cover, ...parts]), `Dossier - ${title} - ${period}.pdf`);
     } catch (e: any) {
       setError(e?.message || 'Génération impossible.');
     } finally {
@@ -229,7 +249,7 @@ export function DossierPanel({
       const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
       const bytes = await buildTourDeTablePdf({
-        title, period, room, trainerName, trainees,
+        title, period, room, trainerName, trainees, place, legal, lastDay,
         data: tdt.data || {},
         completedAt: tdt.completed ? tdt.completedAt : null,
       });
@@ -447,7 +467,7 @@ export function DossierPanel({
       <dialog ref={tdtRef} className="modal modal-full" aria-label="Tour de table" onClose={() => { setTdtOpen(false); router.refresh(); }}>
         {tdtOpen && tdt && (
           <TourDeTable
-            session={{ sessionId, title, period, room, trainerName, trainees }}
+            session={{ sessionId, title, period, room, trainerName, trainees, place, legal, lastDay }}
             initialData={tdt.data}
             initialCompleted={tdt.completed}
             completedAt={tdt.completedAt}

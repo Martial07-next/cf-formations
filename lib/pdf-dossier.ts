@@ -2,6 +2,7 @@
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { HALF_LABEL, type Slot, type SignatureRow } from '@/lib/dossier';
+import type { Legal } from '@/lib/pdf-brand';
 
 /**
  * Génération des PDF du dossier, dans le navigateur (aucune limite de taille
@@ -60,7 +61,7 @@ export type EmargementInput = {
   /** Lieu de formation complet (salle, bâtiment, adresse). */
   place?: string | null;
   /** Mentions légales et « Fait à … le … ». */
-  legal?: { siret: string | null; nda: string | null; city: string | null } | null;
+  legal?: Legal | null;
 };
 
 /**
@@ -69,7 +70,7 @@ export type EmargementInput = {
  * de chaque page. Un stagiaire n'est jamais coupé entre deux pages.
  */
 export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8Array> {
-  const { loadBrand, brandPage, brandFooters, headerRow, wrap: wrapText, C, PAGE } = await import('@/lib/pdf-brand');
+  const { loadBrand, brandPage, brandFooters, headerRow, wrap: wrapText, drawPlace, drawFaitA, legalLine, C, PAGE } = await import('@/lib/pdf-brand');
   const doc = await PDFDocument.create();
   doc.setTitle(`Feuille d'émargement - ${input.title}`);
   doc.setAuthor('CF Réseaux');
@@ -108,13 +109,7 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
     const open = (withTable = true) => {
       const { page, top } = brandPage(doc, b, "FEUILLE D'ÉMARGEMENT", 'Signature des stagiaires par demi-journée', input);
       pages.push(page);
-      let y = top;
-      // Lieu de formation (bâtiment et adresse).
-      if (input.place) {
-        page.drawText('LIEU DE FORMATION', { x: x0, y: y - 8, size: 7, font: b.bold, color: C.muted });
-        page.drawText(wrapText(b.bold, input.place, 9, tableW - 90)[0] || '', { x: x0 + 86, y: y - 8.5, size: 9, font: b.bold, color: C.night });
-        y -= 18;
-      }
+      const y = drawPlace(page, b, x0, top, tableW, input.place);
       return { page, y: withTable ? headerRow(page, b, x0, y, cols) : y };
     };
 
@@ -198,24 +193,15 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
       return { page: p, y: top };
     })());
     const lastDay = input.slots.length ? input.slots[input.slots.length - 1].day : null;
-    const fait = `Fait à ${input.legal?.city || 'Cuincy'}, le ${lastDay ? frDate(lastDay) : new Date().toLocaleDateString('fr-FR')}`;
-    page.drawText(fait, { x: x0 + tableW - b.bold.widthOfTextAtSize(fait, 9.5), y: y - 22, size: 9.5, font: b.bold, color: C.night });
+    drawFaitA(page, b, x0 + tableW, y - 22, input.legal, lastDay ? frDate(lastDay) : new Date().toLocaleDateString('fr-FR'));
   }
 
-  const legal = [
-    'CF RÉSEAUX',
-    input.legal?.siret && `SIRET ${input.legal.siret}`,
-    input.legal?.nda &&
-      `Déclaration d'activité enregistrée sous le n° ${input.legal.nda} auprès du préfet de région Hauts-de-France (cet enregistrement ne vaut pas agrément de l'État)`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
   brandFooters(
     pages,
     b,
     `CF Réseaux · Émargement · ${input.title}`,
     `Signatures électroniques horodatées · généré le ${new Date().toLocaleDateString('fr-FR')}`,
-    legal
+    legalLine(input.legal)
   );
   return doc.save();
 }

@@ -168,3 +168,32 @@ export function headerRow(page: PDFPage, b: Brand, x0: number, y: number, cols: 
   }
   return y - h;
 }
+
+/** Mentions légales et lieu, communs à tous les documents officiels. */
+export type Legal = { siret: string | null; nda: string | null; city: string | null };
+
+/** « CF RÉSEAUX · SIRET … · Déclaration d'activité … » (seulement ce qui est renseigné). */
+export function legalLine(legal?: Legal | null) {
+  return [
+    'CF RÉSEAUX',
+    legal?.siret && `SIRET ${legal.siret}`,
+    legal?.nda &&
+      `Déclaration d'activité enregistrée sous le n° ${legal.nda} auprès du préfet de région Hauts-de-France (cet enregistrement ne vaut pas agrément de l'État)`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Ligne « LIEU DE FORMATION » sous le bandeau ; renvoie le nouveau haut. */
+export function drawPlace(page: PDFPage, b: Brand, x0: number, y: number, width: number, place?: string | null) {
+  if (!place) return y;
+  page.drawText('LIEU DE FORMATION', { x: x0, y: y - 8, size: 7, font: b.bold, color: C.muted });
+  page.drawText(wrap(b.bold, place, 9, width - 90)[0] || '', { x: x0 + 86, y: y - 8.5, size: 9, font: b.bold, color: C.night });
+  return y - 18;
+}
+
+/** « Fait à …, le … » aligné à droite. */
+export function drawFaitA(page: PDFPage, b: Brand, right: number, y: number, legal: Legal | null | undefined, date: string) {
+  const t = clean(b.bold, `Fait à ${legal?.city || 'Cuincy'}, le ${date}`);
+  page.drawText(t, { x: right - b.bold.widthOfTextAtSize(t, 9.5), y, size: 9.5, font: b.bold, color: C.night });
+}
