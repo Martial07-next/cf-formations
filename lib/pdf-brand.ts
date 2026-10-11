@@ -134,10 +134,17 @@ export function brandPage(doc: PDFDocument, b: Brand, docTitle: string, subtitle
 }
 
 /** Pied de page sur toutes les pages : rappel du document et numérotation. */
-export function brandFooters(pages: PDFPage[], b: Brand, label: string, note?: string) {
+export function brandFooters(pages: PDFPage[], b: Brand, label: string, note?: string, legal?: string) {
   const { W, M } = PAGE;
   pages.forEach((p, i) => {
-    p.drawRectangle({ x: M, y: 26, width: W - 2 * M, height: 0.6, color: C.grey });
+    // Mentions légales (SIRET, déclaration d'activité) au-dessus du pied de page.
+    if (legal) {
+      const lines = wrap(b.regular, legal, 6.6, W - 2 * M);
+      lines.slice(0, 2).forEach((l, k) =>
+        p.drawText(l, { x: (W - b.regular.widthOfTextAtSize(l, 6.6)) / 2, y: 24 + (lines.length > 1 ? 8 : 0) - k * 8, size: 6.6, font: b.regular, color: C.muted })
+      );
+    }
+    p.drawRectangle({ x: M, y: legal ? 44 : 26, width: W - 2 * M, height: 0.6, color: C.grey });
     p.drawText(clean(b.regular, label), { x: M, y: 14, size: 7, font: b.regular, color: C.muted });
     if (note) {
       const t = clean(b.regular, note);

@@ -2,7 +2,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
-import { compareRooms } from '@/lib/buildings';
+import { compareRooms, trainingPlace } from '@/lib/buildings';
 import { formatSessionPeriod, sessionHours, formatHours } from '@/lib/week';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -49,7 +49,7 @@ export default async function SessionDetailPage({
       supabase
         .from('sessions')
         .select(
-          'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding), trainers(id, full_name, color), templates(title, category, duration_hours)'
+          'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding, location), trainers(id, full_name, color), templates(title, category, duration_hours)'
         )
         .eq('id', id)
         .maybeSingle(),
@@ -107,6 +107,13 @@ export default async function SessionDetailPage({
           completed: Boolean((formRow as any)?.completed),
           completedAt: (formRow as any)?.completed_at ? new Date((formRow as any).completed_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : null,
         };
+  // Mentions légales des documents (migration 18) ; ignorées si absentes.
+  const { data: settings } = await supabase.from('app_settings').select('*').eq('id', true).maybeSingle();
+  const legal = {
+    siret: ((settings as any)?.siret as string) || null,
+    nda: ((settings as any)?.nda as string) || null,
+    city: ((settings as any)?.signature_city as string) || 'Cuincy',
+  };
   const slots = sessionSlots(session.start_at, session.end_at, (dayRows as any) || []);
   const validatedTrainees = enrolled
     .filter((t: any) => t.status === 'validee')
@@ -124,7 +131,7 @@ export default async function SessionDetailPage({
   // Template docs first (dans l'ordre du catalogue), puis ceux propres à la session.
   const documents = [...((docRows as any[]) || [])].sort((a, b) => Number(!!a.session_id) - Number(!!b.session_id) || a.position - b.position);
 
-  const room = one((session as any).rooms) as { name: string; is_holding: boolean | null } | null;
+  const room = one((session as any).rooms) as { name: string; is_holding: boolean | null; location: string | null } | null;
   const trainer = one((session as any).trainers) as { id: string; full_name: string; color: string | null } | null;
   const template = one((session as any).templates) as { title: string; category: string | null; duration_hours: number } | null;
   const hours = sessionHours(session.start_at, session.end_at, (dayRows as any) || []);
@@ -209,6 +216,8 @@ export default async function SessionDetailPage({
             canFill={canEditStartTimes(profile?.role) || isOwn}
             canManage={editable}
             tourDeTable={tourDeTable}
+            place={room?.is_holding ? null : trainingPlace(room)}
+            legal={legal}
           />
         )}
       </section>

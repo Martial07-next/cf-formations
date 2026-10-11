@@ -57,6 +57,10 @@ export type EmargementInput = {
   /** Stagiaires attendus par demi-journée (modules), clé « jour|demi ». */
   expected: Record<string, string[]>;
   signatures: SignatureRow[];
+  /** Lieu de formation complet (salle, bâtiment, adresse). */
+  place?: string | null;
+  /** Mentions légales et « Fait à … le … ». */
+  legal?: { siret: string | null; nda: string | null; city: string | null } | null;
 };
 
 /**
@@ -74,7 +78,7 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
   const nameW = 140;
   const companyW = 100;
   const ROW = 38;
-  const BOTTOM = 40;
+  const BOTTOM = 58;
   const slotsPerPage = 6;
   const tableW = PAGE.W - 2 * PAGE.M;
   const x0 = PAGE.M;
@@ -86,6 +90,8 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
   const slotChunks: Slot[][] = [];
   for (let i = 0; i < Math.max(input.slots.length, 1); i += slotsPerPage) slotChunks.push(input.slots.slice(i, i + slotsPerPage));
 
+  let lastPage: PDFPage | null = null;
+  let lastY = 0;
   for (const slots of slotChunks) {
     const slotW = (tableW - numW - nameW - companyW) / Math.max(slots.length, 1);
     const cols = [
@@ -99,10 +105,17 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
       })),
     ];
 
-    const open = () => {
+    const open = (withTable = true) => {
       const { page, top } = brandPage(doc, b, "FEUILLE D'ÉMARGEMENT", 'Signature des stagiaires par demi-journée', input);
       pages.push(page);
-      return { page, y: headerRow(page, b, x0, top, cols) };
+      let y = top;
+      // Lieu de formation (bâtiment et adresse).
+      if (input.place) {
+        page.drawText('LIEU DE FORMATION', { x: x0, y: y - 8, size: 7, font: b.bold, color: C.muted });
+        page.drawText(wrapText(b.bold, input.place, 9, tableW - 90)[0] || '', { x: x0 + 86, y: y - 8.5, size: 9, font: b.bold, color: C.night });
+        y -= 18;
+      }
+      return { page, y: withTable ? headerRow(page, b, x0, y, cols) : y };
     };
 
     const drawRow = async (page: PDFPage, y: number, index: string, label: string, company: string, cell: (s: Slot) => SignatureRow | undefined | 'na', shade: any, bold = false) => {
@@ -171,13 +184,38 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
       );
     }
     await trainerRow();
+    lastPage = page;
+    lastY = y;
   }
 
+  // « Fait à …, le … » (dernier jour de la session), en bas du tableau.
+  if (lastPage) {
+    let page: PDFPage = lastPage;
+    let y = lastY;
+    if (y - 34 < BOTTOM) ({ page, y } = (() => {
+      const { page: p, top } = brandPage(doc, b, "FEUILLE D'ÉMARGEMENT", 'Signature des stagiaires par demi-journée', input);
+      pages.push(p);
+      return { page: p, y: top };
+    })());
+    const lastDay = input.slots.length ? input.slots[input.slots.length - 1].day : null;
+    const fait = `Fait à ${input.legal?.city || 'Cuincy'}, le ${lastDay ? frDate(lastDay) : new Date().toLocaleDateString('fr-FR')}`;
+    page.drawText(fait, { x: x0 + tableW - b.bold.widthOfTextAtSize(fait, 9.5), y: y - 22, size: 9.5, font: b.bold, color: C.night });
+  }
+
+  const legal = [
+    'CF RÉSEAUX',
+    input.legal?.siret && `SIRET ${input.legal.siret}`,
+    input.legal?.nda &&
+      `Déclaration d'activité enregistrée sous le n° ${input.legal.nda} auprès du préfet de région Hauts-de-France (cet enregistrement ne vaut pas agrément de l'État)`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   brandFooters(
     pages,
     b,
     `CF Réseaux · Émargement · ${input.title}`,
-    `Signatures électroniques horodatées · généré le ${new Date().toLocaleDateString('fr-FR')}`
+    `Signatures électroniques horodatées · généré le ${new Date().toLocaleDateString('fr-FR')}`,
+    legal
   );
   return doc.save();
 }

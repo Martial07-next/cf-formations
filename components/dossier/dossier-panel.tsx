@@ -60,6 +60,8 @@ export function DossierPanel({
   canFill,
   canManage,
   tourDeTable,
+  place = null,
+  legal = null,
 }: {
   sessionId: string;
   title: string;
@@ -76,6 +78,10 @@ export function DossierPanel({
   canManage: boolean;
   /** Tour de table intégré (null si désactivé pour cette formation). */
   tourDeTable: { data: TdtData | null; completed: boolean; completedAt: string | null } | null;
+  /** Lieu de formation complet (feuille d'émargement). */
+  place?: string | null;
+  /** SIRET, déclaration d'activité, ville du « Fait à ». */
+  legal?: { siret: string | null; nda: string | null; city: string | null } | null;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(signatures);
@@ -182,7 +188,7 @@ export function DossierPanel({
       const { buildEmargementPdf, downloadPdf, fillDocumentPdf, mergePdfs } = await import('@/lib/pdf-dossier');
       const res = await dossierExport(sessionId);
       if (!res.ok) throw new Error(res.error);
-      const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures });
+      const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures, place, legal });
       if (!full) {
         downloadPdf(emarg, `Emargement - ${title}.pdf`);
         return;

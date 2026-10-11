@@ -12,19 +12,26 @@ export async function updateSettings(formData: FormData) {
   const company_address = String(formData.get('company_address') || '').trim() || null;
   const default_session_duration_hours = Number(formData.get('default_session_duration_hours') || 7);
   const notify_on_conflict = formData.get('notify_on_conflict') === 'on';
+  // Mentions légales (feuille d'émargement), migration 18.
+  const legal = {
+    siret: String(formData.get('siret') || '').replace(/\s+/g, ' ').trim() || null,
+    nda: String(formData.get('nda') || '').trim() || null,
+    signature_city: String(formData.get('signature_city') || '').trim() || 'Cuincy',
+  };
 
   if (!company_name) return { ok: false, error: "Le nom de l'entreprise est requis." };
 
-  const { error } = await supabase
-    .from('app_settings')
-    .update({
-      company_name,
-      company_address,
-      default_session_duration_hours,
-      notify_on_conflict,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', true);
+  const base = {
+    company_name,
+    company_address,
+    default_session_duration_hours,
+    notify_on_conflict,
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await supabase.from('app_settings').update({ ...base, ...legal }).eq('id', true);
+  if (error && /siret|nda|signature_city/.test(error.message)) {
+    return { ok: false, error: 'Exécute d’abord la migration 18 (supabase/migration_phase18.sql) pour enregistrer le SIRET et la déclaration d’activité.' };
+  }
 
   if (error) return { ok: false, error: error.message };
   revalidatePath('/administration/parametres');
