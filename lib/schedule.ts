@@ -77,3 +77,21 @@ export function splitHours(hours: number): { h: number; m: number } {
   const total = Math.round(hours * 60);
   return { h: Math.floor(total / 60), m: total % 60 };
 }
+
+/**
+ * Nombre de jours précis à la demi-journée : un jour de 5 h ou plus compte
+ * pour 1, un jour plus court (une matinée, un après-midi) pour ½.
+ * Ex. 25 h = 3 × 7 h + 4 h → 3,5 jours.
+ */
+export function countDays(dayMinutes: number[]): number {
+  return dayMinutes.reduce((n, m) => n + (m >= 300 ? 1 : m > 0 ? 0.5 : 0), 0);
+}
+
+/** 3.5 → « 3 jours et demi », 1 → « 1 jour », 0.5 → « une demi-journée ». */
+export function formatDays(n: number): string {
+  if (n <= 0) return '0 jour';
+  if (n === 0.5) return 'une demi-journée';
+  const whole = Math.floor(n);
+  const half = n - whole >= 0.5;
+  return `${whole} jour${whole > 1 ? 's' : ''}${half ? ' et demi' : ''}`;
+}

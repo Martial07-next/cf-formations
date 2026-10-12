@@ -5,6 +5,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { COMPANY, type Legal } from '@/lib/pdf-brand';
 import { CREAM, INK, RED, gradientText, keep, wrapText } from '@/lib/pdf-appreciation';
 import type { AppreciationEntry } from '@/lib/appreciation';
+import { formatDays } from '@/lib/schedule';
 
 /**
  * Attestation de fin de formation et appréciation des compétences : reprise
@@ -22,7 +23,7 @@ export type FinFormationInput = {
   competences: string | null;
   startDate: string; // AAAA-MM-JJ
   endDate: string;
-  days: number;
+  days: number; // jours précis à la demi-journée (ex. 3.5)
   hours: number;
   address: string | null; // ex. 20 rue du Champ de Tir, 59553 Cuincy
   legal?: Legal | null;
@@ -222,7 +223,7 @@ function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInpu
   y -= 18.1 * k;
   text(page, `Date de réalisation →  ${longPeriod(input.startDate, input.endDate)}`, 23.1, y, B, f.bold);
   y -= 17.25 * k;
-  text(page, `Durée prévue → ${input.days} jour${input.days > 1 ? 's' : ''} (${hoursText(input.hours)})`, 23.1, y, B, f.bold);
+  text(page, `Durée prévue → ${formatDays(input.days)} (${hoursText(input.hours)})`, 23.1, y, B, f.bold);
   y -= 17.25 * k;
   y = labelValue(page, { text: 'Lieu de réalisation → ', font: f.bold }, { text: input.address || 'CF Réseaux', font: f.regular }, B, y, step);
 

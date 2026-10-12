@@ -7,7 +7,7 @@ import { TemplatePicker } from '@/components/template-picker';
 import { placeModules, frDay } from '@/lib/modules';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { missionText, outsideMission } from '@/lib/external';
-import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES } from '@/lib/schedule';
+import { planDays, trainingMinutes, splitHours, FULL_DAY_MINUTES, countDays, formatDays } from '@/lib/schedule';
 
 export type FormRoom = {
   id: string;
@@ -135,6 +135,8 @@ export function SessionForm({
       ? days * dailyMinutes
       : 0;
   const plannedHours = plannedMinutes / 60;
+  // Jours précis à la demi-journée (ex. 3 jours et demi).
+  const manualDays = formatDays(countDays(Array(Math.max(days, 0)).fill(dailyMinutes)));
 
   function setDuration(hours: number) {
     const { h, m } = splitHours(hours);
@@ -334,7 +336,7 @@ export function SessionForm({
         <div className="plan-summary">
           {plan.length > 0 ? (
             <>
-              <strong>{formatHours(plannedHours)}</strong> sur {plan.length} jour{plan.length > 1 ? 's' : ''} :{' '}
+              <strong>{formatHours(plannedHours)}</strong> sur {formatDays(countDays(plan.map((d) => d.minutes)))} :{' '}
               {plan.map((d, i) => (
                 <span key={d.day} className="plan-day">
                   {new Date(d.day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{' '}
@@ -356,7 +358,7 @@ export function SessionForm({
             </>
           ) : plannedHours > 0 ? (
             <>
-              <strong>{formatHours(plannedHours)}</strong> sur {days} jour{days > 1 ? 's' : ''} ouvré{days > 1 ? 's' : ''}, pause 12h–13h déduite
+              <strong>{formatHours(plannedHours)}</strong> sur {manualDays}, pause 12h–13h déduite
               {template && Math.abs(plannedHours - Number(template.duration_hours)) >= 0.25 && (
                 <> · <span style={{ color: 'var(--wait-ink)' }}>catalogue : {formatHours(Number(template.duration_hours))}</span></>
               )}

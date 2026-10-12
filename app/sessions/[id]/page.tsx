@@ -4,7 +4,8 @@ import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
-import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween } from '@/lib/week';
+import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
+import { countDays } from '@/lib/schedule';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
@@ -274,7 +275,8 @@ export default async function SessionDetailPage({
                           formationTitle: (tplOpt as any)?.title || session.title,
                           objectifs: (tplOpt as any)?.objectifs ?? null,
                           competences: (tplOpt as any)?.competences ?? null,
-                          days: Math.max(1, weekdaysBetween(session.start_at, session.end_at).length),
+                          // Jours précis : un jour de moins de 5 h compte pour une demi-journée.
+                          days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
                           hours,
                           address: room?.is_holding ? null : streetAddress(room),
                           signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
