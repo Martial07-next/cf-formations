@@ -6,7 +6,7 @@ import { saveTourDeTable } from '@/app/dossier/actions';
 import { TDT_COLUMNS, type TdtData, type TdtKey } from '@/lib/tdt';
 
 /** Zone de texte qui grandit avec son contenu. */
-function AutoText({
+export function AutoText({
   value,
   onChange,
   readOnly,

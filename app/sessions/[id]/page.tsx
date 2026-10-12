@@ -2,7 +2,8 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
-import { compareRooms, trainingPlace } from '@/lib/buildings';
+import { compareRooms, trainingPlace, buildingAddress } from '@/lib/buildings';
+import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween } from '@/lib/week';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -100,7 +101,12 @@ export default async function SessionDetailPage({
   // Tour de table intégré (migration 17) : activé par défaut, désactivable par formation.
   const [{ data: formRow, error: formError }, { data: tplOpt }] = await Promise.all([
     supabase.from('session_forms').select('data, completed, completed_at').eq('session_id', id).eq('kind', 'tour_de_table').maybeSingle(),
-    templateId ? supabase.from('templates').select('tour_de_table').eq('id', templateId).maybeSingle() : Promise.resolve({ data: null }),
+    templateId ? supabase.from('templates').select('*').eq('id', templateId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  // Fiches d'appréciation individuelle (migration 21) : réglage de la session, sinon de la formation.
+  const [{ data: faiRow, error: faiError }, { data: sessFlag, error: flagError }] = await Promise.all([
+    supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'appreciation').maybeSingle(),
+    supabase.from('sessions').select('fiche_appreciation').eq('id', id).maybeSingle(),
   ]);
   const tourDeTable =
     formError || (tplOpt as any)?.tour_de_table === false
@@ -248,6 +254,21 @@ export default async function SessionDetailPage({
             canFill={canEditStartTimes(profile?.role) || isOwn}
             canManage={editable}
             tourDeTable={tourDeTable}
+            appreciation={
+              faiError || flagError
+                ? null
+                : {
+                    required: appreciationRequired((sessFlag as any)?.fiche_appreciation ?? null, (tplOpt as any)?.fiche_appreciation),
+                    sessionFlag: (sessFlag as any)?.fiche_appreciation ?? null,
+                    templateFlag: Boolean((tplOpt as any)?.fiche_appreciation),
+                    data: ((faiRow as any)?.data as any) || null,
+                    codification: codificationOf((tplOpt as any)?.codification, (tplOpt as any)?.title || session.title),
+                    startDate: session.start_at.slice(0, 10),
+                    endDate: session.end_at.slice(0, 10),
+                    lieu: room?.is_holding ? null : buildingAddress(room),
+                    trainerNames: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                  }
+            }
             dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
             place={room?.is_holding ? null : trainingPlace(room)}
             legal={legal}

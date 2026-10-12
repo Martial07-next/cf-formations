@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
+import { appreciationRequired } from '@/lib/appreciation';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -159,6 +160,12 @@ export default async function Page({
       templateIds.length ? supabase.from('templates').select('id, tour_de_table').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
     ]);
     const tdtOff = new Set(((tplOpts as any[]) || []).filter((t) => t.tour_de_table === false).map((t) => t.id));
+    // Fiches d'appréciation (migration 21) : ignorées si la migration manque.
+    const [{ data: faiForms, error: faiErr }, { data: faiSess }, { data: faiTpl }] = await Promise.all([
+      supabase.from('session_forms').select('session_id, completed').eq('kind', 'appreciation').in('session_id', sessionIds),
+      supabase.from('sessions').select('id, fiche_appreciation').in('id', sessionIds),
+      templateIds.length ? supabase.from('templates').select('id, fiche_appreciation').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
+    ]);
     for (const s of (sessions as any[]) || []) {
       const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
       if (!traineeIds.length) continue;
@@ -173,10 +180,18 @@ export default async function Page({
         documents: ((docs as any[]) || []).filter((d) => d.session_id === s.id || (s.template_id && d.template_id === s.template_id)),
         entries: ((entries as any[]) || []).filter((e) => e.session_id === s.id),
         // Tour de table obligatoire (sauf formation qui le désactive, ou migration 17 absente).
-        forms:
-          formsError || (s.template_id && tdtOff.has(s.template_id))
+        forms: [
+          ...(formsError || (s.template_id && tdtOff.has(s.template_id))
             ? []
-            : [{ completed: ((forms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }],
+            : [{ completed: ((forms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]),
+          ...(!faiErr &&
+          appreciationRequired(
+            ((faiSess as any[]) || []).find((x) => x.id === s.id)?.fiche_appreciation ?? null,
+            ((faiTpl as any[]) || []).find((x) => x.id === s.template_id)?.fiche_appreciation
+          )
+            ? [{ completed: ((faiForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]
+            : []),
+        ],
       });
       if (p.complete) dossierComplete[s.id] = true;
     }

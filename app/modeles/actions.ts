@@ -17,13 +17,20 @@ function readTemplate(formData: FormData) {
     description: get('description') || null,
     // Tour de table dans le dossier (migration 17) : seulement si le formulaire le propose.
     ...(formData.has('tdt_present') ? { tour_de_table: formData.get('tour_de_table') === 'on' } : {}),
+    // Fiche d'appréciation individuelle et codification SERECT (migration 21).
+    ...(formData.has('fai_present')
+      ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
+      : {}),
   };
 }
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
-const missingTdt = (msg: string) => /tour_de_table/.test(msg);
-function withoutTdt<T extends Record<string, any>>(t: T) {
-  const { tour_de_table, ...rest } = t;
+const missingTdt = (msg: string) => /tour_de_table|fiche_appreciation|codification/.test(msg);
+/** Retire les colonnes absentes de la base (migrations 17 / 21 pas encore faites). */
+function withoutTdt<T extends Record<string, any>>(t: T, msg = '') {
+  const { tour_de_table, fiche_appreciation, codification, ...rest } = t;
+  // Seules les colonnes de la migration 21 manquent : on garde le tour de table.
+  if (/fiche_appreciation|codification/.test(msg) && !/tour_de_table/.test(msg) && tour_de_table !== undefined) return { ...rest, tour_de_table };
   return rest;
 }
 
@@ -126,6 +133,7 @@ export async function createTemplate(formData: FormData) {
   const position = await nextPosition(supabase, 'templates', 'folder_id', t.folder_id);
   const row = { ...t, category: await folderPath(supabase, t.folder_id), position };
   let { data, error } = await supabase.from('templates').insert(row).select('id').single();
+  if (error && missingTdt(error.message)) ({ data, error } = await supabase.from('templates').insert(withoutTdt(row, error.message)).select('id').single());
   if (error && missingTdt(error.message)) ({ data, error } = await supabase.from('templates').insert(withoutTdt(row)).select('id').single());
   if (error || !data) return { ok: false, error: error?.message || 'Création impossible.' };
   const extraError = await saveExtras(supabase, data.id, formData);
@@ -150,6 +158,7 @@ export async function updateTemplate(id: string, formData: FormData) {
     ...(moved ? { position: await nextPosition(supabase, 'templates', 'folder_id', t.folder_id) } : {}),
   };
   let { error } = await supabase.from('templates').update(patch).eq('id', id);
+  if (error && missingTdt(error.message)) ({ error } = await supabase.from('templates').update(withoutTdt(patch, error.message)).eq('id', id));
   if (error && missingTdt(error.message)) ({ error } = await supabase.from('templates').update(withoutTdt(patch)).eq('id', id));
   if (error) return { ok: false, error: error.message };
   const extraError = await saveExtras(supabase, id, formData);

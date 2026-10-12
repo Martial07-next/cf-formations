@@ -31,6 +31,9 @@ import { TourDeTable } from '@/components/dossier/tour-de-table';
 import type { TdtData } from '@/lib/tdt';
 import type { Legal } from '@/lib/pdf-brand';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
+import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
+import { setSessionAppreciation } from '@/app/dossier/actions';
+import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
 import type { EntryData } from '@/lib/pdf-dossier';
@@ -65,6 +68,7 @@ export function DossierPanel({
   place = null,
   legal = null,
   dayTrainerNames = {},
+  appreciation = null,
 }: {
   sessionId: string;
   title: string;
@@ -87,6 +91,18 @@ export function DossierPanel({
   legal?: Legal | null;
   /** Remplaçant certains jours : jour → nom du formateur ce jour-là. */
   dayTrainerNames?: Record<string, string>;
+  /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
+  appreciation?: {
+    required: boolean;
+    sessionFlag: boolean | null;
+    templateFlag: boolean;
+    data: AppreciationData | null;
+    codification: string;
+    startDate: string;
+    endDate: string;
+    lieu: string | null;
+    trainerNames: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(signatures);
@@ -104,6 +120,26 @@ export function DossierPanel({
   const tdtRef = useRef<HTMLDialogElement>(null);
   const [tdt, setTdt] = useState(tourDeTable);
   const [tdtOpen, setTdtOpen] = useState(false);
+  const faiRef = useRef<HTMLDialogElement>(null);
+  const [faiOpen, setFaiOpen] = useState(false);
+  const [faiData, setFaiData] = useState<AppreciationData | null>(appreciation?.data || null);
+  useEffect(() => setFaiData(appreciation?.data || null), [appreciation]);
+  const faiOn = Boolean(appreciation?.required);
+  const faiDone = faiOn && appreciationDone(faiData, trainees.map((t) => t.id));
+  const faiCount = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis).length;
+  const faiSession = appreciation
+    ? {
+        sessionId,
+        title,
+        codification: appreciation.codification,
+        startDate: appreciation.startDate,
+        endDate: appreciation.endDate,
+        lieu: appreciation.lieu,
+        trainerName: appreciation.trainerNames,
+        legal,
+        trainees,
+      }
+    : null;
   useEffect(() => setTdt(tourDeTable), [tourDeTable]);
 
   useEffect(() => setRows(signatures), [signatures]);
@@ -112,8 +148,10 @@ export function DossierPanel({
   // Documents obligatoires terminés.
   const requiredDocs = documents.filter((d) => d.required && d.filled_by !== 'aucun');
   const docsDone =
-    requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length + (tdt?.completed ? 1 : 0);
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) } };
+    requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length +
+    (tdt?.completed ? 1 : 0) +
+    (faiDone ? 1 : 0);
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -219,6 +257,10 @@ export function DossierPanel({
           })
         );
       }
+      if (faiOn && faiSession && trainees.length) {
+        const { buildAppreciationPdf } = await import('@/lib/pdf-appreciation');
+        parts.push(await buildAppreciationPdf({ ...faiSession, entries: faiData?.trainees || {} }));
+      }
       for (const d of documents) {
         const url = res.files[d.id];
         if (!url) continue;
@@ -237,6 +279,7 @@ export function DossierPanel({
             ? [{ title: 'Feuille d’émargement', detail: `${emargement.done}/${emargement.needed} signatures`, done: emargement.complete }]
             : []),
           ...(tdt ? [{ title: `Tour de table · ${title}`, detail: tdt.completed ? `Terminé le ${tdt.completedAt || ''}` : 'En cours', done: tdt.completed }] : []),
+          ...(faiOn ? [{ title: 'Fiches d’appréciation individuelle', detail: `${faiCount}/${trainees.length} avis donnés`, done: faiDone }] : []),
           ...documents.map((d) => {
             const e = entryOf(d.id);
             return {
@@ -439,8 +482,61 @@ export function DossierPanel({
           </div>
         </div>
       )}
+      {appreciation && (canManage || faiOn) && (
+        <div className="doc-list" style={{ marginBottom: 6 }}>
+          <div className={`doc-item${faiOn ? '' : ' doc-off'}`}>
+            <FileText size={16} aria-hidden />
+            <span className="doc-item-main">
+              <strong>Fiches d’appréciation individuelle</strong>
+              <small className="hint">
+                {faiOn
+                  ? `Une fiche par stagiaire, remplie par le formateur · ${faiCount}/${trainees.length} avis donnés`
+                  : 'Non demandées pour cette session'}
+              </small>
+            </span>
+            {canManage && (
+              <select
+                className="input"
+                aria-label="Fiches d’appréciation pour cette session"
+                value={appreciation.sessionFlag === null ? 'auto' : appreciation.sessionFlag ? 'oui' : 'non'}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  startTransition(async () => {
+                    const res = await setSessionAppreciation(sessionId, v === 'auto' ? null : v === 'oui');
+                    if (!res.ok) setError(res.error);
+                  });
+                }}
+              >
+                <option value="auto">Selon la formation ({appreciation.templateFlag ? 'oui' : 'non'})</option>
+                <option value="oui">Oui pour cette session</option>
+                <option value="non">Non pour cette session</option>
+              </select>
+            )}
+            {faiOn &&
+              (faiDone ? (
+                <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+              ) : faiCount ? (
+                <span className="badge en_attente">En cours</span>
+              ) : (
+                <span className="badge brouillon">À remplir</span>
+              ))}
+            {faiOn && (
+              <button
+                type="button"
+                className={`small${canFill && !faiDone ? ' primary' : ''}`}
+                onClick={() => {
+                  setFaiOpen(true);
+                  faiRef.current?.showModal();
+                }}
+              >
+                {canFill && !faiDone ? <><PenLine size={14} aria-hidden /> Remplir</> : 'Ouvrir'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {documents.length === 0 ? (
-        !tdt && <p className="hint">
+        !tdt && !faiOn && <p className="hint">
           Aucun document à remplir.{canManage ? ' Ajoute-les une fois pour toutes dans Formations disponibles › Dossier, ou pour cette session ci-dessous.' : ''}
         </p>
       ) : (
@@ -487,6 +583,19 @@ export function DossierPanel({
           })}
         </div>
       )}
+
+      {/* Fiches d'appréciation individuelle */}
+      <dialog ref={faiRef} className="modal modal-full" aria-label="Fiches d’appréciation individuelle" onClose={() => { setFaiOpen(false); router.refresh(); }}>
+        {faiOpen && faiSession && (
+          <AppreciationEditor
+            session={faiSession}
+            initialData={faiData}
+            canEdit={canFill}
+            onClose={() => faiRef.current?.close()}
+            onSaved={(data) => setFaiData(data)}
+          />
+        )}
+      </dialog>
 
       {/* Tour de table intégré */}
       <dialog ref={tdtRef} className="modal modal-full" aria-label="Tour de table" onClose={() => { setTdtOpen(false); router.refresh(); }}>

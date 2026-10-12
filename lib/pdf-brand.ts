@@ -19,12 +19,14 @@ export const C = {
 export const LOGO_RATIO = 1814.62 / 293.44;
 export const PAGE = { W: 842, H: 595, M: 24, BAND: 92 };
 
-export type Brand = { title: PDFFont; bold: PDFFont; regular: PDFFont; logo: PDFImage | null };
+export type Brand = { title: PDFFont; bold: PDFFont; regular: PDFFont; logo: PDFImage | null; logoDark: PDFImage | null };
 
 /** Logo dégradé (SVG) converti en image haute définition pour le PDF. */
-async function logoPng(): Promise<Uint8Array | null> {
+async function logoPng(color?: string): Promise<Uint8Array | null> {
   try {
-    const svg = await fetch('/logo-cf-reseaux.svg').then((r) => (r.ok ? r.text() : Promise.reject()));
+    let svg = await fetch('/logo-cf-reseaux.svg').then((r) => (r.ok ? r.text() : Promise.reject()));
+    // Version unie (ex. vert nuit sur fond blanc) à la place du dégradé.
+    if (color) svg = svg.replace(/fill:\s*url\(#linear-gradient\);?/g, `fill: ${color};`);
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const img = new Image();
     await new Promise((res, rej) => {
@@ -51,17 +53,19 @@ export async function loadBrand(doc: PDFDocument): Promise<Brand> {
       if (!r.ok) throw new Error('Polices introuvables.');
       return r.arrayBuffer();
     });
-  const [title, bold, regular, logo] = await Promise.all([
+  const [title, bold, regular, logo, logoDark] = await Promise.all([
     get('ArchivoExpanded-ExtraBold.ttf'),
     get('SpaceGrotesk-Bold.ttf'),
     get('SpaceGrotesk-Regular.ttf'),
     logoPng(),
+    logoPng('#17241B'),
   ]);
   return {
     title: await doc.embedFont(title, { subset: true }),
     bold: await doc.embedFont(bold, { subset: true }),
     regular: await doc.embedFont(regular, { subset: true }),
     logo: logo ? await doc.embedPng(logo) : null,
+    logoDark: logoDark ? await doc.embedPng(logoDark) : null,
   };
 }
 
@@ -197,3 +201,11 @@ export function drawFaitA(page: PDFPage, b: Brand, right: number, y: number, leg
   const t = clean(b.bold, `Fait à ${legal?.city || 'Cuincy'}, le ${date}`);
   page.drawText(t, { x: right - b.bold.widthOfTextAtSize(t, 9.5), y, size: 9.5, font: b.bold, color: C.night });
 }
+
+/** Coordonnées de la société (pied des documents). Le SIRET des paramètres prime. */
+export const COMPANY = {
+  name: 'CF RÉSEAUX SAS',
+  siret: '900 991 944 00027',
+  tva: 'FR34 900 991 944',
+  email: 'contact@cf-reseaux.fr',
+};

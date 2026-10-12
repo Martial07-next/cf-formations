@@ -329,3 +329,54 @@ export async function saveTourDeTable(sessionId: string, data: unknown, complete
   if (completed !== undefined) refresh(sessionId);
   return { ok: true };
 }
+
+/** Fiches d'appréciation individuelle : enregistrement automatique (terminé quand tous les avis sont donnés). */
+export async function saveAppreciation(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const json = JSON.stringify(data ?? {});
+  if (json.length > 500_000) return { ok: false, error: 'Fiches trop longues.' };
+  const { data: before } = await r.supabase
+    .from('session_forms')
+    .select('completed')
+    .eq('session_id', sessionId)
+    .eq('kind', 'appreciation')
+    .maybeSingle();
+  const { error } = await r.supabase.from('session_forms').upsert(
+    {
+      session_id: sessionId,
+      kind: 'appreciation',
+      data: JSON.parse(json),
+      completed,
+      completed_at: completed ? new Date().toISOString() : null,
+      updated_by: r.profile.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) {
+    return {
+      ok: false,
+      error: /session_forms|kind_check|schema cache|does not exist/i.test(error.message)
+        ? 'Exécute d’abord la migration 21 (supabase/migration_phase21.sql) dans Supabase.'
+        : error.message,
+    };
+  }
+  if (Boolean((before as any)?.completed) !== completed) refresh(sessionId);
+  return { ok: true };
+}
+
+/** Fiches d'appréciation pour cette session : oui, non, ou comme la formation (null). */
+export async function setSessionAppreciation(sessionId: string, value: boolean | null): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('sessions').update({ fiche_appreciation: value }).eq('id', sessionId);
+  if (error) {
+    return {
+      ok: false,
+      error: /fiche_appreciation|schema cache/i.test(error.message) ? 'Exécute d’abord la migration 21 (supabase/migration_phase21.sql) dans Supabase.' : error.message,
+    };
+  }
+  refresh(sessionId);
+  return { ok: true };
+}

@@ -32,3 +32,10 @@ export function trainingPlace(room: { name: string; location?: string | null } |
   }
   return building ? `${room.name} · ${BUILDING_ADDRESS[building]}` : room.name;
 }
+
+/** Bâtiment et adresse seuls (sans la salle), ex. pour le « lieu de dispense ». */
+export function buildingAddress(room: { name: string; location?: string | null } | null): string | null {
+  const place = trainingPlace(room);
+  if (!place || !room) return null;
+  return place.startsWith(`${room.name} · `) ? place.slice(room.name.length + 3) : null;
+}

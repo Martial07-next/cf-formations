@@ -32,6 +32,8 @@ type Template = {
   links: { id: string; label: string; url: string }[];
   documents: DossierDocument[];
   tour_de_table?: boolean;
+  fiche_appreciation?: boolean;
+  codification?: string | null;
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
 export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
@@ -180,6 +182,15 @@ function TemplateFields({
         <label className="check-line">
           <input type="checkbox" name="tour_de_table" defaultChecked={t?.tour_de_table !== false} />
           Tour de table à remplir par le formateur dans le dossier de chaque session
+        </label>
+        <input type="hidden" name="fai_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="fiche_appreciation" defaultChecked={Boolean(t?.fiche_appreciation)} />
+          Fiche d’appréciation individuelle (une par stagiaire) à remplir par le formateur
+        </label>
+        <label style={{ fontWeight: 600, marginTop: 6 }}>
+          Codification SERECT (fiche d’appréciation)
+          <input name="codification" defaultValue={t?.codification || ''} placeholder="Vide = intitulé de la formation en majuscules" />
         </label>
       </div>
 
