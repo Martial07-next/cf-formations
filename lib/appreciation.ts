@@ -2,6 +2,8 @@
 export type Avis = 'favorable' | 'defavorable';
 export type AppreciationEntry = {
   avis?: Avis | null;
+  /** Avis favorable avec recommandations (points de vigilance). */
+  recommandations?: boolean;
   ecarts?: string;
   autres_attestation?: string;
   autres_internes?: string;

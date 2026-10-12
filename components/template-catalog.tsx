@@ -34,6 +34,8 @@ type Template = {
   tour_de_table?: boolean;
   fiche_appreciation?: boolean;
   codification?: string | null;
+  objectifs?: string | null;
+  competences?: string | null;
 };
 type TrainerOption = { id: string; full_name: string; color: string | null };
 export type FolderRow = { id: string; name: string; parent_id: string | null; position: number };
@@ -65,6 +67,7 @@ function TemplateFields({
       .map((m) => ({ name: m.name.trim(), duration_hours: ((Number(m.h) || 0) * 60 + (Number(m.m) || 0)) / 60 }))
   );
   const update = (i: number, patch: Partial<ModuleRow>) => setModules((list) => list.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+  const [fai, setFai] = useState(Boolean(t?.fiche_appreciation));
   const [links, setLinks] = useState<{ label: string; url: string }[]>((t?.links || []).map((l) => ({ label: l.label, url: l.url })));
   const linksJson = JSON.stringify(links.filter((l) => l.label.trim() || l.url.trim()));
   const updateLink = (i: number, patch: Partial<{ label: string; url: string }>) =>
@@ -185,13 +188,35 @@ function TemplateFields({
         </label>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">
-          <input type="checkbox" name="fiche_appreciation" defaultChecked={Boolean(t?.fiche_appreciation)} />
+          <input type="checkbox" name="fiche_appreciation" checked={fai} onChange={(e) => setFai(e.target.checked)} />
           Fiche d’appréciation individuelle (une par stagiaire) à remplir par le formateur
         </label>
-        <label style={{ fontWeight: 600, marginTop: 6 }}>
-          Codification SERECT (fiche d’appréciation)
-          <input name="codification" defaultValue={t?.codification || ''} placeholder="Vide = intitulé de la formation en majuscules" />
-        </label>
+        <div className="fai-template-fields" hidden={!fai}>
+          <label style={{ fontWeight: 600 }}>
+            Codification SERECT (fiche d’appréciation)
+            <input name="codification" defaultValue={t?.codification || ''} placeholder="Vide = intitulé de la formation en majuscules" />
+          </label>
+          <label style={{ fontWeight: 600 }}>
+            Objectifs de fin de formation (attestation de fin de formation)
+            <span className="hint" style={{ fontWeight: 500 }}>Une ligne commençant par « - » devient une puce.</span>
+            <textarea
+              name="objectifs"
+              rows={4}
+              defaultValue={t?.objectifs || ''}
+              placeholder={'Ex. Actualiser et maintenir les compétences nécessaires pour… :\n- sur des conducteurs à isolation synthétique…\n- sur des branchements…'}
+            />
+          </label>
+          <label style={{ fontWeight: 600 }}>
+            Compétences évaluées (appréciation des compétences)
+            <span className="hint" style={{ fontWeight: 500 }}>Une compétence par ligne. Vide = les objectifs ci-dessus.</span>
+            <textarea
+              name="competences"
+              rows={4}
+              defaultValue={t?.competences || ''}
+              placeholder={'Ex. Comprendre et identifier le rôle de l’Exécutant sur l’ouvrage concerné ;\nIdentifier et maîtriser les risques liés aux travaux sous tension…'}
+            />
+          </label>
+        </div>
       </div>
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>

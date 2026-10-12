@@ -18,6 +18,16 @@ export async function updateSettings(formData: FormData) {
     nda: String(formData.get('nda') || '').trim() || null,
     signature_city: String(formData.get('signature_city') || '').trim() || 'Cuincy',
   };
+  // Attestation / appréciation des compétences (migration 22).
+  const cachet = String(formData.get('cachet_image') || '');
+  if (cachet && (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(cachet) || cachet.length > 900_000)) {
+    return { ok: false, error: 'Image du cachet invalide ou trop lourde.' };
+  }
+  const docs = {
+    signataire: String(formData.get('signataire') || '').trim() || 'GRÉBERT MATTHIEU',
+    agrement: String(formData.get('agrement') || '').trim() || 'CTST-2026-27/1/P',
+    cachet_image: cachet || null,
+  };
 
   if (!company_name) return { ok: false, error: "Le nom de l'entreprise est requis." };
 
@@ -28,7 +38,10 @@ export async function updateSettings(formData: FormData) {
     notify_on_conflict,
     updated_at: new Date().toISOString(),
   };
-  let { error } = await supabase.from('app_settings').update({ ...base, ...legal }).eq('id', true);
+  let { error } = await supabase.from('app_settings').update({ ...base, ...legal, ...(formData.has('signataire') ? docs : {}) }).eq('id', true);
+  if (error && /signataire|agrement|cachet_image/.test(error.message)) {
+    return { ok: false, error: 'Exécute d’abord la migration 22 (supabase/migration_phase22.sql) pour enregistrer le cachet et la signature.' };
+  }
   if (error && /siret|nda|signature_city/.test(error.message)) {
     return { ok: false, error: 'Exécute d’abord la migration 18 (supabase/migration_phase18.sql) pour enregistrer le SIRET et la déclaration d’activité.' };
   }

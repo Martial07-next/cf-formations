@@ -14,7 +14,7 @@ export function compareRooms(
 
 /** Adresse complète de chaque bâtiment (documents officiels : émargement…). */
 export const BUILDING_ADDRESS: Record<string, string> = {
-  'BAT 1': 'BÂTIMENT 1 de CF RÉSEAUX · 20 rue du Champs de Tir, 59553 Cuincy',
+  'BAT 1': 'BÂTIMENT 1 de CF RÉSEAUX · 20 rue du Champ de Tir, 59553 Cuincy',
   'BAT 2': "BÂTIMENT 2 de CF RÉSEAUX · 465 Parc d'Activité de la Haute Rive, 59553 Cuincy",
 };
 
@@ -38,4 +38,10 @@ export function buildingAddress(room: { name: string; location?: string | null }
   const place = trainingPlace(room);
   if (!place || !room) return null;
   return place.startsWith(`${room.name} · `) ? place.slice(room.name.length + 3) : null;
+}
+
+/** Adresse postale seule du bâtiment (ex. « 20 rue du Champ de Tir, 59553 Cuincy »). */
+export function streetAddress(room: { name: string; location?: string | null } | null): string | null {
+  const b = buildingAddress(room);
+  return b ? b.split(' · ').slice(1).join(' · ') || null : null;
 }

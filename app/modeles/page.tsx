@@ -21,6 +21,8 @@ export default async function ModelesPage() {
   const { data: tdtOpts } = await supabase.from('templates').select('id, tour_de_table');
   // Fiche d'appréciation (migration 21) : requête séparée, ignorée si absente.
   const { data: faiOpts } = await supabase.from('templates').select('id, fiche_appreciation, codification');
+  // Objectifs et compétences (migration 22).
+  const { data: objOpts } = await supabase.from('templates').select('id, objectifs, competences');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -35,6 +37,8 @@ export default async function ModelesPage() {
     tour_de_table: ((tdtOpts as any[]) || []).find((x) => x.id === t.id)?.tour_de_table !== false,
     fiche_appreciation: Boolean(((faiOpts as any[]) || []).find((x) => x.id === t.id)?.fiche_appreciation),
     codification: ((faiOpts as any[]) || []).find((x) => x.id === t.id)?.codification ?? null,
+    objectifs: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs ?? null,
+    competences: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.competences ?? null,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

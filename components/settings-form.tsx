@@ -11,12 +11,37 @@ type Settings = {
   siret?: string | null;
   nda?: string | null;
   signature_city?: string | null;
+  signataire?: string | null;
+  agrement?: string | null;
+  cachet_image?: string | null;
 };
+
+/** Image du cachet + signature, réduite (700 px max) pour le stockage. */
+async function toDataUrl(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = url;
+    });
+    const scale = Math.min(1, 700 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 export function SettingsForm({ settings }: { settings: Settings }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [cachet, setCachet] = useState<string>(settings.cachet_image || '');
 
   function handle(formData: FormData) {
     setNotice(null);
@@ -64,6 +89,44 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             Ville du « Fait à »
             <input name="signature_city" defaultValue={settings.signature_city || 'Cuincy'} />
           </label>
+        </div>
+        <h3 className="sub-heading">Attestation de fin de formation et appréciation des compétences</h3>
+        <div className="form-row">
+          <label>
+            Signataire (« Par … »)
+            <input name="signataire" defaultValue={settings.signataire || 'GRÉBERT MATTHIEU'} />
+          </label>
+        </div>
+        <div className="form-row">
+          <label>
+            N° d’agrément (pied de page)
+            <input name="agrement" defaultValue={settings.agrement || 'CTST-2026-27/1/P'} />
+          </label>
+        </div>
+        <div className="field" style={{ marginBottom: 14 }}>
+          Cachet et signature
+          <span className="hint">Une image (PNG ou JPG) avec le cachet et la signature, placée sous « SIGNATURE ET CACHET ». Idéalement sur fond transparent ou blanc.</span>
+          <input type="hidden" name="cachet_image" value={cachet} />
+          {cachet ? (
+            <div className="cachet-preview">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={cachet} alt="Cachet et signature" />
+              <button type="button" className="small danger" onClick={() => setCachet('')}>Retirer</button>
+            </div>
+          ) : (
+            <span className="hint">Aucune image : la zone « Signature et cachet » restera vide.</span>
+          )}
+          <input
+            type="file"
+            accept="image/png,image/jpeg"
+            aria-label="Image du cachet et de la signature"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              if (f.size > 8 * 1024 * 1024) return setError('Image trop lourde (8 Mo maximum).');
+              setCachet(await toDataUrl(f));
+            }}
+          />
         </div>
         <div className="form-row">
           <label>

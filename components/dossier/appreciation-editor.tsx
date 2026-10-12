@@ -166,7 +166,13 @@ export function AppreciationEditor({
             <div className="fai-avis" role="radiogroup" aria-label="Avis du formateur">
               {(['favorable', 'defavorable'] as Avis[]).map((a) => (
                 <label key={a} className={`fai-choice ${a}${entry.avis === a ? ' checked' : ''}`}>
-                  <input type="radio" name={`avis-${current}`} checked={entry.avis === a} disabled={!canEdit} onChange={() => set({ avis: a })} />
+                  <input
+                    type="radio"
+                    name={`avis-${current}`}
+                    checked={entry.avis === a}
+                    disabled={!canEdit}
+                    onChange={() => set({ avis: a, ...(a === 'defavorable' ? { recommandations: false } : {}) })}
+                  />
                   {a === 'favorable' ? <ThumbsUp size={20} aria-hidden /> : <ThumbsDown size={20} aria-hidden />}
                   <span>
                     <strong>{a === 'favorable' ? 'Avis favorable' : 'Avis défavorable'}</strong>
@@ -179,6 +185,13 @@ export function AppreciationEditor({
                 </label>
               ))}
             </div>
+
+            {entry.avis === 'favorable' && (
+              <label className="check-line fai-reco">
+                <input type="checkbox" checked={Boolean(entry.recommandations)} disabled={!canEdit} onChange={(e) => set({ recommandations: e.target.checked })} />
+                Avec recommandations (points de vigilance ou compléments de formation à préciser dans « Autres informations »)
+              </label>
+            )}
 
             <label className={`fai-field${entry.avis === 'defavorable' ? ' highlight' : ''}`}>
               <span>

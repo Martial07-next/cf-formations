@@ -15,6 +15,7 @@ import {
   RefreshCw,
   UserX,
   X,
+  Award,
 } from 'lucide-react';
 import {
   ensureSignToken,
@@ -102,6 +103,19 @@ export function DossierPanel({
     endDate: string;
     lieu: string | null;
     trainerNames: string | null;
+    /** Documents de fin de formation (bureau) : null si pas les droits. */
+    finFormation: {
+      actionTitle: string;
+      formationTitle: string;
+      objectifs: string | null;
+      competences: string | null;
+      days: number;
+      hours: number;
+      address: string | null;
+      signataire: string;
+      agrement: string;
+      cachet: string | null;
+    } | null;
   } | null;
 }) {
   const router = useRouter();
@@ -127,6 +141,35 @@ export function DossierPanel({
   const faiOn = Boolean(appreciation?.required);
   const faiDone = faiOn && appreciationDone(faiData, trainees.map((t) => t.id));
   const faiCount = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis).length;
+  // Stagiaires dont la fiche d'appréciation a un avis : documents de fin de formation prêts.
+  const finReady = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis);
+  const fin = appreciation?.finFormation || null;
+  async function downloadFin(kind: 'attestation' | 'competences', only?: string) {
+    if (!fin || !appreciation) return;
+    setError(null);
+    setBusy(`${kind}-${only || 'all'}`);
+    try {
+      const m = await import('@/lib/pdf-fin-formation');
+      const { downloadPdf } = await import('@/lib/pdf-dossier');
+      const list = only ? finReady.filter((t) => t.id === only) : finReady;
+      const input = {
+        ...fin,
+        trainees: list,
+        entries: faiData?.trainees || {},
+        startDate: appreciation.startDate,
+        endDate: appreciation.endDate,
+        legal,
+      };
+      const bytes = kind === 'attestation' ? await m.buildAttestationsPdf(input) : await m.buildCompetencesPdf(input);
+      const what = kind === 'attestation' ? 'Attestation de fin de formation' : 'Appréciation des compétences';
+      downloadPdf(bytes, `${what}${only ? ` - ${list[0]?.name}` : 's'} - ${title}.pdf`);
+    } catch (e: any) {
+      setError(e?.message || 'Génération impossible.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const faiSession = appreciation
     ? {
         sessionId,
@@ -260,6 +303,12 @@ export function DossierPanel({
       if (faiOn && faiSession && trainees.length) {
         const { buildAppreciationPdf } = await import('@/lib/pdf-appreciation');
         parts.push(await buildAppreciationPdf({ ...faiSession, entries: faiData?.trainees || {} }));
+        if (fin && finReady.length && appreciation) {
+          const m = await import('@/lib/pdf-fin-formation');
+          const input = { ...fin, trainees: finReady, entries: faiData?.trainees || {}, startDate: appreciation.startDate, endDate: appreciation.endDate, legal };
+          parts.push(await m.buildAttestationsPdf(input));
+          parts.push(await m.buildCompetencesPdf(input));
+        }
       }
       for (const d of documents) {
         const url = res.files[d.id];
@@ -280,6 +329,9 @@ export function DossierPanel({
             : []),
           ...(tdt ? [{ title: `Tour de table · ${title}`, detail: tdt.completed ? `Terminé le ${tdt.completedAt || ''}` : 'En cours', done: tdt.completed }] : []),
           ...(faiOn ? [{ title: 'Fiches d’appréciation individuelle', detail: `${faiCount}/${trainees.length} avis donnés`, done: faiDone }] : []),
+          ...(faiOn && fin
+            ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${finReady.length}/${trainees.length} générées`, done: faiDone }]
+            : []),
           ...documents.map((d) => {
             const e = entryOf(d.id);
             return {
@@ -533,6 +585,60 @@ export function DossierPanel({
               </button>
             )}
           </div>
+        </div>
+      )}
+      {faiOn && fin && (
+        <div className="fin-docs">
+          <div className="fin-docs-head">
+            <span className="doc-item-main">
+              <strong><Award size={15} aria-hidden style={{ verticalAlign: '-2px' }} /> Documents de fin de formation (bureau administratif)</strong>
+              <small className="hint">
+                Attestation de fin de formation et appréciation des compétences, générées automatiquement dès que le formateur a donné
+                son avis sur la fiche d’appréciation du stagiaire.
+              </small>
+            </span>
+            <span className={`badge ${finReady.length === trainees.length && trainees.length ? 'validee' : 'en_attente'}`}>
+              {finReady.length}/{trainees.length} prêts
+            </span>
+          </div>
+          {!fin.objectifs && (
+            <p className="hint fin-warn">Objectifs de la formation non renseignés : ajoute-les dans Formations disponibles › Modifier.</p>
+          )}
+          {!fin.cachet && <p className="hint fin-warn">Cachet et signature non ajoutés : Administration › Paramètres.</p>}
+          <div className="row-actions" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
+            <button className="small primary" disabled={!finReady.length || !!busy} onClick={() => downloadFin('attestation')}>
+              {busy === 'attestation-all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les attestations
+            </button>
+            <button className="small primary" disabled={!finReady.length || !!busy} onClick={() => downloadFin('competences')}>
+              {busy === 'competences-all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les appréciations des compétences
+            </button>
+          </div>
+          <details>
+            <summary>Par stagiaire</summary>
+            <div className="fin-list">
+              {trainees.map((t) => {
+                const e = faiData?.trainees?.[t.id];
+                return (
+                  <div key={t.id} className="fin-row">
+                    <span>
+                      <strong>{t.name}</strong>
+                      <small className="hint">
+                        {e?.avis === 'favorable' ? (e.recommandations ? 'Avis favorable avec recommandations' : 'Avis favorable') : e?.avis === 'defavorable' ? 'Avis défavorable' : 'En attente de la fiche d’appréciation'}
+                      </small>
+                    </span>
+                    <span className="row-actions">
+                      <button className="small" disabled={!e?.avis || !!busy} onClick={() => downloadFin('attestation', t.id)}>
+                        <Download size={13} aria-hidden /> Attestation
+                      </button>
+                      <button className="small" disabled={!e?.avis || !!busy} onClick={() => downloadFin('competences', t.id)}>
+                        <Download size={13} aria-hidden /> Appréciation des compétences
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
         </div>
       )}
       {documents.length === 0 ? (

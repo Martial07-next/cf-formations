@@ -2,7 +2,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
-import { compareRooms, trainingPlace, buildingAddress } from '@/lib/buildings';
+import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween } from '@/lib/week';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
@@ -267,6 +267,21 @@ export default async function SessionDetailPage({
                     endDate: session.end_at.slice(0, 10),
                     lieu: room?.is_holding ? null : buildingAddress(room),
                     trainerNames: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                    // Attestation / appréciation des compétences : bureau et administrateur uniquement.
+                    finFormation: editable
+                      ? {
+                          actionTitle: session.title,
+                          formationTitle: (tplOpt as any)?.title || session.title,
+                          objectifs: (tplOpt as any)?.objectifs ?? null,
+                          competences: (tplOpt as any)?.competences ?? null,
+                          days: Math.max(1, weekdaysBetween(session.start_at, session.end_at).length),
+                          hours,
+                          address: room?.is_holding ? null : streetAddress(room),
+                          signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
+                          agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
+                          cachet: ((settings as any)?.cachet_image as string) || null,
+                        }
+                      : null,
                   }
             }
             dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}

@@ -21,17 +21,24 @@ function readTemplate(formData: FormData) {
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
+    // Objectifs et compétences évaluées (migration 22).
+    ...(formData.has('objectifs') ? { objectifs: get('objectifs') || null, competences: get('competences') || null } : {}),
   };
 }
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
-const missingTdt = (msg: string) => /tour_de_table|fiche_appreciation|codification/.test(msg);
-/** Retire les colonnes absentes de la base (migrations 17 / 21 pas encore faites). */
+// Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
+const GROUPS = [['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
+/**
+ * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore
+ * faites) : le groupe signalé par l'erreur et les plus récents ; sans message, tous.
+ */
 function withoutTdt<T extends Record<string, any>>(t: T, msg = '') {
-  const { tour_de_table, fiche_appreciation, codification, ...rest } = t;
-  // Seules les colonnes de la migration 21 manquent : on garde le tour de table.
-  if (/fiche_appreciation|codification/.test(msg) && !/tour_de_table/.test(msg) && tour_de_table !== undefined) return { ...rest, tour_de_table };
-  return rest;
+  const copy: Record<string, any> = { ...t };
+  const idx = GROUPS.findIndex((g) => g.some((c) => msg.includes(c)));
+  for (const g of idx >= 0 ? GROUPS.slice(0, idx + 1) : GROUPS) for (const c of g) delete copy[c];
+  return copy as T;
 }
 
 /** Modules (JSON du formulaire) et formateurs habilités. */

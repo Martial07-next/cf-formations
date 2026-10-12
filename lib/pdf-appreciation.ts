@@ -23,9 +23,9 @@ export type AppreciationInput = {
   legal?: Legal | null;
 };
 
-const INK = rgb(23 / 255, 36 / 255, 27 / 255); // #17241B
-const CREAM = rgb(1, 253 / 255, 243 / 255); // #FFFDF3
-const RED = rgb(0.906, 0.098, 0.122); // coche rouge du modèle
+export const INK = rgb(23 / 255, 36 / 255, 27 / 255); // #17241B
+export const CREAM = rgb(1, 253 / 255, 243 / 255); // #FFFDF3
+export const RED = rgb(0.906, 0.098, 0.122); // coche rouge du modèle
 const W = 595.5;
 const H = 842.25;
 
@@ -36,14 +36,14 @@ const short = (iso: string) => {
   return `${d}/${m}/${y.slice(2)}`;
 };
 
-function keep(font: PDFFont, text: string) {
+export function keep(font: PDFFont, text: string) {
   const chars = new Set(font.getCharacterSet());
   return Array.from(text || '')
     .map((ch) => (ch === '\n' || chars.has(ch.codePointAt(0)!) ? ch : '?'))
     .join('');
 }
 
-function wrapText(font: PDFFont, text: string, size: number, width: number) {
+export function wrapText(font: PDFFont, text: string, size: number, width: number) {
   const out: string[] = [];
   for (const para of keep(font, text).replace(/\r/g, '').split('\n')) {
     let line = '';
@@ -62,14 +62,14 @@ function wrapText(font: PDFFont, text: string, size: number, width: number) {
 }
 
 /** Texte qui tient sur une largeur donnée (taille réduite si besoin). */
-function fitSize(font: PDFFont, text: string, size: number, width: number, min = 8) {
+export function fitSize(font: PDFFont, text: string, size: number, width: number, min = 8) {
   let s = size;
   while (s > min && font.widthOfTextAtSize(text, s) > width) s -= 0.25;
   return s;
 }
 
 /** Texte en dégradé jaune → vert, lettre par lettre (comme « COMPTE RENDU » du modèle). */
-function gradientText(page: PDFPage, font: PDFFont, text: string, x: number, y: number, size: number) {
+export function gradientText(page: PDFPage, font: PDFFont, text: string, x: number, y: number, size: number) {
   const total = font.widthOfTextAtSize(text, size);
   let cx = x;
   for (const ch of text) {
