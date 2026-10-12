@@ -1,5 +1,5 @@
 -- ============================================================
--- CF Réseaux · Import du catalogue de formations (52 formations)
+-- CF Réseaux · Import du catalogue de formations (55 formations)
 -- Relevé d'après les captures du catalogue (titre, durée, description).
 -- Les formations sont rangées dans le dossier « À affecter ».
 -- Sans doublon : une formation déjà présente (même nom, majuscules et
@@ -71,7 +71,10 @@ from (values
   (48, 'Recyclage habilitation électrique H0(V)-B0 Chargé de Chantier', 7, 'Formation en présentiel · 7 h (1 jour) · accessible aux personnes en situation de handicap.'),
   (49, 'Recyclage habilitation électrique H0(V)-B0 Exécutant', 7, 'Formation en présentiel · 7 h (1 jour) · accessible aux personnes en situation de handicap.'),
   (50, 'Recyclage habilitation électrique H1(V)-H2(V)-H2(V) essai', 7, 'Formation en présentiel · 7 h (1 jour) · accessible aux personnes en situation de handicap.'),
-  (51, 'Technicien maintenance photovoltaïque', 14, 'Formation en présentiel · 14 h (2 jours) · accessible aux personnes en situation de handicap.')
+  (51, 'Technicien maintenance photovoltaïque', 14, 'Formation en présentiel · 14 h (2 jours) · accessible aux personnes en situation de handicap.'),
+  (52, 'Travaux en hauteur sur les réseaux de distribution', 7, 'Formation en présentiel · 7 h (1 jour) · accessible aux personnes en situation de handicap.'),
+  (53, 'TST Batteries stationnaires IEBAT recyclage', 14, 'Formation en présentiel · 14 h (2 jours) · accessible aux personnes en situation de handicap.'),
+  (54, 'TST Batteries stationnaires IEBAT', 21, 'Formation en présentiel · 21 h (3 jours) · accessible aux personnes en situation de handicap.')
 ) as c(pos, title, hours, description)
 where not exists (
   select 1 from templates t
