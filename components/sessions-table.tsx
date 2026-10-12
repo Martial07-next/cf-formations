@@ -139,7 +139,7 @@ export function SessionsTable({
               {filtered.map((s) => {
                 const trainer = one(s.trainers);
                 const room = one(s.rooms);
-                const validated = (s.session_trainees || []).filter((t) => t.status === 'validee').length;
+                const validated = (s.session_trainees || []).filter((t) => t.status === 'validee').length + ((s as any).reserved || 0);
                 return (
                   <tr key={s.id}>
                     <td>
@@ -173,7 +173,7 @@ export function SessionsTable({
                     <td>{room?.is_holding ? <span className="badge en_attente">À affecter</span> : room?.name || '-'}</td>
                     <td>{fmt(s.start_at)}</td>
                     <td>{fmt(s.end_at)}</td>
-                    <td className="num">{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>
+                    <td className="num" title={(s as any).reserved ? `dont ${(s as any).reserved} place(s) réservée(s) sans nom` : undefined}>{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>
                     {isAdmin && (
                       <td className="row-actions">
                         <button

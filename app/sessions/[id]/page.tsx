@@ -12,6 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
 import { DayTrainersPanel } from '@/components/day-trainers-panel';
 import { loadDayTrainers } from '@/lib/day-trainers';
+import { loadReservations } from '@/lib/reservations';
 import { sessionSlots, expectedOn, slotKey } from '@/lib/dossier';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -131,6 +132,7 @@ export default async function SessionDetailPage({
   }
   // Remplaçants jour par jour (migration 19) et congés des formateurs sur la période.
   const dayTrainerMap = await loadDayTrainers(supabase, [id]);
+  const reservations = (await loadReservations(supabase, [id]))[id] || [];
   const dayTrainers = dayTrainerMap[id] || {};
   const { data: periodAbsences } = await supabase
     .from('trainer_absences')
@@ -191,6 +193,7 @@ export default async function SessionDetailPage({
         )}
 
         <SessionDetailView
+          reservations={reservations}
           isNew={isNew && editable}
           formationLinks={(formationLinks as any) || []}
           isAdmin={editable}

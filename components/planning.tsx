@@ -78,6 +78,7 @@ function SessionCard({
   info,
   dossierDone = false,
   replacement = null,
+  reserved = 0,
 }: {
   s: SessionRow;
   dIso: string;
@@ -87,12 +88,14 @@ function SessionCard({
   dossierDone?: boolean;
   /** Remplaçant ce jour-là (le formateur principal ne vient pas). */
   replacement?: { full_name: string; color: string | null } | null;
+  /** Places réservées par entreprise, sans nom. */
+  reserved?: number;
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const principal = one(s.trainers)?.full_name;
   const trainer = replacement ? replacement.full_name : principal;
   // Avec des modules : stagiaires réellement présents ce jour-là.
-  const count = info ? info.present : validatedCount(s);
+  const count = (info ? info.present : validatedCount(s)) + reserved;
   const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
   return (
     <Link
@@ -103,7 +106,7 @@ function SessionCard({
     >
       <span className="sc-top">
         <StatusPill status={s.status} />
-        <span className="sc-count" title="Stagiaires validés / places">
+        <span className="sc-count" title={`Stagiaires validés${reserved ? ` + ${reserved} place${reserved > 1 ? 's' : ''} réservée${reserved > 1 ? 's' : ''} sans nom` : ''} / places`}>
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
       </span>
@@ -150,6 +153,7 @@ export function Planning({
   templateLinks = [],
   dossierComplete = {},
   dayTrainers = {},
+  reservedSeats = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -174,6 +178,8 @@ export function Planning({
   dossierComplete?: Record<string, boolean>;
   /** Remplaçants certains jours : session → jour → formateur. */
   dayTrainers?: DayTrainerMap;
+  /** Places réservées par entreprise encore sans nom, par session. */
+  reservedSeats?: Record<string, number>;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -466,6 +472,7 @@ export function Planning({
                             absence={absenceFor(absences, trainerOn(dayTrainers, s, d.iso), d.iso, d.iso)}
                             info={dayInfo[s.id]?.[d.iso]}
                             dossierDone={Boolean(dossierComplete[s.id])}
+                            reserved={reservedSeats[s.id] || 0}
                             replacement={dayTrainers[s.id]?.[d.iso] ? trainers.find((t) => t.id === dayTrainers[s.id][d.iso].trainer_id) || null : null}
                           />
                         ))}
@@ -521,7 +528,7 @@ export function Planning({
                       const room = one(s.rooms)?.name || '-';
                       const repl = dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) : null;
                       const trainer = repl ? `${repl.full_name} (remplaçant)` : one(s.trainers)?.full_name;
-                      const count = validatedCount(s);
+                      const count = validatedCount(s) + (reservedSeats[s.id] || 0);
                       return (
                         <Link
                           key={s.id}

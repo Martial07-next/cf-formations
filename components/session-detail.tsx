@@ -21,6 +21,8 @@ import { SessionForm, type FormRoom, type FormTrainer } from '@/components/sessi
 import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2 } from 'lucide-react';
 import { LinkRow } from '@/components/useful-links';
 import type { LinkItem } from '@/lib/links';
+import { ReservationsBox } from '@/components/reservations-box';
+import { reservationStatus, type Reservation } from '@/lib/reservations';
 
 type Trainee = { id: string; full_name: string; email: string | null; company: string | null };
 type EnrolledTrainee = Trainee & { status: 'validee' | 'en_attente' };
@@ -42,6 +44,7 @@ export function SessionDetailView({
   isAdmin,
   isNew = false,
   formationLinks = [],
+  reservations = [],
   session,
   template,
   digiformaEnabled,
@@ -61,6 +64,8 @@ export function SessionDetailView({
   isNew?: boolean;
   /** Supports de cours et documents de la formation. */
   formationLinks?: LinkItem[];
+  /** Places réservées par entreprise (sans les noms). */
+  reservations?: Reservation[];
   session: SessionDetail;
   digiformaEnabled: boolean;
   /** Le formateur connecté anime cette session : il peut ajuster ses horaires. */
@@ -87,8 +92,11 @@ export function SessionDetailView({
   const validated = enrolled.filter((t) => t.status === 'validee');
   const waiting = enrolled.filter((t) => t.status === 'en_attente');
   const capacity = session.max_trainees;
-  const remaining = capacity != null ? capacity - validated.length : null;
-  const overCapacity = capacity != null && validated.length > capacity;
+  // Places réservées par entreprise sans les noms (comptées dans la capacité).
+  const resa = reservationStatus(reservations, validated.map((t) => t.company));
+  const occupied = validated.length + resa.unnamed;
+  const remaining = capacity != null ? capacity - occupied : null;
+  const overCapacity = capacity != null && occupied > capacity;
   const enrolledIds = new Set(enrolled.map((e) => e.id));
   // Recherche rapide (nom, prénom dans n'importe quel ordre, entreprise), 8 résultats.
   const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -114,7 +122,8 @@ export function SessionDetailView({
         <h2 id="stagiaires">Stagiaires</h2>
         {overCapacity && (
           <div role="alert" className="alert alert-warning">
-            <AlertTriangle size={16} aria-hidden /> Capacité dépassée : {validated.length} stagiaires validés pour {capacity} places prévues.
+            <AlertTriangle size={16} aria-hidden /> Capacité dépassée : {occupied} places occupées
+            {resa.unnamed > 0 ? ` (dont ${resa.unnamed} réservée${resa.unnamed > 1 ? 's' : ''} sans nom)` : ''} pour {capacity} places prévues.
           </div>
         )}
         <div className="counters">
@@ -122,6 +131,12 @@ export function SessionDetailView({
             <strong>{validated.length}{capacity != null ? ` / ${capacity}` : ''}</strong>
             <span>validés</span>
           </div>
+          {resa.unnamed > 0 && (
+            <div className="counter-chip">
+              <strong>{resa.unnamed}</strong>
+              <span>réservée{resa.unnamed > 1 ? 's' : ''} sans nom</span>
+            </div>
+          )}
           <div className="counter-chip">
             <strong>{waiting.length}</strong>
             <span>en attente</span>
@@ -133,6 +148,13 @@ export function SessionDetailView({
             </div>
           )}
         </div>
+
+        <ReservationsBox
+          sessionId={session.id}
+          rows={resa.rows}
+          companies={[...new Set(allTrainees.map((t) => t.company).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr'))}
+          canEdit={isAdmin}
+        />
 
         {isAdmin && (
           <div className="trainee-search" style={{ marginTop: 16 }}>

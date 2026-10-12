@@ -4,13 +4,14 @@ import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { loadDayTrainers } from '@/lib/day-trainers';
+import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
 export const maxDuration = 60;
 
 const SESSION_SELECT =
-  'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status, trainee_id)';
+  'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, rooms(name), trainers(full_name, color), session_trainees(status, trainee_id, trainees(company))';
 
 export default async function Page({
   searchParams,
@@ -183,6 +184,17 @@ export default async function Page({
 
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await loadDayTrainers(supabase, sessionIds);
+  // Places réservées par entreprise encore sans nom (migration 20).
+  const reservations = await loadReservations(supabase, sessionIds);
+  const reservedSeats: Record<string, number> = {};
+  for (const s of (sessions as any[]) || []) {
+    if (!reservations[s.id]) continue;
+    const companies = (s.session_trainees || [])
+      .filter((t: any) => t.status === 'validee')
+      .map((t: any) => (Array.isArray(t.trainees) ? t.trainees[0] : t.trainees)?.company);
+    const n = reservationStatus(reservations[s.id], companies).unnamed;
+    if (n) reservedSeats[s.id] = n;
+  }
 
   const dayOverrides: Record<string, { day: string; start_time: string; end_time: string }[]> = {};
   for (const row of dayRows || []) {
@@ -220,6 +232,7 @@ export default async function Page({
         templateLinks={templateLinks}
         dossierComplete={dossierComplete}
         dayTrainers={dayTrainers}
+        reservedSeats={reservedSeats}
       />
     </main>
   );

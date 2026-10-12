@@ -488,3 +488,40 @@ export async function setDayTrainers(sessionId: string, days: string[], trainerI
   revalidatePath('/');
   return { ok: true };
 }
+
+const reservationError = (msg: string) =>
+  /session_reservations|schema cache|does not exist/i.test(msg) ? 'Exécute d’abord la migration 20 (supabase/migration_phase20.sql) dans Supabase.' : msg;
+
+/** Places réservées pour une entreprise, sans les noms des stagiaires. */
+export async function addReservation(sessionId: string, formData: FormData): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const company = String(formData.get('company') || '').trim().slice(0, 120);
+  const seats = Number.parseInt(String(formData.get('seats') || ''), 10);
+  const note = String(formData.get('note') || '').trim().slice(0, 200) || null;
+  if (!company) return { ok: false, error: 'Indique l’entreprise.' };
+  if (!(seats > 0 && seats <= 200)) return { ok: false, error: 'Nombre de places invalide.' };
+  const supabase = await createClient();
+  // Même entreprise déjà réservée : on ajoute les places à la réservation existante.
+  const { data: existing } = await supabase.from('session_reservations').select('id, seats, company').eq('session_id', sessionId);
+  const same = (existing || []).find((r: any) => r.company.trim().toLowerCase() === company.toLowerCase());
+  const { error } = same
+    ? await supabase.from('session_reservations').update({ seats: Math.min(200, same.seats + seats), ...(note ? { note } : {}) }).eq('id', same.id)
+    : await supabase.from('session_reservations').insert({ session_id: sessionId, company, seats, note });
+  if (error) return { ok: false, error: reservationError(error.message) };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
+export async function updateReservationSeats(sessionId: string, id: string, seats: number): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } =
+    seats > 0
+      ? await supabase.from('session_reservations').update({ seats: Math.min(200, Math.floor(seats)) }).eq('id', id).eq('session_id', sessionId)
+      : await supabase.from('session_reservations').delete().eq('id', id).eq('session_id', sessionId);
+  if (error) return { ok: false, error: reservationError(error.message) };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
