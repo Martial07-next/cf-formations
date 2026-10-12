@@ -25,8 +25,17 @@ async function fillRights(sessionId: string) {
   const supabase = await createClient();
   const { data: s } = await supabase.from('sessions').select('id, trainer_id, sign_token, trainers(full_name)').eq('id', sessionId).maybeSingle();
   if (!s) return null;
-  const allowed = canEditStartTimes(profile.role) || (!!profile.trainer_id && profile.trainer_id === s.trainer_id);
-  return allowed ? { profile, session: s as any, supabase } : null;
+  // Remplaçants certains jours (migration 19) : mêmes droits sur le dossier.
+  const { data: dayRows } = await supabase.from('session_day_trainers').select('day, trainer_id, trainers(full_name)').eq('session_id', sessionId);
+  const days = ((dayRows as any[]) || []).map((d) => ({
+    day: String(d.day).slice(0, 10),
+    trainer_id: d.trainer_id as string,
+    name: (Array.isArray(d.trainers) ? d.trainers[0] : d.trainers)?.full_name as string | undefined,
+  }));
+  const allowed =
+    canEditStartTimes(profile.role) ||
+    (!!profile.trainer_id && (profile.trainer_id === s.trainer_id || days.some((d) => d.trainer_id === profile.trainer_id)));
+  return allowed ? { profile, session: s as any, supabase, days } : null;
 }
 
 function refresh(sessionId: string) {
@@ -70,7 +79,9 @@ export async function trainerSign(sessionId: string, day: string, half: string, 
   if (!r) return FORBIDDEN;
   if (!isDay(day) || !isHalf(half)) return { ok: false, error: 'Demi-journée invalide.' };
   if (!validSignature(signature)) return { ok: false, error: 'Signature vide.' };
-  const trainerName = (Array.isArray(r.session.trainers) ? r.session.trainers[0] : r.session.trainers)?.full_name;
+  // Le formateur de CE jour-là (remplaçant éventuel).
+  const trainerName =
+    r.days.find((d) => d.day === day)?.name || (Array.isArray(r.session.trainers) ? r.session.trainers[0] : r.session.trainers)?.full_name;
   await r.supabase.from('attendance_signatures').delete().eq('session_id', sessionId).eq('signer', 'formateur').eq('day', day).eq('half', half);
   const { error } = await r.supabase.from('attendance_signatures').insert({
     session_id: sessionId,

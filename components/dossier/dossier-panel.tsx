@@ -63,6 +63,7 @@ export function DossierPanel({
   tourDeTable,
   place = null,
   legal = null,
+  dayTrainerNames = {},
 }: {
   sessionId: string;
   title: string;
@@ -83,6 +84,8 @@ export function DossierPanel({
   place?: string | null;
   /** SIRET, déclaration d'activité, ville du « Fait à ». */
   legal?: Legal | null;
+  /** Remplaçant certains jours : jour → nom du formateur ce jour-là. */
+  dayTrainerNames?: Record<string, string>;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(signatures);
@@ -190,7 +193,7 @@ export function DossierPanel({
       const { buildEmargementPdf, downloadPdf, fillDocumentPdf, mergePdfs } = await import('@/lib/pdf-dossier');
       const res = await dossierExport(sessionId);
       if (!res.ok) throw new Error(res.error);
-      const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures, place, legal });
+      const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures, place, legal, dayTrainerNames });
       if (!full) {
         downloadPdf(emarg, `Emargement - ${title}.pdf`);
         return;
@@ -364,11 +367,13 @@ export function DossierPanel({
                 <td><strong>Formateur</strong>{trainerName && <small className="hint" style={{ display: 'block' }}>{trainerName}</small>}</td>
                 {slots.map((s) => {
                   const r = find('formateur', null, s);
+                  const sub = dayTrainerNames[s.day];
                   return (
                     <td key={slotKey(s)}>
                       <button type="button" className={`emarg-cell ${r ? 'signed' : 'todo'}`} onClick={() => openCell(null, s)} disabled={!canFill}>
                         {r ? <><CheckCircle2 size={13} aria-hidden /> Signé</> : canFill ? <><PenLine size={13} aria-hidden /> Signer</> : '·'}
                       </button>
+                      {sub && <small className="emarg-sub" title="Remplaçant ce jour-là">{sub}</small>}
                     </td>
                   );
                 })}
@@ -527,7 +532,9 @@ export function DossierPanel({
       <dialog ref={cellRef} className="modal" aria-labelledby="cell-title" onClose={() => setCell(null)}>
         <div className="modal-head">
           <h2 id="cell-title">
-            {cellTrainee ? cellTrainee.name : `Formateur${trainerName ? ` : ${trainerName}` : ''}`}
+            {cellTrainee
+              ? cellTrainee.name
+              : `Formateur : ${(cell && dayTrainerNames[cell.slot.day]) || trainerName || ''}`}
             {cell && <span className="hint" style={{ fontWeight: 600 }}> · {HALF_LABEL[cell.slot.half]} {frShort(cell.slot.day)}</span>}
           </h2>
           <button className="icon ghost" onClick={() => cellRef.current?.close()} aria-label="Fermer"><X size={18} /></button>

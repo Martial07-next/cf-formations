@@ -4,7 +4,8 @@ import { ArrowLeft, Mail } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
-import { loadDayOverrides, hoursOf, one, hoursByMonth } from '@/lib/history';
+import { loadDayOverrides, hoursFor, one, hoursByMonth, sessionsWithReplacements } from '@/lib/history';
+import { trainerOn } from '@/lib/day-trainers';
 import { MonthlyTable } from '@/components/monthly-table';
 import { AbsencesPanel } from '@/components/absences-panel';
 import { formatHours } from '@/lib/week';
@@ -23,7 +24,7 @@ export default async function TrainerDetailPage({
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
-  const [{ data: trainer }, { data: sessions }, { data: absences }] = await Promise.all([
+  const [{ data: trainer }, { data: sessionsRaw }, { data: absences }] = await Promise.all([
     supabase
       .from('trainers')
       .select('id, full_name, email, specialty, availability, status, color, referent_id, profiles!trainers_referent_id_fkey(full_name)')
@@ -31,7 +32,7 @@ export default async function TrainerDetailPage({
       .maybeSingle(),
     supabase
       .from('sessions')
-      .select('id, title, status, start_at, end_at, rooms(name), session_trainees(status)')
+      .select('id, title, status, start_at, end_at, trainer_id, rooms(name), session_trainees(status)')
       .eq('trainer_id', id)
       .order('start_at', { ascending: false }),
     supabase
@@ -43,7 +44,16 @@ export default async function TrainerDetailPage({
 
   if (!trainer) notFound();
 
-  const overrides = await loadDayOverrides(supabase, (sessions || []).map((s: any) => s.id));
+  // + sessions où il remplace le formateur principal certains jours.
+  const { sessions: allSessions, dayTrainers } = await sessionsWithReplacements(
+    supabase,
+    [id],
+    (sessionsRaw || []) as any[],
+    'id, title, status, start_at, end_at, trainer_id, rooms(name), session_trainees(status)'
+  );
+  const sessions = [...allSessions].sort((a: any, b: any) => b.start_at.localeCompare(a.start_at));
+  const overrides = await loadDayOverrides(supabase, sessions.map((s: any) => s.id));
+  const mine = (s: { id: string; trainer_id?: string | null }, day: string) => trainerOn(dayTrainers, s as any, day) === id;
   const now = new Date().toISOString();
   const yearStart = `${now.slice(0, 4)}-01-01`;
   const color = trainer.color || DEFAULT_TRAINER_COLOR;
@@ -57,9 +67,9 @@ export default async function TrainerDetailPage({
       start_at: s.start_at,
       end_at: s.end_at,
       roomName: one<{ name: string }>(s.rooms)?.name || null,
-      trainerName: null,
       color,
-      hours: hoursOf(s, overrides),
+      hours: hoursFor(s, overrides, mine),
+      trainerName: s.trainer_id !== id ? 'remplacement certains jours' : dayTrainers[s.id] && Object.keys(dayTrainers[s.id]).length ? 'remplacé certains jours' : null,
       extra: `${validated} stagiaire${validated > 1 ? 's' : ''}`,
     };
   });
@@ -106,7 +116,7 @@ export default async function TrainerDetailPage({
           title="Suivi mensuel"
           year={year}
           yearHref={(y) => `/formateurs/${id}?annee=${y}`}
-          rows={[{ label: 'Heures', ...hoursByMonth((sessions || []) as any[], overrides, year) }]}
+          rows={[{ label: 'Heures', ...hoursByMonth((sessions || []) as any[], overrides, year, undefined, mine) }]}
         />
 
         <TrainingHistory entries={entries} emptyLabel="Ce formateur n’a encore animé aucune session." />

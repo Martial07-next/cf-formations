@@ -62,6 +62,8 @@ export type EmargementInput = {
   place?: string | null;
   /** Mentions légales et « Fait à … le … ». */
   legal?: Legal | null;
+  /** Remplaçant certains jours : jour → nom (affiché dans la ligne du formateur). */
+  dayTrainerNames?: Record<string, string>;
 };
 
 /**
@@ -113,7 +115,17 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
       return { page, y: withTable ? headerRow(page, b, x0, y, cols) : y };
     };
 
-    const drawRow = async (page: PDFPage, y: number, index: string, label: string, company: string, cell: (s: Slot) => SignatureRow | undefined | 'na', shade: any, bold = false) => {
+    const drawRow = async (
+      page: PDFPage,
+      y: number,
+      index: string,
+      label: string,
+      company: string,
+      cell: (s: Slot) => SignatureRow | undefined | 'na',
+      shade: any,
+      bold = false,
+      caption?: (s: Slot) => string | null
+    ) => {
       page.drawRectangle({ x: x0, y: y - ROW, width: tableW, height: ROW, color: shade, borderColor: C.grey, borderWidth: 0.6 });
       const mid = y - ROW / 2;
       page.drawText(index, { x: x0 + 7, y: mid - 3, size: 8.5, font: b.bold, color: C.night });
@@ -145,6 +157,12 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
             page.drawImage(img, { x: x + (slotW - img.width * scale) / 2, y: y - ROW + (ROW - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
           }
         }
+        // Nom du formateur ce jour-là (remplaçant).
+        const cap = caption?.(s);
+        if (cap) {
+          const t = wrapText(b.regular, cap, 6.5, slotW - 8)[0] || '';
+          page.drawText(t, { x: x + 4, y: y - ROW + 3, size: 6.5, font: b.regular, color: C.muted });
+        }
         x += slotW;
       }
       page.drawLine({ start: { x: x0 + numW, y }, end: { x: x0 + numW, y: y - ROW }, thickness: 0.6, color: C.grey });
@@ -155,7 +173,19 @@ export async function buildEmargementPdf(input: EmargementInput): Promise<Uint8A
     let { page, y } = open();
     const trainerRow = async () => {
       y -= 4;
-      y = await drawRow(page, y, '', `Formateur : ${input.trainerName || ''}`, 'Signature du formateur', (s) => find('formateur', null, s), C.grey, true);
+      const names = input.dayTrainerNames || {};
+      const replaced = slots.some((s) => names[s.day]);
+      y = await drawRow(
+        page,
+        y,
+        '',
+        replaced ? 'Formateur(s)' : `Formateur : ${input.trainerName || ''}`,
+        replaced ? `Principal : ${input.trainerName || ''}` : 'Signature du formateur',
+        (s) => find('formateur', null, s),
+        C.grey,
+        true,
+        (s) => names[s.day] || (replaced ? input.trainerName || null : null)
+      );
     };
     for (let i = 0; i < input.trainees.length; i++) {
       // Place pour ce stagiaire ET la ligne formateur ; sinon page suivante.

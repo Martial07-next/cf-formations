@@ -3,7 +3,8 @@ import { CalendarClock, CalendarOff, ArrowRight } from 'lucide-react';
 import { absenceText, type Absence } from '@/lib/absences';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
-import { loadDayOverrides, hoursByMonth } from '@/lib/history';
+import { loadDayOverrides, hoursByMonth, sessionsWithReplacements } from '@/lib/history';
+import { trainerOn, trainersOf } from '@/lib/day-trainers';
 import { MonthlyTable } from '@/components/monthly-table';
 import { formatHours, formatSessionPeriod } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -68,8 +69,18 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
         .lt('start_at', `${toYear + 1}-01-01`)
         .order('start_at')
     : { data: [] as Session[] };
-  const sessions = (sessionsData || []) as Session[];
+  // + sessions où ils remplacent le formateur principal certains jours.
+  const { sessions, dayTrainers } = await sessionsWithReplacements(
+    supabase,
+    ids,
+    ((sessionsData || []) as Session[]),
+    'id, title, status, start_at, end_at, trainer_id'
+  );
+  sessions.sort((a, b) => a.start_at.localeCompare(b.start_at));
   const overrides = await loadDayOverrides(supabase, sessions.map((s) => s.id));
+  /** Jours assurés par ce formateur (le principal, sauf jours confiés à un remplaçant). */
+  const by = (tid: string) => (s: { id: string; trainer_id?: string | null }, day: string) => trainerOn(dayTrainers, s as any, day) === tid;
+  const sessionsOf = (tid: string) => sessions.filter((s) => trainersOf(dayTrainers, s).includes(tid));
 
   // Congés en cours ou dans les 30 prochains jours.
   const today = nowIso.slice(0, 10);
@@ -88,9 +99,9 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
   const total = (a: number[]) => a.reduce((n, x) => n + x, 0);
 
   function statsFor(t: Trainer) {
-    const own = sessions.filter((s) => s.trainer_id === t.id && s.status !== 'brouillon');
+    const own = sessionsOf(t.id).filter((s) => s.status !== 'brouillon');
     const upcoming = own.filter((s) => s.end_at >= nowIso);
-    const current = hoursByMonth(own, overrides, currentYear);
+    const current = hoursByMonth(own, overrides, currentYear, undefined, by(t.id));
     return {
       month: current.done[currentMonth] + current.planned[currentMonth],
       year: total(current.done),
@@ -153,11 +164,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
               label: t.full_name,
               href: `/formateurs/${t.id}?annee=${year}`,
               color: t.color || DEFAULT_TRAINER_COLOR,
-              ...hoursByMonth(
-                sessions.filter((s) => s.trainer_id === t.id),
-                overrides,
-                year
-              ),
+              ...hoursByMonth(sessionsOf(t.id), overrides, year, undefined, by(t.id)),
             }))}
           />
         )}

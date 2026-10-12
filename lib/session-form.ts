@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSessionStatus, type SessionStatus } from '@/lib/status';
 import { absenceText, type Absence } from '@/lib/absences';
 import { missionText, outsideMission } from '@/lib/external';
+import { loadDayTrainers, trainerOn } from '@/lib/day-trainers';
+import { weekdaysBetween } from '@/lib/week';
 
 export type SessionInput = {
   title: string;
@@ -76,7 +78,7 @@ export async function findSessionConflict(
 ): Promise<string | null> {
   let query = supabase
     .from('sessions')
-    .select('id, title, room_id, trainer_id')
+    .select('id, title, room_id, trainer_id, start_at, end_at')
     .lt('start_at', input.end_at)
     .gt('end_at', input.start_at);
   if (excludeId) query = query.neq('id', excludeId);
@@ -89,8 +91,22 @@ export async function findSessionConflict(
     if (roomClash) return `Conflit : la salle est déjà réservée pour « ${roomClash.title} » sur ce créneau.`;
   }
   if (input.trainer_id) {
-    const trainerClash = data?.find((s) => s.trainer_id === input.trainer_id);
-    if (trainerClash) return `Conflit : ce formateur anime déjà « ${trainerClash.title} » sur ce créneau.`;
+    // Jours où ce formateur anime vraiment cette session (hors jours confiés à un remplaçant).
+    const ownMap = excludeId ? await loadDayTrainers(supabase, [excludeId]) : {};
+    const sessionDays = weekdaysBetween(input.start_at, input.end_at);
+    const activeDays = (sessionDays.length ? sessionDays : [input.start_at.slice(0, 10)]).filter(
+      (d) => !excludeId || !ownMap[excludeId]?.[d] || ownMap[excludeId][d].trainer_id === input.trainer_id
+    );
+    // Autres sessions où il est formateur ce jour-là (principal non remplacé, ou remplaçant).
+    const others = data || [];
+    const othersMap = await loadDayTrainers(supabase, others.map((s) => s.id));
+    for (const s of others) {
+      const days = weekdaysBetween(s.start_at, s.end_at);
+      const clashDay = activeDays.find((d) => (days.length ? days : [s.start_at.slice(0, 10)]).includes(d) && trainerOn(othersMap, s, d) === input.trainer_id);
+      if (clashDay) {
+        return `Conflit : ce formateur anime déjà « ${s.title} » le ${clashDay.split('-').reverse().join('/')}.`;
+      }
+    }
 
     // Formateur externe : seulement pendant sa période d'intervention.
     const { data: tr } = await supabase.from('trainers').select('*').eq('id', input.trainer_id).maybeSingle();
@@ -105,11 +121,12 @@ export async function findSessionConflict(
       .eq('trainer_id', input.trainer_id)
       .lte('start_date', input.end_at.slice(0, 10))
       .gte('end_date', input.start_at.slice(0, 10))
-      .order('start_date')
-      .limit(1);
-    if (off && off.length) {
+      .order('start_date');
+    // Congés tombant uniquement sur des jours confiés à un remplaçant : pas de blocage.
+    const blocking = (off || []).filter((a: any) => activeDays.some((d) => d >= a.start_date && d <= a.end_date));
+    if (blocking.length) {
       const { data: t } = await supabase.from('trainers').select('full_name').eq('id', input.trainer_id).maybeSingle();
-      return `Formateur indisponible : ${t?.full_name ?? 'ce formateur'} est ${absenceText(off[0] as Absence)}.`;
+      return `Formateur indisponible : ${t?.full_name ?? 'ce formateur'} est ${absenceText(blocking[0] as Absence)}.`;
     }
   }
   return null;

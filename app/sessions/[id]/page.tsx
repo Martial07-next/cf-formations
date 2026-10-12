@@ -3,13 +3,15 @@ import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace } from '@/lib/buildings';
-import { formatSessionPeriod, sessionHours, formatHours } from '@/lib/week';
+import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween } from '@/lib/week';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
+import { DayTrainersPanel } from '@/components/day-trainers-panel';
+import { loadDayTrainers } from '@/lib/day-trainers';
 import { sessionSlots, expectedOn, slotKey } from '@/lib/dossier';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -127,7 +129,19 @@ export default async function SessionDetailPage({
   if ((modules || []).length) {
     for (const s of slots) expected[slotKey(s)] = expectedOn(s.day, validatedTrainees.map((t) => t.id), (modules as any) || [], traineeModules);
   }
-  const isOwn = Boolean(profile?.trainer_id) && profile?.trainer_id === (session as any).trainer_id;
+  // Remplaçants jour par jour (migration 19) et congés des formateurs sur la période.
+  const dayTrainerMap = await loadDayTrainers(supabase, [id]);
+  const dayTrainers = dayTrainerMap[id] || {};
+  const { data: periodAbsences } = await supabase
+    .from('trainer_absences')
+    .select('id, trainer_id, start_date, end_date, kind, note')
+    .lte('start_date', session.end_at.slice(0, 10))
+    .gte('end_date', session.start_at.slice(0, 10));
+  const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
+  const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
+  const isOwn =
+    Boolean(profile?.trainer_id) &&
+    (profile?.trainer_id === (session as any).trainer_id || Object.values(dayTrainers).some((d) => d.trainer_id === profile?.trainer_id));
   // Template docs first (dans l'ordre du catalogue), puis ceux propres à la session.
   const documents = [...((docRows as any[]) || [])].sort((a, b) => Number(!!a.session_id) - Number(!!b.session_id) || a.position - b.position);
 
@@ -161,6 +175,11 @@ export default async function SessionDetailPage({
                   </Link>
                 </>
               )}
+              {replacementNames.length > 0 && (
+                <span className="sc-replaced" title="Remplaçant(s) certains jours">
+                  Remplacé certains jours par {replacementNames.join(', ')}
+                </span>
+              )}
             </p>
           </div>
         </header>
@@ -179,7 +198,7 @@ export default async function SessionDetailPage({
           canEditStartTimes={canEditStartTimes(profile?.role)}
           modules={(modules as any) || []}
           traineeModules={traineeModules}
-          isOwnTrainer={Boolean(profile?.trainer_id) && profile?.trainer_id === (session as any).trainer_id}
+          isOwnTrainer={isOwn}
           digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}
           template={template}
@@ -188,6 +207,16 @@ export default async function SessionDetailPage({
           enrolled={enrolled}
           allTrainees={allTrainees || []}
           dayOverrides={(dayRows as any) || []}
+        />
+
+        <DayTrainersPanel
+          sessionId={session.id}
+          days={weekdaysBetween(session.start_at, session.end_at)}
+          principalId={(session as any).trainer_id}
+          trainers={(trainers as any) || []}
+          dayTrainers={dayTrainers}
+          absences={(periodAbsences as any) || []}
+          canEdit={editable}
         />
 
         {dossierError ? (
@@ -216,6 +245,7 @@ export default async function SessionDetailPage({
             canFill={canEditStartTimes(profile?.role) || isOwn}
             canManage={editable}
             tourDeTable={tourDeTable}
+            dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
             place={room?.is_holding ? null : trainingPlace(room)}
             legal={legal}
           />

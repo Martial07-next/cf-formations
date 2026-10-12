@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
+import { loadDayTrainers } from '@/lib/day-trainers';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -180,6 +181,9 @@ export default async function Page({
     }
   }
 
+  // Remplaçants certains jours (migration 19).
+  const dayTrainers = await loadDayTrainers(supabase, sessionIds);
+
   const dayOverrides: Record<string, { day: string; start_time: string; end_time: string }[]> = {};
   for (const row of dayRows || []) {
     (dayOverrides[row.session_id] ||= []).push({ day: row.day, start_time: row.start_time, end_time: row.end_time });
@@ -215,6 +219,7 @@ export default async function Page({
         usefulLinks={(usefulLinks as any) || []}
         templateLinks={templateLinks}
         dossierComplete={dossierComplete}
+        dayTrainers={dayTrainers}
       />
     </main>
   );

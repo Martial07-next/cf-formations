@@ -419,3 +419,72 @@ export async function splitSessionByDay(sessionId: string): Promise<ActionResult
   refreshSession(sessionId);
   return { ok: true };
 }
+
+/**
+ * Formateur remplaçant sur certains jours (ex. jours 3 et 4). `trainerId`
+ * vide ou égal au formateur principal : les jours reviennent au principal.
+ * Vérifie les congés, la période d'intervention d'un externe et les autres
+ * sessions du remplaçant ces jours-là.
+ */
+export async function setDayTrainers(sessionId: string, days: string[], trainerId: string | null, note?: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: s } = await supabase.from('sessions').select('id, title, trainer_id, start_at, end_at').eq('id', sessionId).maybeSingle();
+  if (!s) return { ok: false, error: 'Session introuvable.' };
+  const { weekdaysBetween } = await import('@/lib/week');
+  const sessionDays = weekdaysBetween(s.start_at, s.end_at);
+  const list = [...new Set(days)].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && sessionDays.includes(d)).sort();
+  if (!list.length) return { ok: false, error: 'Choisis au moins un jour de la session.' };
+  const fr = (d: string) => d.split('-').reverse().join('/');
+  const missing = (msg: string) =>
+    /session_day_trainers|schema cache|does not exist/i.test(msg) ? 'Exécute d’abord la migration 19 (supabase/migration_phase19.sql) dans Supabase.' : msg;
+
+  // Retour au formateur principal.
+  if (!trainerId || trainerId === s.trainer_id) {
+    const { error } = await supabase.from('session_day_trainers').delete().eq('session_id', sessionId).in('day', list);
+    if (error) return { ok: false, error: missing(error.message) };
+    revalidatePath(`/sessions/${sessionId}`);
+    revalidatePath('/');
+    return { ok: true };
+  }
+
+  const { data: tr } = await supabase.from('trainers').select('*').eq('id', trainerId).maybeSingle();
+  if (!tr) return { ok: false, error: 'Formateur introuvable.' };
+  const { outsideMission, missionText } = await import('@/lib/external');
+  const outside = list.filter((d) => outsideMission(tr as any, d, d));
+  if (outside.length) return { ok: false, error: `${tr.full_name} (externe) intervient ${missionText(tr as any)} : pas le ${outside.map(fr).join(', ')}.` };
+
+  // Congés / absences du remplaçant.
+  const { data: off } = await supabase
+    .from('trainer_absences')
+    .select('start_date, end_date, kind')
+    .eq('trainer_id', trainerId)
+    .lte('start_date', list[list.length - 1])
+    .gte('end_date', list[0]);
+  const absentDays = list.filter((d) => (off || []).some((a: any) => d >= a.start_date && d <= a.end_date));
+  if (absentDays.length) return { ok: false, error: `${tr.full_name} est absent ou en congé le ${absentDays.map(fr).join(', ')}.` };
+
+  // Autres sessions du remplaçant ces jours-là.
+  const { data: others } = await supabase
+    .from('sessions')
+    .select('id, title, trainer_id, start_at, end_at')
+    .neq('id', sessionId)
+    .lt('start_at', `${list[list.length - 1]}T23:59:59`)
+    .gt('end_at', `${list[0]}T00:00:00`);
+  const { loadDayTrainers, trainerOn } = await import('@/lib/day-trainers');
+  const map = await loadDayTrainers(supabase, (others || []).map((o: any) => o.id));
+  for (const o of (others || []) as any[]) {
+    const oDays = weekdaysBetween(o.start_at, o.end_at);
+    const clash = list.find((d) => (oDays.length ? oDays : [o.start_at.slice(0, 10)]).includes(d) && trainerOn(map, o, d) === trainerId);
+    if (clash) return { ok: false, error: `${tr.full_name} anime déjà « ${o.title} » le ${fr(clash)}.` };
+  }
+
+  const { error } = await supabase.from('session_day_trainers').upsert(
+    list.map((day) => ({ session_id: sessionId, day, trainer_id: trainerId, note: String(note || '').trim().slice(0, 200) || null })),
+    { onConflict: 'session_id,day' }
+  );
+  if (error) return { ok: false, error: missing(error.message) };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}

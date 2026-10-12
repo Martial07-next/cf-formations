@@ -13,6 +13,7 @@ import { eventOnDay, type PlanningEvent } from '@/lib/events';
 import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
 import { UsefulLinksButton, type TemplateLinks } from '@/components/useful-links';
 import type { UsefulLink } from '@/lib/links';
+import { trainersOf, trainerOn, type DayTrainerMap } from '@/lib/day-trainers';
 import {
   addDays,
   isoDate,
@@ -76,6 +77,7 @@ function SessionCard({
   absence,
   info,
   dossierDone = false,
+  replacement = null,
 }: {
   s: SessionRow;
   dIso: string;
@@ -83,9 +85,12 @@ function SessionCard({
   absence: Absence | null;
   info?: { modules: string[]; present: number };
   dossierDone?: boolean;
+  /** Remplaçant ce jour-là (le formateur principal ne vient pas). */
+  replacement?: { full_name: string; color: string | null } | null;
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
-  const trainer = one(s.trainers)?.full_name;
+  const principal = one(s.trainers)?.full_name;
+  const trainer = replacement ? replacement.full_name : principal;
   // Avec des modules : stagiaires réellement présents ce jour-là.
   const count = info ? info.present : validatedCount(s);
   const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
@@ -93,8 +98,8 @@ function SessionCard({
     <Link
       href={`/sessions/${s.id}`}
       className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}
-      style={{ ['--c' as any]: colorOf(s) }}
-      title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})`}
+      style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
+      title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
     >
       <span className="sc-top">
         <StatusPill status={s.status} />
@@ -113,6 +118,9 @@ function SessionCard({
       </span>
       {absence && (
         <span className="sc-absence"><CalendarOff size={11} aria-hidden /> Formateur {absenceText(absence)}</span>
+      )}
+      {replacement && (
+        <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
       )}
       {dossierDone && (
         <span className="sc-dossier"><FolderCheck size={11} aria-hidden /> Dossier complet</span>
@@ -141,6 +149,7 @@ export function Planning({
   usefulLinks = [],
   templateLinks = [],
   dossierComplete = {},
+  dayTrainers = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -163,6 +172,8 @@ export function Planning({
   templateLinks?: TemplateLinks[];
   /** Sessions dont le dossier (émargement + documents) est complet. */
   dossierComplete?: Record<string, boolean>;
+  /** Remplaçants certains jours : session → jour → formateur. */
+  dayTrainers?: DayTrainerMap;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -199,20 +210,20 @@ export function Planning({
   const shown = useMemo(
     () =>
       sessions.filter((s) => {
-        if (trainerFilter === 'none' ? s.trainer_id : trainerFilter && s.trainer_id !== trainerFilter) return false;
+        if (trainerFilter === 'none' ? s.trainer_id : trainerFilter && !trainersOf(dayTrainers, s).includes(trainerFilter)) return false;
         if (statusFilter && s.status !== statusFilter) return false;
         if (!query) return true;
         const trainer = one(s.trainers)?.full_name ?? '';
         return `${s.title} ${trainer}`.toLowerCase().includes(query.toLowerCase());
       }),
-    [sessions, query, trainerFilter, statusFilter]
+    [sessions, query, trainerFilter, statusFilter, dayTrainers]
   );
 
   // Formateurs présents sur la période (légende des couleurs).
   const visibleTrainers = useMemo(() => {
-    const ids = new Set(sessions.map((s) => s.trainer_id).filter(Boolean));
+    const ids = new Set(sessions.flatMap((s) => trainersOf(dayTrainers, s)));
     return trainers.filter((t) => ids.has(t.id));
-  }, [sessions, trainers]);
+  }, [sessions, trainers, dayTrainers]);
 
   const holding = rooms.filter((r) => r.is_holding);
   const holdingWithSessions = holding.filter((r) => shown.some((s) => s.room_id === r.id));
@@ -447,7 +458,16 @@ export function Planning({
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => (
-                          <SessionCard key={s.id} s={s} dIso={d.iso} overrides={dayOverrides[s.id] || []} absence={absenceFor(absences, s.trainer_id, d.iso, d.iso)} info={dayInfo[s.id]?.[d.iso]} dossierDone={Boolean(dossierComplete[s.id])} />
+                          <SessionCard
+                            key={s.id}
+                            s={s}
+                            dIso={d.iso}
+                            overrides={dayOverrides[s.id] || []}
+                            absence={absenceFor(absences, trainerOn(dayTrainers, s, d.iso), d.iso, d.iso)}
+                            info={dayInfo[s.id]?.[d.iso]}
+                            dossierDone={Boolean(dossierComplete[s.id])}
+                            replacement={dayTrainers[s.id]?.[d.iso] ? trainers.find((t) => t.id === dayTrainers[s.id][d.iso].trainer_id) || null : null}
+                          />
                         ))}
                         {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
                           <button
@@ -499,14 +519,15 @@ export function Planning({
                     </span>
                     {daySessions.map((s) => {
                       const room = one(s.rooms)?.name || '-';
-                      const trainer = one(s.trainers)?.full_name;
+                      const repl = dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) : null;
+                      const trainer = repl ? `${repl.full_name} (remplaçant)` : one(s.trainers)?.full_name;
                       const count = validatedCount(s);
                       return (
                         <Link
                           key={s.id}
                           href={`/sessions/${s.id}`}
                           className="month-chip"
-                          style={{ ['--c' as any]: colorOf(s) }}
+                          style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
                           title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})`}
                         >
                           <span className="chip-top">
