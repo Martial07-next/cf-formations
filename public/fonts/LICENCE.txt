@@ -1,4 +1,4 @@
 Polices utilisées pour les documents PDF de la plateforme (charte CF Réseaux) :
-- Archivo (Omnibus-Type), instance Expanded ExtraBold (wdth 125, wght 800)
-- Space Grotesk (Florian Karsten), Regular et Bold
+- Archivo (Omnibus-Type), instances Expanded Bold et ExtraBold (wdth 125, wght 700 / 800)
+- Space Grotesk (Florian Karsten), Light, Regular, SemiBold et Bold
 Toutes deux sous licence SIL Open Font License 1.1 : https://openfontlicense.org
