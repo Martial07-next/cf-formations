@@ -1,4 +1,5 @@
 import { effectiveDayTime, weekdaysBetween, type DayOverride } from '@/lib/week';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
 
 /**
  * Dossier de formation dématérialisé : émargement par demi-journée et
@@ -91,10 +92,13 @@ export function dossierProgress(input: {
   const completedDocs =
     required.filter((d) => input.entries.some((e) => e.document_id === d.id && e.completed)).length + forms.filter((f) => f.completed).length;
   const emargementDone = input.traineeIds.length > 0 && needed > 0 && done === needed;
+  const docsNeeded = required.length + forms.length;
+  const docsOk = completedDocs === docsNeeded;
   return {
     emargement: { done, needed, complete: emargementDone },
-    documents: { done: completedDocs, needed: required.length + forms.length },
-    complete: emargementDone && completedDocs === required.length + forms.length,
+    documents: { done: completedDocs, needed: docsNeeded },
+    // Émargement masqué (géré dans Digiforma) : seuls les documents comptent.
+    complete: EMARGEMENT_ENABLED ? emargementDone && docsOk : docsNeeded > 0 && docsOk,
   };
 }
 

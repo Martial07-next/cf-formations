@@ -30,6 +30,7 @@ import { PdfFiller } from '@/components/dossier/pdf-filler';
 import { TourDeTable } from '@/components/dossier/tour-de-table';
 import type { TdtData } from '@/lib/tdt';
 import type { Legal } from '@/lib/pdf-brand';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
 import type { EntryData } from '@/lib/pdf-dossier';
@@ -128,8 +129,14 @@ export function DossierPanel({
     }
     return { needed, done, complete: trainees.length > 0 && needed > 0 && done === needed };
   }, [slots, expected, trainees, rows]);
-  const complete = emargement.complete && progress.documents.done === progress.documents.needed;
-  const remaining = emargement.needed - emargement.done + (progress.documents.needed - progress.documents.done);
+  // Émargement masqué (géré dans Digiforma) : il ne compte plus dans le dossier.
+  const emargOk = EMARGEMENT_ENABLED ? emargement.complete : true;
+  const complete =
+    emargOk &&
+    progress.documents.done === progress.documents.needed &&
+    (EMARGEMENT_ENABLED || progress.documents.needed > 0);
+  const remaining =
+    (EMARGEMENT_ENABLED ? emargement.needed - emargement.done : 0) + (progress.documents.needed - progress.documents.done);
   const now = currentSlot(slots);
   const lastDay = slots.length ? slots[slots.length - 1].day.split('-').reverse().join('/') : null;
 
@@ -193,12 +200,15 @@ export function DossierPanel({
       const { buildEmargementPdf, downloadPdf, fillDocumentPdf, mergePdfs } = await import('@/lib/pdf-dossier');
       const res = await dossierExport(sessionId);
       if (!res.ok) throw new Error(res.error);
-      const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures, place, legal, dayTrainerNames });
-      if (!full) {
-        downloadPdf(emarg, `Emargement - ${title}.pdf`);
-        return;
+      const parts: Uint8Array[] = [];
+      if (EMARGEMENT_ENABLED) {
+        const emarg = await buildEmargementPdf({ title, period, room, trainerName, slots, trainees, expected, signatures: res.signatures, place, legal, dayTrainerNames });
+        if (!full) {
+          downloadPdf(emarg, `Emargement - ${title}.pdf`);
+          return;
+        }
+        parts.push(emarg);
       }
-      const parts: Uint8Array[] = [emarg];
       if (tdt) {
         const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
         parts.push(
@@ -223,7 +233,9 @@ export function DossierPanel({
         title, period, room, trainerName, place, legal, lastDay,
         complete,
         items: [
-          { title: 'Feuille d’émargement', detail: `${emargement.done}/${emargement.needed} signatures`, done: emargement.complete },
+          ...(EMARGEMENT_ENABLED
+            ? [{ title: 'Feuille d’émargement', detail: `${emargement.done}/${emargement.needed} signatures`, done: emargement.complete }]
+            : []),
           ...(tdt ? [{ title: `Tour de table · ${title}`, detail: tdt.completed ? `Terminé le ${tdt.completedAt || ''}` : 'En cours', done: tdt.completed }] : []),
           ...documents.map((d) => {
             const e = entryOf(d.id);
@@ -298,25 +310,30 @@ export function DossierPanel({
         )}
       </div>
       <p className="panel-intro">
-        Plus de papier : les stagiaires signent avec leur téléphone (QR code), le formateur remplit les documents en ligne et
-        tout s’enregistre automatiquement. Quand tout est signé et rempli, la session affiche « Dossier complet » sur le planning.
+        {EMARGEMENT_ENABLED
+          ? 'Plus de papier : les stagiaires signent avec leur téléphone (QR code), le formateur remplit les documents en ligne et tout s’enregistre automatiquement. Quand tout est signé et rempli, la session affiche « Dossier complet » sur le planning.'
+          : 'Plus de papier : le formateur remplit les documents en ligne et tout s’enregistre automatiquement. Quand tout est rempli, la session affiche « Dossier complet » sur le planning. L’émargement se fait dans Digiforma.'}
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
       <div className="dossier-actions">
-        {canFill && (
+        {EMARGEMENT_ENABLED && canFill && (
           <button className="primary" onClick={() => showQr()} disabled={busy === 'qr' || trainees.length === 0}>
             <QrCode size={16} aria-hidden /> {busy === 'qr' ? 'Ouverture…' : 'QR code d’émargement'}
           </button>
         )}
-        <button onClick={() => exportPdf(false)} disabled={!!busy}>
-          {busy === 'emargement' ? <Loader2 size={15} className="spin" aria-hidden /> : <Download size={15} aria-hidden />} Feuille d’émargement
-        </button>
+        {EMARGEMENT_ENABLED && (
+          <button onClick={() => exportPdf(false)} disabled={!!busy}>
+            {busy === 'emargement' ? <Loader2 size={15} className="spin" aria-hidden /> : <Download size={15} aria-hidden />} Feuille d’émargement
+          </button>
+        )}
         <button onClick={() => exportPdf(true)} disabled={!!busy}>
           {busy === 'full' ? <Loader2 size={15} className="spin" aria-hidden /> : <Download size={15} aria-hidden />} Dossier complet (PDF)
         </button>
       </div>
 
+      {EMARGEMENT_ENABLED && (
+        <>
       <h3 className="sub-heading">
         Émargement <span className="hint">({emargement.done}/{emargement.needed} signatures)</span>
       </h3>
@@ -381,6 +398,9 @@ export function DossierPanel({
             </tbody>
           </table>
         </div>
+      )}
+
+        </>
       )}
 
       <h3 className="sub-heading">

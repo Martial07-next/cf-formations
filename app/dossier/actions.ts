@@ -8,6 +8,9 @@ import { canEditStartTimes } from '@/lib/roles';
 import { FORBIDDEN, requireManager } from '@/lib/auth';
 import { validSignature } from '@/lib/emargement';
 import type { Half } from '@/lib/dossier';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
+
+const EMARG_OFF = { ok: false as const, error: 'L’émargement se fait dans Digiforma.' };
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -45,6 +48,7 @@ function refresh(sessionId: string) {
 
 /** Jeton secret du QR code d'émargement (créé à la première ouverture). */
 export async function ensureSignToken(sessionId: string, renew = false): Promise<Result<{ token: string }>> {
+  if (!EMARGEMENT_ENABLED) return EMARG_OFF;
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
   if (r.session.sign_token && !renew) return { ok: true, token: r.session.sign_token };
@@ -75,6 +79,7 @@ export async function attendanceState(sessionId: string): Promise<Result<{ rows:
 
 /** Signature du formateur pour une demi-journée. */
 export async function trainerSign(sessionId: string, day: string, half: string, signature: string): Promise<Result> {
+  if (!EMARGEMENT_ENABLED) return EMARG_OFF;
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
   if (!isDay(day) || !isHalf(half)) return { ok: false, error: 'Demi-journée invalide.' };
@@ -101,6 +106,7 @@ export async function trainerSign(sessionId: string, day: string, half: string, 
 
 /** Stagiaire absent sur une demi-journée, ou remise à zéro (signature à refaire). */
 export async function setTraineeAttendance(sessionId: string, traineeId: string, day: string, half: string, mode: 'absent' | 'reset'): Promise<Result> {
+  if (!EMARGEMENT_ENABLED) return EMARG_OFF;
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
   if (!isDay(day) || !isHalf(half)) return { ok: false, error: 'Demi-journée invalide.' };
@@ -266,6 +272,7 @@ export async function deleteDocument(id: string): Promise<Result> {
 
 /** Signature d'un stagiaire sur l'appareil du formateur (stagiaire sans téléphone). */
 export async function staffTraineeSign(sessionId: string, traineeId: string, day: string, half: string, signature: string): Promise<Result> {
+  if (!EMARGEMENT_ENABLED) return EMARG_OFF;
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
   if (!isDay(day) || !isHalf(half)) return { ok: false, error: 'Demi-journée invalide.' };

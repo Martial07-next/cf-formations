@@ -2,9 +2,11 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadSigningContext, validSignature } from '@/lib/emargement';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
 
 /** Signature d'un stagiaire depuis le QR code (demi-journée en cours uniquement). */
 export async function signAttendance(token: string, traineeId: string, signature: string) {
+  if (!EMARGEMENT_ENABLED) return { ok: false as const, error: 'L’émargement se fait dans Digiforma.' };
   const ctx = await loadSigningContext(String(token));
   if (!ctx.ok) return { ok: false as const, error: ctx.error };
   if (!ctx.slot) return { ok: false as const, error: 'L’émargement n’est pas ouvert en ce moment.' };

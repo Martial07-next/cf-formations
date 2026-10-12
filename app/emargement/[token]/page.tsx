@@ -4,12 +4,16 @@ import { loadSigningContext } from '@/lib/emargement';
 import { HALF_LABEL } from '@/lib/dossier';
 import { frDate } from '@/lib/absences';
 import { EmargementSign } from '@/components/emargement-sign';
+import { notFound } from 'next/navigation';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Émargement · CF Réseaux', robots: { index: false, follow: false } };
 
 export default async function EmargementPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // Émargement géré dans Digiforma : la page de signature est désactivée.
+  if (!EMARGEMENT_ENABLED) notFound();
   const ctx = await loadSigningContext(token);
 
   return (
