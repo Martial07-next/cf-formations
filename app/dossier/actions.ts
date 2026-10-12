@@ -326,8 +326,49 @@ export async function saveTourDeTable(sessionId: string, data: unknown, complete
         : error.message,
     };
   }
-  if (completed !== undefined) refresh(sessionId);
+  // Entreprise saisie dans le tour de table : reportée sur la fiche du stagiaire
+  // (et donc partout sur la plateforme).
+  const updated = await syncCompanies(sessionId, (row.data as any)?.rows || {});
+  if (completed !== undefined || updated) refresh(sessionId);
+  if (updated) {
+    revalidatePath('/stagiaires');
+    revalidatePath('/sessions');
+  }
   return { ok: true };
+}
+
+/**
+ * Met à jour l'entreprise des stagiaires de la session d'après le tour de
+ * table. Le formateur n'a pas le droit de modifier l'annuaire : l'écriture
+ * passe par le serveur, limitée aux stagiaires inscrits à cette session et au
+ * seul champ « entreprise ». Renvoie le nombre de fiches modifiées.
+ */
+async function syncCompanies(sessionId: string, rows: Record<string, { company?: string }>): Promise<number> {
+  const wanted = Object.entries(rows)
+    .map(([id, r]) => [id, String(r?.company ?? '').replace(/\s+/g, ' ').trim().slice(0, 120)] as const)
+    .filter(([id, c]) => /^[0-9a-f-]{36}$/.test(id) && c);
+  if (!wanted.length) return 0;
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return 0;
+  }
+  const { data: links } = await admin
+    .from('session_trainees')
+    .select('trainee_id, trainees(company)')
+    .eq('session_id', sessionId)
+    .in('trainee_id', wanted.map(([id]) => id));
+  const current = new Map(
+    ((links as any[]) || []).map((l) => [l.trainee_id as string, ((Array.isArray(l.trainees) ? l.trainees[0] : l.trainees)?.company as string) || ''])
+  );
+  let n = 0;
+  for (const [id, company] of wanted) {
+    if (!current.has(id) || current.get(id) === company) continue;
+    const { error } = await admin.from('trainees').update({ company }).eq('id', id);
+    if (!error) n++;
+  }
+  return n;
 }
 
 /** Fiches d'appréciation individuelle : enregistrement automatique (terminé quand tous les avis sont donnés). */

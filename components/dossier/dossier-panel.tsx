@@ -534,7 +534,7 @@ export function DossierPanel({
           </div>
         </div>
       )}
-      {appreciation && (canManage || faiOn) && (
+      {appreciation && (faiOn || (canManage && appreciation.templateFlag)) && (
         <div className="doc-list" style={{ marginBottom: 6 }}>
           <div className={`doc-item${faiOn ? '' : ' doc-off'}`}>
             <FileText size={16} aria-hidden />
