@@ -12,6 +12,7 @@ import {
   UsersRound,
   History,
   Menu,
+  Route,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
@@ -30,6 +31,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
       ],
     },
   ];
+  if (canManage(role)) groups[0].links.push({ href: '/poec', label: 'Parcours POEC', icon: Route });
 
   const suivi: NavLink[] = [];
   if (profile?.trainer_id) suivi.push({ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History });

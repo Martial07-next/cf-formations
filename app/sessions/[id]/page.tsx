@@ -158,6 +158,9 @@ export default async function SessionDetailPage({
   const trainer = one((session as any).trainers) as { id: string; full_name: string; color: string | null } | null;
   const template = one((session as any).templates) as { title: string; category: string | null; duration_hours: number } | null;
   const hours = sessionHours(session.start_at, session.end_at, (dayRows as any) || []);
+  // Parcours POEC (migration 23) : erreur ignorée si la migration manque.
+  const { data: poecRow } = await supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle();
+  const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string } | null;
 
   return (
     <main>
@@ -192,6 +195,13 @@ export default async function SessionDetailPage({
             </p>
           </div>
         </header>
+
+        {poec && (
+          <div role="status" className="alert alert-success poec-banner">
+            Formation du parcours POEC <strong>{poec.title}</strong> : le groupe est inscrit automatiquement.{' '}
+            {canManage(profile?.role) && <Link href={`/poec/${poec.id}`}>Ouvrir le parcours</Link>}
+          </div>
+        )}
 
         {room?.is_holding && (
           <div role="status" className="alert alert-warning">

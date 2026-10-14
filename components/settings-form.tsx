@@ -14,6 +14,8 @@ type Settings = {
   signataire?: string | null;
   agrement?: string | null;
   cachet_image?: string | null;
+  director_name?: string | null;
+  director_title?: string | null;
 };
 
 /** Image du cachet + signature, réduite (700 px max) pour le stockage. */
@@ -88,6 +90,17 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           <label>
             Ville du « Fait à »
             <input name="signature_city" defaultValue={settings.signature_city || 'Cuincy'} />
+          </label>
+        </div>
+        <h3 className="sub-heading">Conventions de stage POEC</h3>
+        <div className="form-row">
+          <label>
+            Représenté par
+            <input name="director_name" defaultValue={settings.director_name || 'Madame Aurélie Lancelle'} />
+          </label>
+          <label>
+            Fonction
+            <input name="director_title" defaultValue={settings.director_title || 'Directrice de CF Réseaux'} />
           </label>
         </div>
         <h3 className="sub-heading">Attestation de fin de formation et appréciation des compétences</h3>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { MapPin, Utensils, Award, Handshake, Megaphone, Pin, CalendarOff, X, Plus, Pencil, Trash2, Users } from 'lucide-react';
+import Link from 'next/link';
+import { MapPin, Utensils, Award, Handshake, Megaphone, Pin, CalendarOff, X, Plus, Pencil, Trash2, Users, Briefcase, ArrowRight } from 'lucide-react';
 import { createEvent, updateEvent, deleteEvent } from '@/app/evenements/actions';
 import { EVENT_KINDS, EVENT_KIND, eventTimeLabel, type EventKind, type PlanningEvent } from '@/lib/events';
 import { absenceText, type Absence } from '@/lib/absences';
@@ -16,6 +17,7 @@ const ICONS: Record<EventKind, typeof MapPin> = {
   recrutement: Handshake,
   forum: Megaphone,
   autre: Pin,
+  stage: Briefcase,
 };
 
 export function EventIcon({ kind, size = 12 }: { kind: EventKind; size?: number }) {
@@ -109,7 +111,9 @@ export function DayDetails({
             <article key={e.id} className="event-item" style={{ ['--k' as any]: EVENT_KIND[e.kind]?.color }}>
               <div className="event-item-head">
                 <span className="event-kind"><EventIcon kind={e.kind} size={14} /> {EVENT_KIND[e.kind]?.label}</span>
-                {canEdit && (
+                {e.href ? (
+                  <Link href={e.href} className="btn small">Ouvrir <ArrowRight size={13} aria-hidden /></Link>
+                ) : canEdit && (
                   <span className="row-actions">
                     <button className="small icon ghost" aria-label={`Modifier ${e.title}`} onClick={() => onEdit(e)}><Pencil size={14} /></button>
                     <button

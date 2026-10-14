@@ -39,7 +39,13 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   const conflict = await findSessionConflict(supabase, parsed.value);
   if (conflict) return { ok: false, error: conflict };
 
-  const { data, error } = await supabase.from('sessions').insert(parsed.value).select('id').single();
+  // Formation ajoutée depuis un parcours POEC (migration 23).
+  const poecId = String(formData.get('poec_id') || '') || null;
+  const { data, error } = await supabase
+    .from('sessions')
+    .insert((poecId ? { ...parsed.value, poec_id: poecId } : parsed.value) as Record<string, unknown>)
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
 
   // Dernier jour partiel calculé automatiquement (ex. 17 h 30 → 3e jour 09:00–12:30).
@@ -65,6 +71,16 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
       end_day: m.end_day > endDay ? endDay : m.end_day,
     }));
     await supabase.from('session_modules').insert(placed);
+  }
+
+  // Parcours POEC : le groupe (toujours les mêmes stagiaires) est inscrit d'office.
+  if (poecId) {
+    const { data: members } = await supabase.from('poec_trainees').select('trainee_id').eq('program_id', poecId);
+    const rows = ((members as any[]) || []).map((m) => ({ session_id: data.id, trainee_id: m.trainee_id, status: 'validee' }));
+    if (rows.length) await supabase.from('session_trainees').upsert(rows, { onConflict: 'session_id,trainee_id' });
+    refresh();
+    revalidatePath(`/poec/${poecId}`);
+    redirect(`/poec/${poecId}?ajout=${data.id}`);
   }
 
   refresh();

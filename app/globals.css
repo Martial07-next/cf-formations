@@ -656,3 +656,67 @@ tr.replaced-day td{background:#fffbe0}
 .fin-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .fin-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:6px}
 .fin-row>span:first-child{display:flex;flex-direction:column}
+
+/* ---------- Parcours POEC ---------- */
+.sc-poec{display:block;font-size:10px;font-weight:800;color:#0f5e57;background:#d9f3ef;border-radius:6px;padding:1px 6px;margin:3px 0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.chip-poec{font-size:9px;font-weight:800;color:#0f5e57;background:#d9f3ef;border-radius:4px;padding:0 4px;flex-shrink:0}
+.poec-banner a{font-weight:800}
+.poec-new summary{cursor:pointer;list-style:none;font-size:15px}
+.poec-new summary::-webkit-details-marker{display:none}
+.poec-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.poec-list-card{display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-left:4px solid #0f766e;border-radius:var(--radius);padding:16px 18px;text-decoration:none;color:var(--ink);box-shadow:var(--shadow-sm);transition:box-shadow .15s var(--ease)}
+.poec-list-card:hover{box-shadow:var(--shadow)}
+.poec-list-card strong{font-size:16px}
+.poec-list-card .hint{display:flex;align-items:center;gap:5px}
+.poec-list-meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.poec-list-meta span{display:inline-flex;align-items:center;gap:4px}
+.poec-objectives{white-space:pre-line;margin:0;line-height:1.6;font-size:14px}
+.poec-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:999px;padding:0 14px;background:#fff;margin-bottom:10px;max-width:520px}
+.poec-search input{border:none;outline:none;flex:1;min-height:40px;font-size:14px;font-family:inherit;background:transparent}
+.poec-found{list-style:none;padding:0;margin:0 0 12px;display:flex;flex-wrap:wrap;gap:6px}
+.poec-weeks{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.poec-weeks > li{display:grid;grid-template-columns:150px 1fr;gap:12px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;background:var(--surface)}
+.poec-weeks > li.is-empty{background:var(--surface-2)}
+.poec-week-head{display:flex;flex-direction:column;font-size:13px}
+.poec-week-head span{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.poec-week-items{display:flex;flex-direction:column;gap:6px;min-width:0}
+.poec-item{display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:8px;background:var(--surface-2);border-left:4px solid var(--c, #64748b);color:var(--ink);text-decoration:none;font-size:13.5px}
+.poec-item svg{margin-top:2px;flex-shrink:0}
+.poec-item small{display:block;color:var(--muted);font-size:12px}
+a.poec-item:hover{background:var(--cf-mint-soft)}
+.poec-item.stage{background:#fff8c4;border-left-color:#d4b800}
+.poec-weeks > li.poec-total{display:flex;justify-content:space-between;background:var(--cf-dark);color:#fff;border-color:var(--cf-dark)}
+.poec-row-stage td{background:#fffbe0}
+.poec-row-stage svg{vertical-align:-2px}
+.poec-period{margin-bottom:18px}
+.poec-period .sub-heading{display:flex;align-items:center;gap:6px}
+.poec-status{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:2px 8px;margin-top:4px;white-space:nowrap}
+.poec-status.a_remplir{background:var(--draft-bg);color:var(--draft-ink)}
+.poec-status.a_signer{background:var(--wait-bg);color:var(--wait-ink)}
+.poec-status.signee{background:var(--ok-bg);color:var(--ok-ink)}
+.poec-status.validee_ft{background:#d9f3ef;color:#0f5e57}
+.poec-steps{list-style:none;padding:0;margin:6px 0;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;font-weight:700;color:var(--muted)}
+.poec-steps li{display:inline-flex;align-items:center;gap:4px}
+.poec-steps li.done{color:var(--ok-ink)}
+.poec-links{display:grid;grid-template-columns:auto auto auto;gap:4px 6px;align-items:center}
+.poec-link-label{font-size:11.5px;font-weight:800;color:var(--muted)}
+.poec-fieldset{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px 0;margin:0 0 14px}
+.poec-fieldset legend{font-weight:800;font-size:13px;padding:0 6px}
+.poec-attach{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}
+.poec-card{max-width:640px}
+.poec-card.wide{max-width:980px}
+.poec-band{background:#17241B;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.poec-band img{height:24px;display:block}
+.poec-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:12px 0}
+.poec-summary div{background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:14px}
+.poec-summary span{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.poec-public section{margin-top:18px}
+.poec-public .sub-heading{display:flex;align-items:center;gap:6px}
+.poec-ft-sign{margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+@media (max-width:640px){
+  .poec-weeks > li{grid-template-columns:1fr}
+  .poec-links{grid-template-columns:auto auto}
+  .poec-link-label{grid-column:1 / -1}
+}
+.poec-links button{white-space:nowrap}
+.poec-link-done{grid-column:span 2}

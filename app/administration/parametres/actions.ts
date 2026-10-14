@@ -47,6 +47,20 @@ export async function updateSettings(formData: FormData) {
   }
 
   if (error) return { ok: false, error: error.message };
+
+  // Représentant de CF Réseaux sur les conventions de stage POEC (migration 23).
+  if (formData.has('director_name')) {
+    const { error: dirError } = await supabase
+      .from('app_settings')
+      .update({
+        director_name: String(formData.get('director_name') || '').trim() || 'Madame Aurélie Lancelle',
+        director_title: String(formData.get('director_title') || '').trim() || 'Directrice de CF Réseaux',
+      })
+      .eq('id', true);
+    if (dirError) {
+      return { ok: false, error: 'Le reste est enregistré. Exécute la migration 23 (supabase/migration_phase23.sql) pour enregistrer le représentant des conventions POEC.' };
+    }
+  }
   revalidatePath('/administration/parametres');
   return { ok: true };
 }

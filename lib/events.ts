@@ -1,4 +1,4 @@
-export type EventKind = 'externe' | 'repas' | 'examen' | 'recrutement' | 'forum' | 'autre';
+export type EventKind = 'externe' | 'repas' | 'examen' | 'recrutement' | 'forum' | 'autre' | 'stage';
 
 export type PlanningEvent = {
   id: string;
@@ -12,6 +12,8 @@ export type PlanningEvent = {
   participants: string | null;
   notes: string | null;
   trainer_ids: string[];
+  /** Évènement calculé (ex. stage d'un parcours POEC) : ouvert via ce lien, non modifiable ici. */
+  href?: string;
 };
 
 /** Types d'évènements : libellé et couleur (l'icône est choisie dans components/planning-events.tsx). */
@@ -24,7 +26,11 @@ export const EVENT_KINDS: { value: EventKind; label: string; color: string }[] =
   { value: 'autre', label: 'Autre', color: '#475569' },
 ];
 
-export const EVENT_KIND: Record<string, (typeof EVENT_KINDS)[number]> = Object.fromEntries(EVENT_KINDS.map((k) => [k.value, k]));
+export const EVENT_KIND: Record<string, { value: EventKind; label: string; color: string }> = {
+  ...Object.fromEntries(EVENT_KINDS.map((k) => [k.value, k])),
+  // Stages en entreprise des parcours POEC (non saisissables comme évènement).
+  stage: { value: 'stage', label: 'Stage POEC en entreprise', color: '#0f766e' },
+};
 
 export function eventOnDay(e: { start_date: string; end_date: string }, day: string) {
   return e.start_date <= day && e.end_date >= day;

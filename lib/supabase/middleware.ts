@@ -28,7 +28,10 @@ export async function updateSession(request: NextRequest) {
 
   const isLogin = request.nextUrl.pathname.startsWith('/login');
   // Émargement par QR code : ouvert aux stagiaires, sans compte.
-  const isPublicRoute = isLogin || request.nextUrl.pathname.startsWith('/emargement/');
+  const path = request.nextUrl.pathname;
+  // Conventions POEC : liens personnels de l'entreprise d'accueil, du stagiaire et de France Travail.
+  const isPublicRoute =
+    isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') || path.startsWith('/france-travail/');
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

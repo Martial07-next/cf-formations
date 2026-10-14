@@ -79,6 +79,7 @@ function SessionCard({
   dossierDone = false,
   replacement = null,
   reserved = 0,
+  poec = null,
 }: {
   s: SessionRow;
   dIso: string;
@@ -90,6 +91,8 @@ function SessionCard({
   replacement?: { full_name: string; color: string | null } | null;
   /** Places réservées par entreprise, sans nom. */
   reserved?: number;
+  /** Parcours POEC auquel appartient la session. */
+  poec?: string | null;
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const principal = one(s.trainers)?.full_name;
@@ -110,6 +113,7 @@ function SessionCard({
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
       </span>
+      {poec && <span className="sc-poec" title={`Parcours POEC : ${poec}`}>POEC · {poec}</span>}
       <span className="sc-title">
         {!isStart && <CornerDownRight size={12} aria-label="suite" style={{ verticalAlign: '-2px', marginRight: 3 }} />}
         {s.title}
@@ -154,6 +158,7 @@ export function Planning({
   dossierComplete = {},
   dayTrainers = {},
   reservedSeats = {},
+  poecTitles = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -180,6 +185,7 @@ export function Planning({
   dayTrainers?: DayTrainerMap;
   /** Places réservées par entreprise encore sans nom, par session. */
   reservedSeats?: Record<string, number>;
+  poecTitles?: Record<string, string>;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -473,6 +479,7 @@ export function Planning({
                             info={dayInfo[s.id]?.[d.iso]}
                             dossierDone={Boolean(dossierComplete[s.id])}
                             reserved={reservedSeats[s.id] || 0}
+                            poec={poecTitles[s.id] || null}
                             replacement={dayTrainers[s.id]?.[d.iso] ? trainers.find((t) => t.id === dayTrainers[s.id][d.iso].trainer_id) || null : null}
                           />
                         ))}
@@ -535,11 +542,12 @@ export function Planning({
                           href={`/sessions/${s.id}`}
                           className="month-chip"
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
-                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})`}
+                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
+                            {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
                             {dossierComplete[s.id] && <FolderCheck size={11} aria-label="Dossier complet" className="chip-dossier" />}
                           </span>
                           <span className="chip-trainer">

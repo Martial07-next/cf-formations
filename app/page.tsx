@@ -92,6 +92,32 @@ export default async function Page({
     trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
   }));
 
+  // Stages en entreprise des parcours POEC (migration 23) : affichés comme évènements.
+  const { data: stageRows } = await supabase
+    .from('poec_periods')
+    .select('id, label, start_date, end_date, program_id, poec_programs(title, poec_trainees(trainee_id))')
+    .lte('start_date', isoDate(addDays(rangeEnd, -1)))
+    .gte('end_date', isoDate(rangeStart))
+    .order('start_date');
+  for (const p of (stageRows as any[]) || []) {
+    const prog = Array.isArray(p.poec_programs) ? p.poec_programs[0] : p.poec_programs;
+    const n = prog?.poec_trainees?.length || 0;
+    events.push({
+      id: `stage-${p.id}`,
+      kind: 'stage',
+      title: `${prog?.title || 'POEC'} · ${p.label}`,
+      start_date: p.start_date,
+      end_date: p.end_date,
+      start_time: null,
+      end_time: null,
+      location: 'En entreprise',
+      participants: n ? `${n} stagiaire${n > 1 ? 's' : ''} du groupe` : null,
+      notes: null,
+      trainer_ids: [],
+      href: `/poec/${p.program_id}`,
+    });
+  }
+
   // Liens utiles (bouton du planning) et supports des formations. Erreur ignorée si la migration 15 manque.
   const [{ data: usefulLinks }, { data: tLinks }] = await Promise.all([
     supabase.from('useful_links').select('id, category, label, url, description, position').order('position'),
@@ -197,6 +223,16 @@ export default async function Page({
     }
   }
 
+  // Sessions rattachées à un parcours POEC (migration 23) : badge sur le planning.
+  const poecTitles: Record<string, string> = {};
+  if (sessionIds.length) {
+    const { data: poecRows } = await supabase.from('sessions').select('id, poec_programs(title)').in('id', sessionIds).not('poec_id', 'is', null);
+    for (const r of (poecRows as any[]) || []) {
+      const prog = Array.isArray(r.poec_programs) ? r.poec_programs[0] : r.poec_programs;
+      if (prog?.title) poecTitles[r.id] = prog.title;
+    }
+  }
+
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await loadDayTrainers(supabase, sessionIds);
   // Places réservées par entreprise encore sans nom (migration 20).
@@ -248,6 +284,7 @@ export default async function Page({
         dossierComplete={dossierComplete}
         dayTrainers={dayTrainers}
         reservedSeats={reservedSeats}
+        poecTitles={poecTitles}
       />
     </main>
   );
