@@ -6,6 +6,7 @@ import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { appreciationRequired } from '@/lib/appreciation';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
+import { shortName } from '@/lib/tracking';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -233,6 +234,16 @@ export default async function Page({
     }
   }
 
+  // Créée par (migration 24) : affiché en petit sur le planning.
+  const createdBy: Record<string, string> = {};
+  if (sessionIds.length) {
+    const { data: byRows } = await supabase.from('sessions').select('id, created_by, profiles!sessions_created_by_fkey(full_name)').in('id', sessionIds);
+    for (const r of (byRows as any[]) || []) {
+      const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      if (p?.full_name) createdBy[r.id] = shortName(p.full_name);
+    }
+  }
+
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await loadDayTrainers(supabase, sessionIds);
   // Places réservées par entreprise encore sans nom (migration 20).
@@ -285,6 +296,7 @@ export default async function Page({
         dayTrainers={dayTrainers}
         reservedSeats={reservedSeats}
         poecTitles={poecTitles}
+        createdBy={createdBy}
       />
     </main>
   );

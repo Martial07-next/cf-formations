@@ -1,5 +1,6 @@
 'use client';
 
+import { AUTH_KINDS } from '@/lib/autorisations';
 import { useMemo, useState, useTransition } from 'react';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
@@ -33,6 +34,7 @@ type Template = {
   documents: DossierDocument[];
   tour_de_table?: boolean;
   fiche_appreciation?: boolean;
+  authorizations?: string[] | null;
   codification?: string | null;
   objectifs?: string | null;
   competences?: string | null;
@@ -216,6 +218,16 @@ function TemplateFields({
               placeholder={'Ex. Comprendre et identifier le rôle de l’Exécutant sur l’ouvrage concerné ;\nIdentifier et maîtriser les risques liés aux travaux sous tension…'}
             />
           </label>
+        </div>
+        <input type="hidden" name="auth_present" value="1" />
+        <div className="autor-kinds" role="group" aria-label="Autorisations à faire remplir aux stagiaires">
+          <span className="hint" style={{ fontWeight: 700 }}>Autorisations stagiaire (QR code, une seule fois par stagiaire) :</span>
+          {AUTH_KINDS.map((k) => (
+            <label key={k.kind} className="check-line">
+              <input type="checkbox" name="authorizations" value={k.kind} defaultChecked={(t?.authorizations ?? ['image']).includes(k.kind)} />
+              {k.short}
+            </label>
+          ))}
         </div>
       </div>
 

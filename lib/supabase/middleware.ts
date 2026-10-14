@@ -31,7 +31,9 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   // Conventions POEC : liens personnels de l'entreprise d'accueil, du stagiaire et de France Travail.
   const isPublicRoute =
-    isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') || path.startsWith('/france-travail/');
+    isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') ||
+    path.startsWith('/france-travail/') ||
+    path.startsWith('/autorisations/');
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

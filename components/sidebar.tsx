@@ -13,6 +13,7 @@ import {
   History,
   Menu,
   Route,
+  ClipboardList,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
@@ -36,6 +37,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
   const suivi: NavLink[] = [];
   if (profile?.trainer_id) suivi.push({ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History });
   if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound });
+  if (role === 'admin' || role === 'bureau') suivi.push({ href: '/suivi', label: 'Suivi interne', icon: ClipboardList });
   if (role === 'admin' || role === 'bureau') suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
   if (suivi.length) groups.push({ label: 'Suivi', links: suivi });
 

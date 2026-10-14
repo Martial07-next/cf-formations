@@ -1,4 +1,9 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
+import { loadStaff } from '@/lib/tracking';
+import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/components/tracking/session-tracking';
+import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
+import { loadAuthorizations } from '@/lib/autorisations-server';
+import { sessionKinds } from '@/lib/autorisations';
 import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
@@ -162,6 +167,32 @@ export default async function SessionDetailPage({
   const { data: poecRow } = await supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle();
   const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string } | null;
 
+  // Organisation interne (migration 24) : créée par, gestionnaire, suivi des inscriptions, historique.
+  const [{ data: trackRow, error: trackError }, { data: trackLinks }, { data: activity }, staff] = await Promise.all([
+    supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle(),
+    supabase
+      .from('session_trainees')
+      .select('trainee_id, added_by, added_at, status_by, status_at, followup_by, followup_count, last_followup_at, last_followup_by, followup_note')
+      .eq('session_id', id),
+    supabase.from('session_activity').select('id, action, detail, created_at, actor_id').eq('session_id', id).order('created_at', { ascending: false }).limit(150),
+    loadStaff(supabase as any),
+  ]);
+  const tracking: Record<string, TraineeTracking> | null = trackError
+    ? null
+    : Object.fromEntries(
+        ((trackLinks as any[]) || []).map((r) => [
+          r.trainee_id,
+          {
+            addedBy: r.added_by, addedAt: r.added_at, statusBy: r.status_by, statusAt: r.status_at, followupBy: r.followup_by,
+            followupCount: r.followup_count || 0, lastFollowupAt: r.last_followup_at, lastFollowupBy: r.last_followup_by, followupNote: r.followup_note,
+          },
+        ])
+      );
+  // Autorisations (droit à l'image, livrets, vêtements TST) des stagiaires validés.
+  const autorKinds = trackError ? [] : sessionKinds((trackRow as any)?.authorizations ?? null, (tplOpt as any)?.authorizations ?? null);
+  const validatedIds = enrolled.filter((t: any) => t.status === 'validee').map((t: any) => t.id as string);
+  const autorRows = trackError ? [] : await loadAuthorizations(supabase as any, validatedIds);
+
   return (
     <main>
       <Sidebar active="/sessions" profile={profile} />
@@ -196,6 +227,17 @@ export default async function SessionDetailPage({
           </div>
         </header>
 
+        {tracking && (
+          <SessionTrackingBar
+            sessionId={session.id}
+            createdBy={(trackRow as any)?.created_by ?? null}
+            createdAt={(trackRow as any)?.created_by ? (trackRow as any)?.created_at : null}
+            managerId={(trackRow as any)?.manager_id ?? null}
+            staff={staff}
+            canManage={editable}
+          />
+        )}
+
         {poec && (
           <div role="status" className="alert alert-success poec-banner">
             Formation du parcours POEC <strong>{poec.title}</strong> : le groupe est inscrit automatiquement.{' '}
@@ -227,7 +269,21 @@ export default async function SessionDetailPage({
           enrolled={enrolled}
           allTrainees={allTrainees || []}
           dayOverrides={(dayRows as any) || []}
+          tracking={tracking}
+          staff={staff}
         />
+
+        {!trackError && (
+          <SessionAutorisations
+            sessionId={session.id}
+            kinds={autorKinds}
+            overridden={(trackRow as any)?.authorizations != null}
+            canManage={editable}
+            canCollect={canEditStartTimes(profile?.role) || isOwn}
+            rows={validatedTrainees.map((t) => ({ id: t.id, name: t.name, auths: autorRows.filter((a) => a.trainee_id === t.id) }))}
+            cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+          />
+        )}
 
         <DayTrainersPanel
           sessionId={session.id}
@@ -301,6 +357,8 @@ export default async function SessionDetailPage({
             legal={legal}
           />
         )}
+
+        {editable && <SessionHistory items={(activity as any) || []} staff={staff} />}
       </section>
     </main>
   );

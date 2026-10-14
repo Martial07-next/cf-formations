@@ -23,6 +23,8 @@ export default async function ModelesPage() {
   const { data: faiOpts } = await supabase.from('templates').select('id, fiche_appreciation, codification');
   // Objectifs et compétences (migration 22).
   const { data: objOpts } = await supabase.from('templates').select('id, objectifs, competences');
+  // Autorisations stagiaire (migration 24).
+  const { data: authOpts } = await supabase.from('templates').select('id, authorizations');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -39,6 +41,7 @@ export default async function ModelesPage() {
     codification: ((faiOpts as any[]) || []).find((x) => x.id === t.id)?.codification ?? null,
     objectifs: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs ?? null,
     competences: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.competences ?? null,
+    authorizations: ((authOpts as any[]) || []).find((x) => x.id === t.id)?.authorizations ?? null,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

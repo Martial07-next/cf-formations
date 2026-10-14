@@ -23,6 +23,8 @@ import { LinkRow } from '@/components/useful-links';
 import type { LinkItem } from '@/lib/links';
 import { ReservationsBox } from '@/components/reservations-box';
 import { reservationStatus, type Reservation } from '@/lib/reservations';
+import { AddedBy, FollowupCell, type TraineeTracking } from '@/components/tracking/session-tracking';
+import type { Staff } from '@/lib/tracking';
 
 type Trainee = { id: string; full_name: string; email: string | null; company: string | null };
 type EnrolledTrainee = Trainee & { status: 'validee' | 'en_attente' };
@@ -58,7 +60,12 @@ export function SessionDetailView({
   enrolled,
   allTrainees,
   dayOverrides,
+  tracking = null,
+  staff = [],
 }: {
+  /** Organisation interne (migration 24) : qui a inscrit, qui relance. */
+  tracking?: Record<string, TraineeTracking> | null;
+  staff?: Staff[];
   isAdmin: boolean;
   /** Session qui vient d'être créée : l'ajout des stagiaires passe en premier. */
   isNew?: boolean;
@@ -198,7 +205,7 @@ export function SessionDetailView({
             <tbody>
               {validated.map((t) => (
                 <tr key={t.id}>
-                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
+                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a><AddedBy t={tracking?.[t.id]} staff={staff} /></td>
                   {modules.length > 0 && (
                     <td>
                       <TraineeModuleToggles
@@ -229,11 +236,11 @@ export function SessionDetailView({
           <p className="empty">Aucun stagiaire en attente.</p>
         ) : (
           <table className="data">
-            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{tracking && <th>Suivi des relances</th>}{isAdmin && <th></th>}</tr></thead>
             <tbody>
               {waiting.map((t) => (
                 <tr key={t.id}>
-                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a></td>
+                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a><AddedBy t={tracking?.[t.id]} staff={staff} /></td>
                   {modules.length > 0 && (
                     <td>
                       <TraineeModuleToggles
@@ -247,6 +254,9 @@ export function SessionDetailView({
                   )}
                   <td>{t.email || '-'}</td>
                   <td>{t.company || '-'}</td>
+                  {tracking && (
+                    <td><FollowupCell sessionId={session.id} traineeId={t.id} t={tracking[t.id]} staff={staff} canManage={isAdmin} /></td>
+                  )}
                   {isAdmin && (
                     <td className="row-actions">
                       <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>

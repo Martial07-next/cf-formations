@@ -80,6 +80,7 @@ function SessionCard({
   replacement = null,
   reserved = 0,
   poec = null,
+  by = null,
 }: {
   s: SessionRow;
   dIso: string;
@@ -93,6 +94,8 @@ function SessionCard({
   reserved?: number;
   /** Parcours POEC auquel appartient la session. */
   poec?: string | null;
+  /** Créée par (compte de l'équipe). */
+  by?: string | null;
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const principal = one(s.trainers)?.full_name;
@@ -129,6 +132,7 @@ function SessionCard({
       {replacement && (
         <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
       )}
+      {by && <span className="sc-by">créé par {by}</span>}
       {dossierDone && (
         <span className="sc-dossier"><FolderCheck size={11} aria-hidden /> Dossier complet</span>
       )}
@@ -159,6 +163,7 @@ export function Planning({
   dayTrainers = {},
   reservedSeats = {},
   poecTitles = {},
+  createdBy = {},
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -186,6 +191,7 @@ export function Planning({
   /** Places réservées par entreprise encore sans nom, par session. */
   reservedSeats?: Record<string, number>;
   poecTitles?: Record<string, string>;
+  createdBy?: Record<string, string>;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -480,6 +486,7 @@ export function Planning({
                             dossierDone={Boolean(dossierComplete[s.id])}
                             reserved={reservedSeats[s.id] || 0}
                             poec={poecTitles[s.id] || null}
+                            by={createdBy[s.id] || null}
                             replacement={dayTrainers[s.id]?.[d.iso] ? trainers.find((t) => t.id === dayTrainers[s.id][d.iso].trainer_id) || null : null}
                           />
                         ))}
@@ -542,7 +549,7 @@ export function Planning({
                           href={`/sessions/${s.id}`}
                           className="month-chip"
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
-                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}`}
+                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · créé par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />

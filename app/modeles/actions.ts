@@ -21,6 +21,10 @@ function readTemplate(formData: FormData) {
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
+    // Autorisations stagiaire demandées (migration 24).
+    ...(formData.has('auth_present')
+      ? { authorizations: formData.getAll('authorizations').map(String).filter((k) => ['image', 'livret', 'vetements'].includes(k)) }
+      : {}),
     // Objectifs et compétences évaluées (migration 22).
     ...(formData.has('objectifs') ? { objectifs: get('objectifs') || null, competences: get('competences') || null } : {}),
   };
@@ -28,7 +32,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

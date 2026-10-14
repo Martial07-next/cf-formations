@@ -9,6 +9,8 @@ import { loadDayOverrides, hoursOf, one } from '@/lib/history';
 import { formatHours, dayHours } from '@/lib/week';
 import { attendsDay, modulesLabel } from '@/lib/modules';
 import { nameFields } from '@/lib/trainee-name';
+import { TraineeAutorisations } from '@/components/autorisations/trainee-autorisations';
+import { AUTH_SELECT, type Authorization } from '@/lib/autorisations';
 
 export default async function TraineeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,6 +63,14 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
     };
   });
 
+  // Autorisations signées (migration 24) ; rien si la migration manque.
+  const [{ data: authRows, error: authError }, { data: settings }, { data: extra }] = await Promise.all([
+    supabase.from('trainee_authorizations').select(AUTH_SELECT).eq('trainee_id', id),
+    canManage(profile?.role) ? supabase.from('app_settings').select('cachet_image').eq('id', true).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('trainees').select('address').eq('id', id).maybeSingle(),
+  ]);
+  const sessionTitles = Object.fromEntries(sessions.map((x) => [x.s.id, x.s.title as string]));
+
   const now = new Date().toISOString();
   const completed = entries.filter((e) => e.end_at < now && e.enrollmentStatus === 'validee');
   const upcoming = entries.filter((e) => e.end_at >= now);
@@ -75,7 +85,11 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
             <Link href="/stagiaires" className="back-link"><ArrowLeft size={14} aria-hidden /> Stagiaires</Link>
             <p className="eyebrow">Fiche stagiaire</p>
             <h1>{trainee.full_name}</h1>
-            <p>{trainee.company || 'Entreprise non renseignée'}{trainee.email ? ` · ${trainee.email}` : ''}</p>
+            <p>
+              {trainee.company || 'Entreprise non renseignée'}
+              {trainee.email ? ` · ${trainee.email}` : ''}
+              {(extra as any)?.address ? ` · ${(extra as any).address}` : ''}
+            </p>
           </div>
         </header>
 
@@ -84,6 +98,16 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
           <div className="stat"><span>Heures de formation</span><strong>{formatHours(hoursDone)}</strong><small>formations terminées</small></div>
           <div className="stat"><span>À venir</span><strong>{upcoming.length}</strong><small>inscriptions</small></div>
         </div>
+
+        {!authError && (
+          <TraineeAutorisations
+            traineeName={trainee.full_name}
+            auths={(authRows as Authorization[]) || []}
+            sessionTitles={sessionTitles}
+            canManage={canManage(profile?.role)}
+            cachet={((settings as any)?.cachet_image as string) || null}
+          />
+        )}
 
         <TrainingHistory entries={entries} emptyLabel="Ce stagiaire n’est inscrit à aucune formation pour l’instant." />
 
