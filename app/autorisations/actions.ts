@@ -9,6 +9,7 @@ import { canEditStartTimes } from '@/lib/roles';
 import { validSignature } from '@/lib/emargement';
 import { authMissing, isAuthKind, validAuthData, AUTH_KIND, type AuthKind } from '@/lib/autorisations';
 import { loadAutorContext } from '@/lib/autorisations-server';
+import { staffOf } from '@/lib/session-staff';
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -17,21 +18,6 @@ const MIGRATION = 'Exécute d’abord la migration 24 (supabase/migration_phase2
 function refreshTrainee(traineeId: string, sessionId?: string | null) {
   revalidatePath(`/stagiaires/${traineeId}`);
   if (sessionId) revalidatePath(`/sessions/${sessionId}`);
-}
-
-/** Bureau, référent ou formateur de la session (y compris remplaçant). */
-async function staffOf(sessionId: string) {
-  const profile = await getCurrentProfile();
-  if (!profile) return null;
-  if (canEditStartTimes(profile.role)) return profile;
-  if (!profile.trainer_id) return null;
-  const supabase = await createClient();
-  const [{ data: s }, { data: days }] = await Promise.all([
-    supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle(),
-    supabase.from('session_day_trainers').select('trainer_id').eq('session_id', sessionId),
-  ]);
-  const ok = s?.trainer_id === profile.trainer_id || ((days as any[]) || []).some((d) => d.trainer_id === profile.trainer_id);
-  return ok ? profile : null;
 }
 
 /** Jeton du QR code des autorisations (créé à la première ouverture). */
@@ -63,6 +49,8 @@ export async function setSessionAuthKinds(sessionId: string, kinds: string[]): P
 }
 
 export type SignPayload = {
+  /** Adresse (droit à l'image, vêtements prêtés). */
+  address?: string;
   docs: { kind: string; data: Record<string, unknown>; accepted?: boolean }[];
   city: string;
   signature: string;
@@ -80,6 +68,8 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
   if (!validSignature(payload.signature)) return { ok: false, error: 'Signe dans le cadre avant de valider.' };
   const city = String(payload.city || '').trim().slice(0, 120);
   if (!city) return { ok: false, error: 'Indique la ville (« Fait à »).' };
+  const loanAddress = String(payload.address || '').trim().slice(0, 300);
+  if (trainee.loans.length && !loanAddress) return { ok: false, error: 'Vêtements TST : indique ton adresse.' };
 
   const rows: { trainee_id: string; kind: AuthKind; data: object; accepted: boolean; signature: string; city: string; session_id: string; collected_by: null }[] = [];
   for (const kind of trainee.missing) {
@@ -91,14 +81,24 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
     if (missing.length) return { ok: false, error: `${AUTH_KIND[kind].short} : ${missing.join(', ')}.` };
     rows.push({ trainee_id: traineeId, kind, data, accepted, signature: payload.signature, city, session_id: ctx.sessionId, collected_by: null });
   }
-  if (!rows.length) return { ok: true, count: 0 };
+  if (!rows.length && !trainee.loans.length) return { ok: true, count: 0 };
 
   const admin = createAdminClient();
-  const { error } = await admin.from('trainee_authorizations').insert(rows);
-  if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
+  if (rows.length) {
+    const { error } = await admin.from('trainee_authorizations').insert(rows);
+    if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
+  }
+  // Vêtements TST prêtés : même signature.
+  if (trainee.loans.length) {
+    await admin
+      .from('clothing_loans')
+      .update({ address: loanAddress, city, signature: payload.signature, signed_at: new Date().toISOString() })
+      .in('id', trainee.loans.map((l) => l.id))
+      .is('signed_at', null);
+  }
 
   // Adresse / entreprise : reprises dans la fiche du stagiaire.
-  const address = rows.map((r) => (r.data as any).address).find(Boolean);
+  const address = rows.map((r) => (r.data as any).address).find(Boolean) || loanAddress;
   const company = rows.map((r) => (r.data as any).company).find(Boolean);
   const patch: Record<string, string> = {};
   if (address) patch.address = address;
@@ -107,7 +107,7 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
 
   revalidatePath(`/autorisations/${token}`);
   refreshTrainee(traineeId, ctx.sessionId);
-  return { ok: true, count: rows.length };
+  return { ok: true, count: rows.length + trainee.loans.length };
 }
 
 /** Vêtements / livrets rendus (une nouvelle attestation vêtements sera demandée la prochaine fois). */

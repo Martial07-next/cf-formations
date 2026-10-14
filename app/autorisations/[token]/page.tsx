@@ -21,7 +21,7 @@ export default async function AutorisationsPage({ params }: { params: Promise<{ 
           <>
             <h1>{ctx.title}</h1>
             <p className="hint">
-              À remplir une seule fois : {ctx.kinds.map((k) => AUTH_KIND[k].short).join(' · ') || 'aucune autorisation demandée'}. Choisis ton nom.
+              À remplir une seule fois : {ctx.kinds.map((k) => AUTH_KIND[k].short).join(' · ') || 'vêtements prêtés'}. Choisis ton nom.
             </p>
             <AutorSign token={token} trainees={ctx.trainees} />
           </>

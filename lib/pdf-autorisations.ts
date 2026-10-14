@@ -14,16 +14,19 @@ import { AUTH_KIND, type Authorization } from '@/lib/autorisations';
 
 /** Document à imprimer : autorisation stagiaire ou document salarié (droit à l'image, remise de matériel). */
 export type PdfAuth = Pick<Authorization, 'accepted' | 'signature' | 'city' | 'returned_at'> & {
-  kind: Authorization['kind'] | 'materiel';
+  kind: Authorization['kind'] | 'materiel' | 'vetements';
   data: Record<string, any>;
   signed_at: string;
   return_signature?: string | null;
 };
 export type AuthPdfItem = { auth: PdfAuth; traineeName: string };
 
-const MATERIEL_TEMPLATE = '/templates/remise-materiel.pdf';
-const templateOf = (k: PdfAuth['kind']) => (k === 'materiel' ? MATERIEL_TEMPLATE : AUTH_KIND[k].template);
-const labelOf = (k: PdfAuth['kind']) => (k === 'materiel' ? 'Attestation de remise de matériel' : AUTH_KIND[k].label);
+const EXTRA: Record<'materiel' | 'vetements', { template: string; label: string }> = {
+  materiel: { template: '/templates/remise-materiel.pdf', label: 'Attestation de remise de matériel' },
+  vetements: { template: '/templates/vetements-tst.pdf', label: 'Attestation de restitution de vêtements de travail TST' },
+};
+const templateOf = (k: PdfAuth['kind']) => (k === 'materiel' || k === 'vetements' ? EXTRA[k].template : AUTH_KIND[k].template);
+const labelOf = (k: PdfAuth['kind']) => (k === 'materiel' || k === 'vetements' ? EXTRA[k].label : AUTH_KIND[k].label);
 
 type Ctx = { doc: PDFDocument; value: PDFFont; cachet: PDFImage | null };
 
@@ -156,8 +159,24 @@ async function fill(page: PDFPage, ctx: Ctx, item: AuthPdfItem) {
   put(page, ctx, date.full, 45, L(189.2, 16), 176, 13);
   image(page, sig, 26, L(160.9, 15.8) - 8, 230, 54);
   image(page, ctx.cachet, 26, L(85.4, 15.8) - 8, 200, 74);
+  // Encadré de retour (même style que celui des livrets) : rendus, manquants, signature du stagiaire.
   if (a.returned_at) {
-    page.drawText(keep(ctx.value, `Vêtements restitués le ${parts(a.returned_at).full}`), { x: 330, y: 100, size: 10, font: ctx.value, color: INK });
+    const x = 318, y = 18, w = 252, h = 132;
+    page.drawRectangle({ x, y, width: w, height: h, color: WHITE, borderColor: INK, borderWidth: 1.2 });
+    const t = (str: string, ty: number, size = 8.5, color = INK) => page.drawText(keep(ctx.value, str), { x: x + 10, y: ty, size, font: ctx.value, color });
+    const rv = Number(d.returned_vestes ?? 0), rp = Number(d.returned_pantalons ?? 0);
+    const mv = Math.max(0, Number(d.vestes ?? 0) - rv), mp = Math.max(0, Number(d.pantalons ?? 0) - rp);
+    const txt = (v: number, p: number) => [v ? `${v} veste${v > 1 ? 's' : ''}` : '', p ? `${p} pantalon${p > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ') || 'aucun';
+    t('Restitution des vêtements', y + h - 16, 9.5);
+    t(`Date de restitution : ${parts(a.returned_at).full}`, y + h - 32);
+    t(`Rendus : ${txt(rv, rp)}`, y + h - 46);
+    if (mv + mp > 0) t(`MANQUE : ${txt(mv, mp)}`, y + h - 60, 9.5, RED);
+    else t('Tous les vêtements ont été rendus.', y + h - 60);
+    if (d.return_note) t(String(d.return_note).slice(0, 60), y + h - 73, 7.5);
+    t('Signature du stagiaire :', y + 34, 8);
+    image(page, await embedDataUrl(ctx.doc, a.return_signature), x + 120, y + 50, 120, 26);
+    t('Signature de CF Réseaux :', y + 10, 8);
+    image(page, ctx.cachet, x + 130, y + 26, 110, 22);
   }
 }
 

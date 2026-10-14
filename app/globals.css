@@ -789,3 +789,18 @@ a.poec-item:hover{background:var(--cf-mint-soft)}
 .muted-row td{opacity:.6}
 .chip-by{display:block;font-size:9.5px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .history-list li.with-action{grid-template-columns:96px 1fr 26px;align-items:center}
+
+/* ---------- Prêts de vêtements TST ---------- */
+.loan-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.loan-item{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:10px;padding:10px 12px;font-size:14px}
+.loan-item.prete{border-left-color:#d4a106}
+.loan-item.a_signer{border-left-color:#64748b}
+.loan-item.incomplet{border-left-color:var(--cf-red-ink)}
+.loan-item.restitue{border-left-color:var(--ok-ink)}
+.loan-main{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.loan-dates{flex-basis:100%}
+.loan-status{font-size:11.5px;font-weight:800;border-radius:999px;padding:1px 8px;background:var(--draft-bg);color:var(--draft-ink)}
+.loan-status.prete{background:var(--wait-bg);color:var(--wait-ink)}
+.loan-status.restitue{background:var(--ok-bg);color:var(--ok-ink)}
+.loan-status.incomplet{background:#fdeceb;color:var(--cf-red-ink)}
+#vetements h2 svg{vertical-align:-3px}

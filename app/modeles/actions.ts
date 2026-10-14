@@ -23,7 +23,7 @@ function readTemplate(formData: FormData) {
       : {}),
     // Autorisations stagiaire demandées (migration 24).
     ...(formData.has('auth_present')
-      ? { authorizations: formData.getAll('authorizations').map(String).filter((k) => ['image', 'livret', 'vetements'].includes(k)) }
+      ? { authorizations: formData.getAll('authorizations').map(String).filter((k) => ['image', 'livret'].includes(k)) }
       : {}),
     // Objectifs et compétences évaluées (migration 22).
     ...(formData.has('objectifs') ? { objectifs: get('objectifs') || null, competences: get('competences') || null } : {}),

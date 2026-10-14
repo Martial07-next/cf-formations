@@ -12,6 +12,8 @@ export type AutorTrainee = {
   company: string | null;
   address: string | null;
   missing: AuthKind[];
+  /** Vêtements TST prêtés sur cette session, pas encore signés. */
+  loans: { id: string; vestes: number; pantalons: number }[];
   /** Droit à l'image refusé (à savoir pour les photos). */
   imageRefused: boolean;
 };
@@ -56,6 +58,8 @@ export async function loadAutorContext(token: string): Promise<AutorContext> {
     .filter((t) => t.status === 'validee')
     .map((t) => ({ id: t.trainee_id as string, t: Array.isArray(t.trainees) ? t.trainees[0] : t.trainees }));
   const auths = await loadAuthorizations(admin, enrolled.map((e) => e.id));
+  // Prêts de vêtements à signer (migration 27) ; ignorés si la table manque.
+  const { data: loanRows } = await admin.from('clothing_loans').select('id, trainee_id, vestes, pantalons').eq('session_id', (s as any).id).is('signed_at', null);
   return {
     ok: true,
     sessionId: (s as any).id,
@@ -71,6 +75,7 @@ export async function loadAutorContext(token: string): Promise<AutorContext> {
           company: e.t?.company || null,
           address: e.t?.address || null,
           missing: missingKinds(kinds, mine),
+          loans: ((loanRows as any[]) || []).filter((l) => l.trainee_id === e.id).map((l) => ({ id: l.id, vestes: l.vestes, pantalons: l.pantalons })),
           imageRefused: lastImage ? !lastImage.accepted : false,
         };
       })

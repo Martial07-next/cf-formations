@@ -6,6 +6,7 @@ import { CheckCircle2, Search, FileText, ChevronLeft } from 'lucide-react';
 import { signAuthorizations } from '@/app/autorisations/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AUTH_KIND, type AuthKind } from '@/lib/autorisations';
+import { clothesText } from '@/lib/vetements';
 import type { AutorTrainee } from '@/lib/autorisations-server';
 
 const fold = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -42,10 +43,10 @@ export function AutorSign({ token, trainees }: { token: string; trainees: AutorT
       </label>
       <div className="sign-names">
         {list.map((t) =>
-          t.missing.length ? (
+          t.missing.length + t.loans.length ? (
             <button key={t.id} type="button" className="sign-name" onClick={() => setChosen(t)}>
               <span>{t.name}</span>
-              <span className="autor-todo">{t.missing.length} à remplir</span>
+              <span className="autor-todo">{t.missing.length + t.loans.length} à remplir</span>
             </button>
           ) : (
             <div key={t.id} className="sign-name autor-ok" aria-label={`${t.name} : rien à remplir`}>
@@ -62,15 +63,14 @@ export function AutorSign({ token, trainees }: { token: string; trainees: AutorT
 
 function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee: AutorTrainee; onBack: () => void; onDone: () => void }) {
   const kinds = trainee.missing;
-  const needsAddress = kinds.includes('image') || kinds.includes('vetements');
+  const loans = trainee.loans;
+  const needsAddress = kinds.includes('image') || loans.length > 0;
   const [address, setAddress] = useState(trainee.address || '');
   const [imageOk, setImageOk] = useState<boolean | null>(null);
   const [company, setCompany] = useState(trainee.company || '');
   const [memo, setMemo] = useState(false);
   const [pv, setPv] = useState(false);
   const [autres, setAutres] = useState('');
-  const [vestes, setVestes] = useState(0);
-  const [pantalons, setPantalons] = useState(0);
   const [city, setCity] = useState('Cuincy');
   const [read, setRead] = useState(false);
   const [empty, setEmpty] = useState(true);
@@ -82,7 +82,6 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
   const ready =
     (!needsAddress || (address.trim() && (!has('image') || imageOk !== null))) &&
     (!has('livret') || memo || pv || autres.trim()) &&
-    (!has('vetements') || vestes + pantalons > 0) &&
     city.trim() && read && !empty;
 
   const docLink = (k: AuthKind) => (
@@ -127,14 +126,13 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
         </section>
       )}
 
-      {has('vetements') && (
+      {loans.length > 0 && (
         <section className="autor-card">
-          <h3>{AUTH_KIND.vetements.short}</h3>
-          <p className="hint">{AUTH_KIND.vetements.intro} {docLink('vetements')}</p>
-          <div className="autor-counts">
-            <Counter label="Veste(s) TST" value={vestes} onChange={setVestes} />
-            <Counter label="Pantalon(s) TST" value={pantalons} onChange={setPantalons} />
-          </div>
+          <h3>Vêtements TST prêtés</h3>
+          <p className="hint">
+            CF Réseaux te prête : <strong>{loans.map((l) => clothesText(l.vestes, l.pantalons)).join(' + ')}</strong>. À nettoyer puis à ramener au siège.{' '}
+            <a href="/templates/vetements-tst.pdf" target="_blank" rel="noreferrer" className="autor-doc-link"><FileText size={13} aria-hidden /> Lire le document</a>
+          </p>
         </section>
       )}
 
@@ -158,12 +156,12 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
             setError(null);
             startTransition(async () => {
               const res = await signAuthorizations(token, trainee.id, {
+                address,
                 city,
                 signature,
                 docs: [
                   { kind: 'image', data: { address }, accepted: imageOk !== false },
                   { kind: 'livret', data: { company, memoformat: memo, livret_pv: pv, autres } },
-                  { kind: 'vetements', data: { address, vestes, pantalons } },
                 ].filter((d) => has(d.kind as AuthKind)),
               });
               if (!res.ok) setError(res.error);
@@ -171,21 +169,8 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
             });
           }}
         >
-          {isPending ? 'Enregistrement…' : `Signer ${kinds.length > 1 ? `les ${kinds.length} documents` : 'le document'}`}
+          {isPending ? 'Enregistrement…' : `Signer ${kinds.length + loans.length > 1 ? `les ${kinds.length + loans.length} documents` : 'le document'}`}
         </button>
-      </div>
-    </div>
-  );
-}
-
-function Counter({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="autor-counter">
-      <span>{label}</span>
-      <div>
-        <button type="button" className="small icon" aria-label={`Moins de ${label}`} onClick={() => onChange(Math.max(0, value - 1))}>−</button>
-        <strong aria-live="polite">{value}</strong>
-        <button type="button" className="small icon" aria-label={`Plus de ${label}`} onClick={() => onChange(Math.min(20, value + 1))}>+</button>
       </div>
     </div>
   );

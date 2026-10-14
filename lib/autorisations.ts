@@ -1,10 +1,11 @@
 /**
  * Autorisations stagiaire dématérialisées. Chacune est signée une fois et
  * rangée dans la fiche du stagiaire : sur ses formations suivantes, il n'a
- * plus rien à remplir (sauf vêtements TST, à refaire après restitution).
+ * plus rien à remplir. (Les vêtements TST sont des prêts au cas par cas :
+ * voir lib/vetements.ts.)
  */
 
-export type AuthKind = 'image' | 'livret' | 'vetements';
+export type AuthKind = 'image' | 'livret';
 
 export type AuthData = {
   address?: string;
@@ -12,8 +13,6 @@ export type AuthData = {
   memoformat?: boolean;
   livret_pv?: boolean;
   autres?: string;
-  vestes?: number;
-  pantalons?: number;
 };
 
 export type Authorization = {
@@ -59,20 +58,12 @@ export const AUTH_KINDS: {
     returnable: true,
     template: '/templates/remise-livrets.pdf',
   },
-  {
-    kind: 'vetements',
-    label: 'Attestation de restitution de vêtements de travail TST',
-    short: 'Vêtements TST',
-    intro: 'Les vêtements TST emportés : à nettoyer puis à ramener au siège de CF Réseaux.',
-    returnable: true,
-    template: '/templates/vetements-tst.pdf',
-  },
 ];
 
 export const AUTH_KIND = Object.fromEntries(AUTH_KINDS.map((k) => [k.kind, k])) as Record<AuthKind, (typeof AUTH_KINDS)[number]>;
 
 export function isAuthKind(v: string): v is AuthKind {
-  return v === 'image' || v === 'livret' || v === 'vetements';
+  return v === 'image' || v === 'livret';
 }
 
 /** Autorisations demandées sur une session : celles de la session, sinon celles de la formation. */
@@ -81,17 +72,10 @@ export function sessionKinds(sessionKindsValue: string[] | null | undefined, tem
   return AUTH_KINDS.map((k) => k.kind).filter((k) => list.includes(k));
 }
 
-/**
- * Autorisation encore valable pour ce stagiaire ?
- *  · droit à l'image et livrets : la dernière signée reste valable ;
- *  · vêtements TST : valable tant que les vêtements n'ont pas été restitués
- *    (après restitution, une nouvelle attestation est demandée).
- */
+/** Autorisation encore valable pour ce stagiaire : la dernière signée. */
 export function currentAuth(list: Authorization[], kind: AuthKind): Authorization | null {
   const mine = list.filter((a) => a.kind === kind).sort((a, b) => b.signed_at.localeCompare(a.signed_at));
   const last = mine[0] || null;
-  if (!last) return null;
-  if (kind === 'vetements' && last.returned_at) return null;
   return last;
 }
 
@@ -102,21 +86,15 @@ export function missingKinds(kinds: AuthKind[], list: Authorization[]): AuthKind
 
 export function validAuthData(kind: AuthKind, raw: any): AuthData {
   const s = (v: unknown, n = 300) => String(v ?? '').trim().slice(0, n);
-  const q = (v: unknown) => Math.max(0, Math.min(20, Math.round(Number(v) || 0)));
   if (kind === 'image') return { address: s(raw?.address) };
-  if (kind === 'livret') return { company: s(raw?.company), memoformat: !!raw?.memoformat, livret_pv: !!raw?.livret_pv, autres: s(raw?.autres) };
-  return { address: s(raw?.address), vestes: q(raw?.vestes), pantalons: q(raw?.pantalons) };
+  return { company: s(raw?.company), memoformat: !!raw?.memoformat, livret_pv: !!raw?.livret_pv, autres: s(raw?.autres) };
 }
 
 /** Champs manquants avant signature. */
 export function authMissing(kind: AuthKind, d: AuthData, accepted = true): string[] {
   if (kind === 'image') return d.address ? [] : ['adresse'];
-  if (kind === 'livret') return d.memoformat || d.livret_pv || d.autres ? [] : ['au moins un document reçu'];
-  if (!accepted) return [];
-  const out: string[] = [];
-  if (!d.address) out.push('adresse');
-  if (!d.vestes && !d.pantalons) out.push('nombre de vestes ou de pantalons');
-  return out;
+  void accepted;
+  return d.memoformat || d.livret_pv || d.autres ? [] : ['au moins un document reçu'];
 }
 
 export const frDateTime = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : '');

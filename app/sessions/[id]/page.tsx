@@ -4,6 +4,8 @@ import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/comp
 import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
 import { loadAuthorizations } from '@/lib/autorisations-server';
 import { sessionKinds } from '@/lib/autorisations';
+import { SessionLoans } from '@/components/vetements/loans-panel';
+import { LOAN_SELECT, loanStatus, type ClothingLoan } from '@/lib/vetements';
 import { canEditStartTimes } from '@/lib/roles';
 import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
@@ -192,6 +194,18 @@ export default async function SessionDetailPage({
   const autorKinds = trackError ? [] : sessionKinds((trackRow as any)?.authorizations ?? null, (tplOpt as any)?.authorizations ?? null);
   const validatedIds = enrolled.filter((t: any) => t.status === 'validee').map((t: any) => t.id as string);
   const autorRows = trackError ? [] : await loadAuthorizations(supabase as any, validatedIds);
+  // Prêts de vêtements TST (migration 27) : ceux de la session + ceux pas rendus d'avant.
+  const [{ data: loanRows, error: loanError }, { data: addrRows }] = await Promise.all([
+    supabase
+      .from('clothing_loans')
+      .select(LOAN_SELECT)
+      .or(validatedIds.length ? `session_id.eq.${id},trainee_id.in.(${validatedIds.join(',')})` : `session_id.eq.${id}`),
+    validatedIds.length ? supabase.from('trainees').select('id, address').in('id', validatedIds) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const allLoans = ((loanRows as ClothingLoan[]) || []);
+  const sessionLoans = allLoans.filter((l) => l.session_id === id);
+  const otherOpenLoans = allLoans.filter((l) => l.session_id !== id && ['prete', 'incomplet'].includes(loanStatus(l)));
+  const addressOf = (tid: string) => ((addrRows as any[]) || []).find((r) => r.id === tid)?.address || null;
 
   return (
     <main>
@@ -273,6 +287,17 @@ export default async function SessionDetailPage({
           tracking={tracking}
           staff={staff}
         />
+
+        {!loanError && (canEditStartTimes(profile?.role) || isOwn) && (
+          <SessionLoans
+            sessionId={session.id}
+            trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
+            loans={sessionLoans}
+            otherOpen={otherOpenLoans}
+            canManage={editable}
+            cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+          />
+        )}
 
         {!trackError && (
           <SessionAutorisations

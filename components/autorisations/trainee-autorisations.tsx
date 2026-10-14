@@ -57,8 +57,7 @@ export function TraineeAutorisations({
                   <td>
                     {a.kind === 'image' && (a.accepted ? 'Autorise' : <span className="autor-refus"><Ban size={12} aria-hidden /> N’autorise pas</span>)}
                     {a.kind === 'livret' && [a.data.memoformat && 'MémoFormat', a.data.livret_pv && 'Livret PV', a.data.autres].filter(Boolean).join(' · ')}
-                    {a.kind === 'vetements' && `${a.data.vestes || 0} veste(s) · ${a.data.pantalons || 0} pantalon(s)`}
-                    {AUTH_KIND[a.kind].returnable && (a.returned_at ? <div className="hint">Restitué le {frDateTime(a.returned_at)}</div> : a.kind === 'vetements' ? <div className="autor-refus">À restituer</div> : null)}
+                    {AUTH_KIND[a.kind].returnable && a.returned_at && <div className="hint">Restitué le {frDateTime(a.returned_at)}</div>}
                   </td>
                   <td className="row-actions">
                     {canManage && <AuthPdfButton items={[{ auth: a, traineeName }]} cachet={cachet} fileName={`${AUTH_KIND[a.kind].short} - ${traineeName}.pdf`} />}

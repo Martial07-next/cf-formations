@@ -11,6 +11,8 @@ import { attendsDay, modulesLabel } from '@/lib/modules';
 import { nameFields } from '@/lib/trainee-name';
 import { TraineeAutorisations } from '@/components/autorisations/trainee-autorisations';
 import { AUTH_SELECT, type Authorization } from '@/lib/autorisations';
+import { TraineeLoans } from '@/components/vetements/loans-panel';
+import { LOAN_SELECT, type ClothingLoan } from '@/lib/vetements';
 
 export default async function TraineeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -69,6 +71,7 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
     canManage(profile?.role) ? supabase.from('app_settings').select('cachet_image').eq('id', true).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('trainees').select('address').eq('id', id).maybeSingle(),
   ]);
+  const { data: loanRows } = await supabase.from('clothing_loans').select(LOAN_SELECT).eq('trainee_id', id);
   const sessionTitles = Object.fromEntries(sessions.map((x) => [x.s.id, x.s.title as string]));
 
   const now = new Date().toISOString();
@@ -108,6 +111,15 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
             cachet={((settings as any)?.cachet_image as string) || null}
           />
         )}
+
+        <TraineeLoans
+          traineeName={trainee.full_name}
+          address={(extra as any)?.address || null}
+          loans={(loanRows as ClothingLoan[]) || []}
+          sessionTitles={sessionTitles}
+          canManage={canManage(profile?.role)}
+          cachet={((settings as any)?.cachet_image as string) || null}
+        />
 
         <TrainingHistory entries={entries} emptyLabel="Ce stagiaire n’est inscrit à aucune formation pour l’instant." />
 
