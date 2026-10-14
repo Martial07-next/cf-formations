@@ -81,12 +81,22 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
     if (missing.length) return { ok: false, error: `${AUTH_KIND[kind].short} : ${missing.join(', ')}.` };
     rows.push({ trainee_id: traineeId, kind, data, accepted, signature: payload.signature, city, session_id: ctx.sessionId, collected_by: null });
   }
-  if (!rows.length && !trainee.loans.length) return { ok: true, count: 0 };
+  if (!rows.length && !trainee.loans.length && !trainee.docs.length) return { ok: true, count: 0 };
 
   const admin = createAdminClient();
   if (rows.length) {
     const { error } = await admin.from('trainee_authorizations').insert(rows);
     if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
+  }
+  // Documents ajoutés (règlement intérieur…) : même signature.
+  if (trainee.docs.length) {
+    const { error: docError } = await admin.from('document_signatures').insert(
+      trainee.docs.map((d) => ({
+        document_id: d.id, version: d.version, trainee_id: traineeId, session_id: ctx.sessionId,
+        signature: payload.signature, city, collected_by: null,
+      }))
+    );
+    if (docError) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
   }
   // Vêtements TST prêtés : même signature.
   if (trainee.loans.length) {
@@ -107,7 +117,7 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
 
   revalidatePath(`/autorisations/${token}`);
   refreshTrainee(traineeId, ctx.sessionId);
-  return { ok: true, count: rows.length + trainee.loans.length };
+  return { ok: true, count: rows.length + trainee.loans.length + trainee.docs.length };
 }
 
 /** Vêtements / livrets rendus (une nouvelle attestation vêtements sera demandée la prochaine fois). */

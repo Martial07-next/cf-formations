@@ -804,3 +804,11 @@ a.poec-item:hover{background:var(--cf-mint-soft)}
 .loan-status.restitue{background:var(--ok-bg);color:var(--ok-ink)}
 .loan-status.incomplet{background:#fdeceb;color:var(--cf-red-ink)}
 #vetements h2 svg{vertical-align:-3px}
+.rights-table td.right{text-align:center;font-size:12px;font-weight:700}
+.rights-table td.right.yes{color:var(--ok-ink)}
+.rights-table td.right.own{color:var(--wait-ink)}
+.rights-table td.right.no{color:var(--muted)}
+.rights-table th{text-align:center}
+.rights-table th:first-child{text-align:left}
+.rights-group td{background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
+.rights-table td:first-child{min-width:340px}

@@ -7,6 +7,11 @@ import { signEmployeeDocs } from '@/app/salaries/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
 import { DOC_LABEL, MATERIAL_ITEMS, materialSummary, type EmployeeDoc } from '@/lib/salaries';
+import { SignedDocButton } from '@/components/documents/signed-docs';
+import type { DocSignature } from '@/lib/documents';
+
+/** Document ajouté par l'administrateur (signé ou à signer), avec son lien de lecture. */
+export type ExtraDoc = { id: string; title: string; description: string | null; url: string | null; sig: DocSignature | null };
 
 const TEMPLATE = { image: '/templates/autorisation-image.pdf', materiel: '/templates/remise-materiel.pdf' };
 
@@ -17,7 +22,9 @@ export function EmployeeSign({
   address: initialAddress,
   docs,
   cachet,
+  extras = [],
 }: {
+  extras?: ExtraDoc[];
   link: string;
   name: string;
   address: string | null;
@@ -25,7 +32,10 @@ export function EmployeeSign({
   cachet: string | null;
 }) {
   const router = useRouter();
-  const pending = docs.filter((d) => !d.signed_at);
+  const pendingBuiltin = docs.filter((d) => !d.signed_at);
+  const pendingExtras = extras.filter((e) => !e.sig);
+  const pending = pendingBuiltin;
+  const pendingCount = pendingBuiltin.length + pendingExtras.length;
   const signed = docs.filter((d) => d.signed_at);
   const [address, setAddress] = useState(initialAddress || '');
   const [city, setCity] = useState('Cuincy');
@@ -41,7 +51,7 @@ export function EmployeeSign({
 
   return (
     <div className="autor-form">
-      {pending.length === 0 ? (
+      {pendingCount === 0 ? (
         <div className="sign-done" role="status">
           <CheckCircle2 size={44} aria-hidden />
           <h2>Tout est signé, merci !</h2>
@@ -83,6 +93,15 @@ export function EmployeeSign({
               )}
             </section>
           ))}
+          {pendingExtras.map((e) => (
+            <section key={e.id} className="autor-card">
+              <h3>{e.title}</h3>
+              <p className="hint">
+                {e.description ? `${e.description} ` : ''}
+                {e.url && <a href={e.url} target="_blank" rel="noreferrer" className="autor-doc-link"><FileText size={13} aria-hidden /> Lire le document</a>}
+              </p>
+            </section>
+          ))}
           <section className="autor-card">
             <h3>Signature</h3>
             <label className="field">Fait à<input value={city} onChange={(e) => setCity(e.target.value)} /></label>
@@ -109,13 +128,13 @@ export function EmployeeSign({
                 });
               }}
             >
-              {isPending ? 'Signature…' : `Signer ${pending.length > 1 ? `les ${pending.length} documents` : 'le document'}`}
+              {isPending ? 'Signature…' : `Signer ${pendingCount > 1 ? `les ${pendingCount} documents` : 'le document'}`}
             </button>
           </div>
         </>
       )}
 
-      {signed.length > 0 && (
+      {(signed.length > 0 || extras.some((e) => e.sig)) && (
         <section className="autor-card">
           <h3>Mes documents signés</h3>
           <ul className="material-list">
@@ -127,6 +146,12 @@ export function EmployeeSign({
                   {d.kind === 'materiel' && <span className="hint"> · {materialSummary(d.data)}{d.returned_at ? ' · restitué' : ''}</span>}
                 </span>
                 <AuthPdfButton items={[pdfItem(d)]} cachet={cachet} fileName={`${DOC_LABEL[d.kind]} - ${name}.pdf`} />
+              </li>
+            ))}
+            {extras.filter((e) => e.sig).map((e) => (
+              <li key={e.id} style={{ justifyContent: 'space-between' }}>
+                <span><strong>{e.title}</strong> · {new Date(e.sig!.signed_at).toLocaleDateString('fr-FR')}</span>
+                <SignedDocButton doc={e} sig={e.sig!} signerName={name} signerRole="salarie" getUrl={async () => e.url} />
               </li>
             ))}
           </ul>

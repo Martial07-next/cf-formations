@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const tabs = [
   { href: '/administration', label: 'Utilisateurs' },
+  { href: '/administration/documents', label: 'Documents à signer' },
   { href: '/administration/parametres', label: 'Paramètres généraux' },
   { href: '/administration/integrations', label: 'Intégrations' },
   { href: '/administration/donnees', label: 'Données' },

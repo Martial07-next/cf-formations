@@ -13,6 +13,9 @@ import { TraineeAutorisations } from '@/components/autorisations/trainee-autoris
 import { AUTH_SELECT, type Authorization } from '@/lib/autorisations';
 import { TraineeLoans } from '@/components/vetements/loans-panel';
 import { LOAN_SELECT, type ClothingLoan } from '@/lib/vetements';
+import { TraineeSignedDocs } from '@/components/documents/signed-docs';
+import { customDocs as customDocsOf } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 
 export default async function TraineeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -72,6 +75,9 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
     supabase.from('trainees').select('address').eq('id', id).maybeSingle(),
   ]);
   const { data: loanRows } = await supabase.from('clothing_loans').select(LOAN_SELECT).eq('trainee_id', id);
+  // Documents ajoutés par l'administrateur (règlement intérieur…), migration 28.
+  const [allDocs, docSigs] = await Promise.all([loadDocs(supabase as any), loadDocSignatures(supabase as any, 'trainee_id', [id])]);
+  const traineeDocs = customDocsOf(allDocs, 'stagiaire');
   const sessionTitles = Object.fromEntries(sessions.map((x) => [x.s.id, x.s.title as string]));
 
   const now = new Date().toISOString();
@@ -111,6 +117,8 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
             cachet={((settings as any)?.cachet_image as string) || null}
           />
         )}
+
+        <TraineeSignedDocs docs={traineeDocs} sigs={docSigs} traineeName={trainee.full_name} sessionTitles={sessionTitles} isAdmin={profile?.role === 'admin'} />
 
         <TraineeLoans
           traineeName={trainee.full_name}

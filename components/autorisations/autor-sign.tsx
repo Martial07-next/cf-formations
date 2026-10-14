@@ -43,10 +43,10 @@ export function AutorSign({ token, trainees }: { token: string; trainees: AutorT
       </label>
       <div className="sign-names">
         {list.map((t) =>
-          t.missing.length + t.loans.length ? (
+          t.missing.length + t.loans.length + t.docs.length ? (
             <button key={t.id} type="button" className="sign-name" onClick={() => setChosen(t)}>
               <span>{t.name}</span>
-              <span className="autor-todo">{t.missing.length + t.loans.length} à remplir</span>
+              <span className="autor-todo">{t.missing.length + t.loans.length + t.docs.length} à remplir</span>
             </button>
           ) : (
             <div key={t.id} className="sign-name autor-ok" aria-label={`${t.name} : rien à remplir`}>
@@ -64,6 +64,8 @@ export function AutorSign({ token, trainees }: { token: string; trainees: AutorT
 function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee: AutorTrainee; onBack: () => void; onDone: () => void }) {
   const kinds = trainee.missing;
   const loans = trainee.loans;
+  const docs = trainee.docs;
+  const total = kinds.length + loans.length + docs.length;
   const needsAddress = kinds.includes('image') || loans.length > 0;
   const [address, setAddress] = useState(trainee.address || '');
   const [imageOk, setImageOk] = useState<boolean | null>(null);
@@ -126,6 +128,16 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
         </section>
       )}
 
+      {docs.map((d) => (
+        <section key={d.id} className="autor-card">
+          <h3>{d.title}</h3>
+          <p className="hint">
+            {d.description ? `${d.description} ` : ''}
+            {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="autor-doc-link"><FileText size={13} aria-hidden /> Lire le document</a>}
+          </p>
+        </section>
+      ))}
+
       {loans.length > 0 && (
         <section className="autor-card">
           <h3>Vêtements TST prêtés</h3>
@@ -169,7 +181,7 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
             });
           }}
         >
-          {isPending ? 'Enregistrement…' : `Signer ${kinds.length + loans.length > 1 ? `les ${kinds.length + loans.length} documents` : 'le document'}`}
+          {isPending ? 'Enregistrement…' : `Signer ${total > 1 ? `les ${total} documents` : 'le document'}`}
         </button>
       </div>
     </div>

@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EMPLOYEE_DOC_SELECT, validEmployeeToken, type EmployeeDoc } from '@/lib/salaries';
-import { EmployeeSign } from '@/components/salaries/employee-sign';
+import { EmployeeSign, type ExtraDoc } from '@/components/salaries/employee-sign';
+import { customDocs, signatureFor } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
+import { docStoragePath } from '@/lib/documents';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Mes documents · CF Réseaux', robots: { index: false, follow: false } };
@@ -13,6 +16,7 @@ export default async function SalariePage({ params }: { params: Promise<{ token:
   let emp: any = null;
   let docs: EmployeeDoc[] = [];
   let cachet: string | null = null;
+  let extras: ExtraDoc[] = [];
   if (!validEmployeeToken(token)) error = 'Lien invalide.';
   else {
     try {
@@ -27,6 +31,15 @@ export default async function SalariePage({ params }: { params: Promise<{ token:
         ]);
         docs = (rows as EmployeeDoc[]) || [];
         cachet = (settings as any)?.cachet_image || null;
+        // Documents ajoutés par l'administrateur (règlement intérieur…), migration 28.
+        const [all, sigs] = await Promise.all([loadDocs(admin as any), loadDocSignatures(admin as any, 'employee_id', [data.id])]);
+        extras = await Promise.all(
+          customDocs(all, 'salarie').map(async (d) => {
+            const sig = signatureFor(d, sigs);
+            const { data: u } = await admin.storage.from('dossiers').createSignedUrl(docStoragePath(d.id, sig ? sig.version : d.version), 3600);
+            return { id: d.id, title: d.title, description: d.description, url: u?.signedUrl || null, sig };
+          })
+        );
       }
     } catch {
       error = 'Service momentanément indisponible.';
@@ -43,7 +56,7 @@ export default async function SalariePage({ params }: { params: Promise<{ token:
           <>
             <h1>Bonjour {emp.full_name}</h1>
             <p className="hint">Relis, complète ton adresse et signe une seule fois pour tous tes documents.</p>
-            <EmployeeSign link={token} name={emp.full_name} address={emp.address} docs={docs} cachet={cachet} />
+            <EmployeeSign link={token} name={emp.full_name} address={emp.address} docs={docs} cachet={cachet} extras={extras} />
           </>
         )}
       </div>

@@ -81,10 +81,13 @@ export async function updateProgram(id: string, fd: FormData): Promise<ActionRes
 export async function deleteProgram(id: string): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
-  // Les sessions restent au planning (simplement détachées du parcours).
+  // Les formations du parcours sont supprimées avec lui (inscriptions, dossiers… suivent).
+  const { error: sessionsError } = await supabase.from('sessions').delete().eq('poec_id', id);
+  if (sessionsError) return { ok: false, error: `Sessions du parcours non supprimées : ${sessionsError.message}` };
   const { error } = await supabase.from('poec_programs').delete().eq('id', id);
   if (error) return dbError(error);
   refresh();
+  revalidatePath('/sessions');
   redirect('/poec');
 }
 

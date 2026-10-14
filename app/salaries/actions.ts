@@ -7,6 +7,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 import { validSignature } from '@/lib/emargement';
 import { cleanMaterial, validEmployeeToken, EMPLOYEE_DOC_SELECT, type EmployeeDoc } from '@/lib/salaries';
+import { builtinActive, customDocs, missingDocs } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -36,9 +38,11 @@ export async function createEmployee(fd: FormData): Promise<Result> {
   const supabase = await createClient();
   const { data, error } = await supabase.from('employees').insert({ ...e, token: token() }).select('id').single();
   if (error) return { ok: false, error: MIGRATION };
-  await supabase.from('employee_documents').insert({ employee_id: data.id, kind: 'image' });
+  // Documents intégrés désactivés par l'administrateur : non demandés.
+  const docs = await loadDocs(supabase as any);
+  if (builtinActive(docs, 'image_salarie')) await supabase.from('employee_documents').insert({ employee_id: data.id, kind: 'image' });
   const material = cleanMaterial(Object.fromEntries(fd.entries()));
-  if (Object.keys(material).length) await supabase.from('employee_documents').insert({ employee_id: data.id, kind: 'materiel', data: material });
+  if (Object.keys(material).length && builtinActive(docs, 'materiel')) await supabase.from('employee_documents').insert({ employee_id: data.id, kind: 'materiel', data: material });
   refresh();
   return { ok: true };
 }
@@ -137,7 +141,9 @@ export async function signEmployeeDocs(
   if (!emp) return { ok: false, error: 'Ce lien n’est plus valide.' };
   const { data: pendingRows } = await admin.from('employee_documents').select(EMPLOYEE_DOC_SELECT).eq('employee_id', emp.id).is('signed_at', null);
   const pending = (pendingRows as EmployeeDoc[]) || [];
-  if (!pending.length) return { ok: false, error: 'Aucun document à signer.' };
+  // Documents ajoutés par l'administrateur (ex. règlement intérieur) encore à signer.
+  const custom = missingDocs(customDocs(await loadDocs(admin as any), 'salarie'), await loadDocSignatures(admin as any, 'employee_id', [emp.id]));
+  if (!pending.length && !custom.length) return { ok: false, error: 'Aucun document à signer.' };
   if (pending.some((d) => d.kind === 'image') && payload.imageAccepted === null) return { ok: false, error: 'Droit à l’image : choisis « J’autorise » ou « Je n’autorise pas ».' };
   const now = new Date().toISOString();
   for (const d of pending) {
@@ -152,6 +158,12 @@ export async function signEmployeeDocs(
       })
       .eq('id', d.id)
       .is('signed_at', null);
+  }
+  if (custom.length) {
+    const { error } = await admin.from('document_signatures').insert(
+      custom.map((d) => ({ document_id: d.id, version: d.version, employee_id: emp.id, signature: payload.signature, city, collected_by: null }))
+    );
+    if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
   }
   await admin.from('employees').update({ address }).eq('id', emp.id);
   revalidatePath(`/salarie/${link}`);

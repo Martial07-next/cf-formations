@@ -4,6 +4,8 @@ import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/comp
 import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
 import { loadAuthorizations } from '@/lib/autorisations-server';
 import { sessionKinds } from '@/lib/autorisations';
+import { builtinActive, customDocs as customDocsOf } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { SessionLoans } from '@/components/vetements/loans-panel';
 import { LOAN_SELECT, loanStatus, type ClothingLoan } from '@/lib/vetements';
 import { canEditStartTimes } from '@/lib/roles';
@@ -191,8 +193,14 @@ export default async function SessionDetailPage({
         ])
       );
   // Autorisations (droit à l'image, livrets, vêtements TST) des stagiaires validés.
-  const autorKinds = trackError ? [] : sessionKinds((trackRow as any)?.authorizations ?? null, (tplOpt as any)?.authorizations ?? null);
+  // Documents à signer gérés par l'administrateur (migration 28).
+  const allDocs = await loadDocs(supabase as any);
+  const trainingDocs = customDocsOf(allDocs, 'stagiaire');
+  const autorKinds = trackError
+    ? []
+    : sessionKinds((trackRow as any)?.authorizations ?? null, (tplOpt as any)?.authorizations ?? null).filter((k) => builtinActive(allDocs, k));
   const validatedIds = enrolled.filter((t: any) => t.status === 'validee').map((t: any) => t.id as string);
+  const docSigs = trainingDocs.length ? await loadDocSignatures(supabase as any, 'trainee_id', validatedIds) : [];
   const autorRows = trackError ? [] : await loadAuthorizations(supabase as any, validatedIds);
   // Prêts de vêtements TST (migration 27) : ceux de la session + ceux pas rendus d'avant.
   const [{ data: loanRows, error: loanError }, { data: addrRows }] = await Promise.all([
@@ -288,7 +296,7 @@ export default async function SessionDetailPage({
           staff={staff}
         />
 
-        {!loanError && (canEditStartTimes(profile?.role) || isOwn) && (
+        {!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn) && (
           <SessionLoans
             sessionId={session.id}
             trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
@@ -306,7 +314,13 @@ export default async function SessionDetailPage({
             overridden={(trackRow as any)?.authorizations != null}
             canManage={editable}
             canCollect={canEditStartTimes(profile?.role) || isOwn}
-            rows={validatedTrainees.map((t) => ({ id: t.id, name: t.name, auths: autorRows.filter((a) => a.trainee_id === t.id) }))}
+            rows={validatedTrainees.map((t) => ({
+              id: t.id,
+              name: t.name,
+              auths: autorRows.filter((a) => a.trainee_id === t.id),
+              docSigs: docSigs.filter((x) => x.trainee_id === t.id),
+            }))}
+            customDocs={trainingDocs}
             cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
           />
         )}

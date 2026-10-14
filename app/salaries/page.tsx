@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { EmployeesManager } from '@/components/salaries/employees-manager';
+import { builtinActive, customDocs } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { EMPLOYEE_DOC_SELECT, EMPLOYEE_SELECT, type Employee, type EmployeeDoc } from '@/lib/salaries';
 
 export const metadata = { title: 'Salariés · CF Réseaux' };
@@ -18,6 +20,10 @@ export default async function SalariesPage() {
     supabase.from('profiles').select('id, full_name').order('full_name'),
     supabase.from('app_settings').select('cachet_image').eq('id', true).maybeSingle(),
   ]);
+  // Documents ajoutés par l'administrateur pour les salariés (migration 28).
+  const allDocs = await loadDocs(supabase as any);
+  const extraDocs = customDocs(allDocs, 'salarie');
+  const docSigs = extraDocs.length ? await loadDocSignatures(supabase as any, 'employee_id', ((employees as any[]) || []).map((e) => e.id)) : [];
   return (
     <main>
       <Sidebar active="/salaries" profile={profile} />
@@ -33,7 +39,13 @@ export default async function SalariesPage() {
           <div role="alert" className="alert alert-warning">Exécute la migration 25 (supabase/migration_phase25.sql) dans Supabase pour activer les documents salariés.</div>
         ) : (
           <EmployeesManager
-            rows={((employees as Employee[]) || []).map((e) => ({ ...e, docs: ((docs as EmployeeDoc[]) || []).filter((d) => d.employee_id === e.id) }))}
+            rows={((employees as Employee[]) || []).map((e) => ({
+              ...e,
+              docs: ((docs as EmployeeDoc[]) || []).filter((d) => d.employee_id === e.id),
+              docSigs: docSigs.filter((x) => x.employee_id === e.id),
+            }))}
+            extraDocs={extraDocs}
+            materialOn={builtinActive(allDocs, 'materiel')}
             accounts={((accounts as any[]) || []).filter((a) => a.full_name)}
             cachet={((settings as any)?.cachet_image as string) || null}
           />

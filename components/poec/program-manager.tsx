@@ -108,7 +108,7 @@ export function ProgramHeaderActions({ program }: { program: PoecProgram }) {
         className="danger"
         disabled={isPending}
         onClick={() =>
-          confirm(`Supprimer le parcours « ${program.title} » ? Les sessions restent au planning, les conventions sont supprimées.`) &&
+          confirm(`Supprimer le parcours « ${program.title} » ?\n\nToutes ses formations (sessions du planning, inscriptions, dossiers) et ses conventions seront supprimées définitivement.`) &&
           run(() => deleteProgram(program.id))
         }
       >

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, CircleDashed, QrCode, Download, Settings2, Ban, ExternalLink } from 'lucide-react';
 import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actions';
 import type { AuthPdfItem } from '@/lib/pdf-autorisations';
+import { missingDocs, type DocSignature, type SignableDoc } from '@/lib/documents';
 import { AUTH_KINDS, AUTH_KIND, currentAuth, frDateTime, type AuthKind, type Authorization } from '@/lib/autorisations';
 
-export type AutorRow = { id: string; name: string; auths: Authorization[] };
+export type AutorRow = { id: string; name: string; auths: Authorization[]; docSigs?: DocSignature[] };
 
 /** Téléchargement PDF d'autorisations signées (modèles CF Réseaux remplis). */
 export function AuthPdfButton({
@@ -59,7 +60,10 @@ export function SessionAutorisations({
   canCollect,
   rows,
   cachet,
+  customDocs = [],
 }: {
+  /** Documents ajoutés par l'administrateur (ex. règlement intérieur). */
+  customDocs?: SignableDoc[];
   sessionId: string;
   kinds: AuthKind[];
   /** La session a ses propres autorisations (sinon celles de la formation). */
@@ -83,7 +87,10 @@ export function SessionAutorisations({
 
   const status = rows.map((r) => ({
     ...r,
-    missing: kinds.filter((k) => !currentAuth(r.auths, k)),
+    missing: [
+      ...kinds.filter((k) => !currentAuth(r.auths, k)).map((k) => AUTH_KIND[k].short),
+      ...missingDocs(customDocs, r.docSigs || [], sessionId).map((d) => d.title),
+    ],
     imageRefused: r.auths.some((a) => a.kind === 'image' && !a.accepted && currentAuth(r.auths, 'image')?.id === a.id),
   }));
   const todo = status.filter((s) => s.missing.length);
@@ -110,7 +117,7 @@ export function SessionAutorisations({
               <Settings2 size={14} aria-hidden /> Documents demandés
             </button>
           )}
-          {canCollect && kinds.length > 0 && rows.length > 0 && (
+          {canCollect && kinds.length + customDocs.length > 0 && rows.length > 0 && (
             <button type="button" className="small primary" onClick={() => (qr ? setQr(null) : showQr())} disabled={isPending}>
               <QrCode size={14} aria-hidden /> {qr ? 'Masquer le QR code' : 'QR code stagiaires'}
             </button>
@@ -142,7 +149,7 @@ export function SessionAutorisations({
         </div>
       )}
 
-      {!kinds.length ? (
+      {!kinds.length && !customDocs.length ? (
         <p className="hint">Aucune autorisation demandée pour cette session.</p>
       ) : !rows.length ? (
         <p className="hint">Les autorisations apparaîtront dès qu’un stagiaire sera validé. Demandées : {kinds.map((k) => AUTH_KIND[k].short).join(' · ')}.</p>
@@ -163,14 +170,14 @@ export function SessionAutorisations({
           )}
           <div className="autor-list">
             <p className="autor-summary">
-              <strong>{ok.length}/{rows.length}</strong> stagiaire{rows.length > 1 ? 's' : ''} à jour · {kinds.map((k) => AUTH_KIND[k].short).join(' · ')}
+              <strong>{ok.length}/{rows.length}</strong> stagiaire{rows.length > 1 ? 's' : ''} à jour · {[...kinds.map((k) => AUTH_KIND[k].short), ...customDocs.map((d) => d.title)].join(' · ')}
             </p>
             <ul>
               {todo.map((s) => (
                 <li key={s.id} className="todo">
                   <CircleDashed size={15} aria-hidden />
                   <span className="autor-name">{s.name}</span>
-                  <span className="hint">à remplir : {s.missing.map((k) => AUTH_KIND[k].short).join(', ')}</span>
+                  <span className="hint">à remplir : {s.missing.join(', ')}</span>
                   {s.imageRefused && <span className="autor-refus"><Ban size={12} aria-hidden /> pas de photo</span>}
                 </li>
               ))}

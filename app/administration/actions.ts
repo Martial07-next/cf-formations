@@ -167,3 +167,35 @@ export async function deleteUserAccess(userId: string): Promise<{ ok: true } | {
   revalidatePath('/formateurs');
   return { ok: true };
 }
+
+/**
+ * Modifie un accès : nom prénom, e-mail et, si renseigné, mot de passe
+ * (saisi ou généré). Renvoie le mot de passe à transmettre.
+ */
+export async function updateUserAccess(
+  userId: string,
+  input: { full_name: string; email: string; password: string; generate: boolean }
+): Promise<{ ok: true; password: string | null } | { ok: false; error: string }> {
+  const me = await requireAdmin();
+  if (!me) return FORBIDDEN;
+  const admin = serviceClient();
+  if (!admin) return { ok: false, error: NO_SERVICE_KEY };
+  const fullName = String(input.full_name || '').trim();
+  const email = String(input.email || '').trim().toLowerCase();
+  if (!fullName) return { ok: false, error: 'Indique le nom prénom.' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Adresse e-mail invalide.' };
+  if (input.password && input.password.length < 8) return { ok: false, error: 'Le mot de passe doit faire au moins 8 caractères.' };
+  if (userId === me.id && (input.password || input.generate)) return { ok: false, error: 'Change ton propre mot de passe depuis « Mon profil ».' };
+  const password = input.password || (input.generate ? generatePassword() : null);
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    email,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+    ...(password ? { password } : {}),
+  });
+  if (error) return { ok: false, error: /already|registered|exists/i.test(error.message) ? 'Un autre compte utilise déjà cet e-mail.' : error.message };
+  const { error: pErr } = await admin.from('profiles').update({ full_name: fullName }).eq('id', userId);
+  if (pErr) return { ok: false, error: pErr.message };
+  revalidatePath('/administration');
+  return { ok: true, password };
+}

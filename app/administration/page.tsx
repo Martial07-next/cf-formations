@@ -4,6 +4,7 @@ import { AdminUsersTable } from '@/components/admin-users-table';
 import { CreateAccessPanel } from '@/components/create-access-panel';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminTabs, AdminResourceLinks } from '@/components/admin-tabs';
+import { RightsTable } from '@/components/rights-table';
 
 export default async function AdministrationPage() {
   const supabase = await createClient();
@@ -59,21 +60,12 @@ export default async function AdministrationPage() {
 
         <AdminTabs active="/administration" />
 
-        <div className="panel">
-          <h2>Les rôles</h2>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.8 }}>
-            <li><span className="badge admin">Administrateur</span> gère la plateforme : accès, paramètres, intégrations, suppression des données (et tout le reste).</li>
-            <li><span className="badge bureau">Bureau administratif</span> crée, modifie et supprime les sessions ; gère les stagiaires et les imports, les formateurs, les salles, les formations et les congés.</li>
-            <li><span className="badge referent">Référent cadre</span> consulte les sessions et peut seulement changer l’heure de début ; suit son équipe et gère les congés de ses formateurs.</li>
-            <li><span className="badge formateur">Formateur</span> consulte le planning, ses stagiaires et son historique ; peut changer l’heure de début de ses propres sessions.</li>
-            <li><span className="badge consultation">Consultation</span> lecture seule du planning.</li>
-          </ul>
-        </div>
-
         <CreateAccessPanel serviceReady={serviceReady} />
 
         <h2 className="sub-heading" style={{ marginTop: 4 }}>Accès existants</h2>
         <AdminUsersTable rows={rows} currentUserId={user?.id || ''} />
+
+        <RightsTable />
 
         <h2 className="sub-heading">Contenu de la plateforme</h2>
         <AdminResourceLinks />

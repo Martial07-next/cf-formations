@@ -7,9 +7,11 @@ import {
 } from '@/app/salaries/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
+import { missingDocs, signatureFor, type DocSignature, type SignableDoc } from '@/lib/documents';
+import { SignedDocButton } from '@/components/documents/signed-docs';
 import { DOC_LABEL, MATERIAL_ITEMS, materialSummary, type Employee, type EmployeeDoc } from '@/lib/salaries';
 
-type Row = Employee & { docs: EmployeeDoc[] };
+type Row = Employee & { docs: EmployeeDoc[]; docSigs?: DocSignature[] };
 type Account = { id: string; full_name: string };
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -74,7 +76,19 @@ function materialState(docs: EmployeeDoc[]) {
   );
 }
 
-export function EmployeesManager({ rows, accounts, cachet }: { rows: Row[]; accounts: Account[]; cachet: string | null }) {
+export function EmployeesManager({
+  rows,
+  accounts,
+  cachet,
+  extraDocs = [],
+  materialOn = true,
+}: {
+  rows: Row[];
+  accounts: Account[];
+  cachet: string | null;
+  extraDocs?: SignableDoc[];
+  materialOn?: boolean;
+}) {
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -104,7 +118,7 @@ export function EmployeesManager({ rows, accounts, cachet }: { rows: Row[]; acco
     const body = `Bonjour ${r.full_name},\n\nVoici ton lien personnel pour signer en ligne tes documents CF Réseaux (droit à l’image, remise de matériel) :\n${url(r)}\n\nLe bureau administratif`;
     window.location.href = `mailto:${encodeURIComponent(r.email || '')}?subject=${encodeURIComponent('Tes documents à signer – CF Réseaux')}&body=${encodeURIComponent(body)}`;
   };
-  const pending = (r: Row) => r.docs.filter((d) => !d.signed_at).length;
+  const pending = (r: Row) => r.docs.filter((d) => !d.signed_at).length + missingDocs(extraDocs, r.docSigs || []).length;
 
   return (
     <>
@@ -120,7 +134,7 @@ export function EmployeesManager({ rows, accounts, cachet }: { rows: Row[]; acco
       ) : (
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>Salarié</th><th>Droit à l’image</th><th>Matériel</th><th>Lien de signature</th><th></th></tr></thead>
+            <thead><tr><th>Salarié</th><th>Droit à l’image</th><th>Matériel</th>{extraDocs.length > 0 && <th>Autres documents</th>}<th>Lien de signature</th><th></th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className={r.active ? '' : 'muted-row'}>
@@ -130,6 +144,16 @@ export function EmployeesManager({ rows, accounts, cachet }: { rows: Row[]; acco
                   </td>
                   <td>{imageState(r.docs)}</td>
                   <td>{materialState(r.docs)}</td>
+                  {extraDocs.length > 0 && (
+                    <td>
+                      <span className="material-states">
+                        {extraDocs.map((d) => {
+                          const sig = signatureFor(d, r.docSigs || []);
+                          return <span key={d.id} className={`autor-chip${sig ? ' ok' : ' wait'}`}>{d.title} · {sig ? 'signé' : 'à signer'}</span>;
+                        })}
+                      </span>
+                    </td>
+                  )}
                   <td>
                     {pending(r) > 0 && r.active ? (
                       <span className="row-actions">
@@ -176,7 +200,7 @@ export function EmployeesManager({ rows, accounts, cachet }: { rows: Row[]; acco
       </Modal>
 
       <Modal open={!!open} onClose={() => setOpenId(null)} title={open?.full_name || ''}>
-        {open && <EmployeeDetail row={open} accounts={accounts} cachet={cachet} run={run} error={error} isPending={isPending} onDeleted={() => setOpenId(null)} />}
+        {open && <EmployeeDetail row={open} accounts={accounts} cachet={cachet} run={run} error={error} isPending={isPending} onDeleted={() => setOpenId(null)} extraDocs={extraDocs} materialOn={materialOn} />}
       </Modal>
     </>
   );
@@ -190,7 +214,11 @@ function EmployeeDetail({
   error,
   isPending,
   onDeleted,
+  extraDocs,
+  materialOn,
 }: {
+  extraDocs: SignableDoc[];
+  materialOn: boolean;
   row: Row;
   accounts: Account[];
   cachet: string | null;
@@ -275,6 +303,19 @@ function EmployeeDetail({
             )}
           </li>
         ))}
+        {extraDocs.map((d) => {
+          const sig = signatureFor(d, row.docSigs || []);
+          return (
+            <li key={d.id}>
+              <span>
+                <strong>{d.title}</strong>
+                <br />
+                <span className="hint">{sig ? `Signé le ${fr(sig.signed_at)}` : 'En attente de signature'}</span>
+              </span>
+              {sig && <span className="row-actions"><SignedDocButton doc={d} sig={sig} signerName={row.full_name} signerRole="salarie" /></span>}
+            </li>
+          );
+        })}
       </ul>
 
       {adding ? (
@@ -285,7 +326,7 @@ function EmployeeDetail({
         </form>
       ) : (
         <div className="form-actions" style={{ marginTop: 12 }}>
-          <button type="button" className="small" onClick={() => setAdding(true)}><PackagePlus size={14} aria-hidden /> Remettre du matériel</button>
+          {materialOn && <button type="button" className="small" onClick={() => setAdding(true)}><PackagePlus size={14} aria-hidden /> Remettre du matériel</button>}
           <button type="button" className="small" disabled={isPending} onClick={() => run(() => requestImage(row.id))}>Redemander le droit à l’image</button>
           <button type="button" className="small ghost" disabled={isPending} onClick={() => confirm('Nouveau lien ? L’ancien ne fonctionnera plus.') && run(() => renewEmployeeLink(row.id))}><RefreshCcw size={14} aria-hidden /> Nouveau lien</button>
           <button type="button" className="small danger" disabled={isPending} onClick={() => confirm(`Supprimer ${row.full_name} et ses documents ?`) && run(() => deleteEmployee(row.id), onDeleted)}><Trash2 size={14} aria-hidden /> Supprimer</button>
