@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, CircleDashed, QrCode, Download, Settings2, Ban, ExternalLink } from 'lucide-react';
 import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actions';
+import type { AuthPdfItem } from '@/lib/pdf-autorisations';
 import { AUTH_KINDS, AUTH_KIND, currentAuth, frDateTime, type AuthKind, type Authorization } from '@/lib/autorisations';
 
 export type AutorRow = { id: string; name: string; auths: Authorization[] };
@@ -16,7 +17,7 @@ export function AuthPdfButton({
   label = 'PDF',
   className = 'small',
 }: {
-  items: { auth: Authorization; traineeName: string }[];
+  items: AuthPdfItem[];
   fileName: string;
   cachet: string | null;
   label?: string;

@@ -12,7 +12,18 @@ import { AUTH_KIND, type Authorization } from '@/lib/autorisations';
  * de CF Réseaux.
  */
 
-export type AuthPdfItem = { auth: Authorization; traineeName: string };
+/** Document à imprimer : autorisation stagiaire ou document salarié (droit à l'image, remise de matériel). */
+export type PdfAuth = Pick<Authorization, 'accepted' | 'signature' | 'city' | 'returned_at'> & {
+  kind: Authorization['kind'] | 'materiel';
+  data: Record<string, any>;
+  signed_at: string;
+  return_signature?: string | null;
+};
+export type AuthPdfItem = { auth: PdfAuth; traineeName: string };
+
+const MATERIEL_TEMPLATE = '/templates/remise-materiel.pdf';
+const templateOf = (k: PdfAuth['kind']) => (k === 'materiel' ? MATERIEL_TEMPLATE : AUTH_KIND[k].template);
+const labelOf = (k: PdfAuth['kind']) => (k === 'materiel' ? 'Attestation de remise de matériel' : AUTH_KIND[k].label);
 
 type Ctx = { doc: PDFDocument; value: PDFFont; cachet: PDFImage | null };
 
@@ -109,6 +120,33 @@ async function fill(page: PDFPage, ctx: Ctx, item: AuthPdfItem) {
     return;
   }
 
+  if (a.kind === 'materiel') {
+    put(page, ctx, item.traineeName, 181, L(560.5, 18.8), 338);
+    put(page, ctx, d.address, 142, L(528.2, 18.8), 377);
+    // Colonne gauche puis droite : case cochée, quantité sur les « ... ».
+    const rows: [string, number, number, boolean][] = [
+      ['ordinateur', 24, 447.3, true], ['clavier', 24, 429.3, true], ['souris', 24, 411.3, true], ['ecran', 24, 393.3, false],
+      ['chaussures', 251.4, 447, false], ['casque', 251.4, 429, false], ['manteau', 251.4, 411, false], ['telephone', 251.4, 393, true],
+    ];
+    for (const [key, x, y0, fixed] of rows) {
+      const n = Number(d[key]) || 0;
+      if (!n) continue;
+      check(page, x + 0.5, L(y0, 17) - 1);
+      if (!fixed) over(page, ctx, String(n), x + 14.5, L(y0, 17) - 0.3, 12, 13);
+    }
+    put(page, ctx, city, 74, L(219.4, 16), 230, 13);
+    over(page, ctx, `${date.d}  /  ${date.m}  /  ${date.y}`, 41.5, L(197.6, 16), 128, 13);
+    image(page, sig, 26, L(169.3, 15.8) - 8, 230, 50);
+    image(page, ctx.cachet, 26, L(90.7, 15.8) - 8, 240, 74);
+    if (a.returned_at) {
+      const r = parts(a.returned_at);
+      over(page, ctx, `${r.d} / ${r.m} / ${r.y}`, 409, L(80.9, 7), 60, 7);
+      image(page, await embedDataUrl(ctx.doc, a.return_signature), 420, L(52.8, 7) + 14, 120, 22);
+      image(page, ctx.cachet, 430, L(24.6, 7) + 14, 110, 22);
+    }
+    return;
+  }
+
   // Vêtements TST
   put(page, ctx, item.traineeName, 181, L(560.5, 18.8), 338);
   put(page, ctx, d.address, 142, L(528.2, 18.8), 377);
@@ -127,7 +165,7 @@ async function fill(page: PDFPage, ctx: Ctx, item: AuthPdfItem) {
 export async function buildAuthorizationsPdf(items: AuthPdfItem[], cachetDataUrl: string | null): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  doc.setTitle(items.length === 1 ? `${AUTH_KIND[items[0].auth.kind].label} – ${items[0].traineeName}` : 'Autorisations stagiaires');
+  doc.setTitle(items.length === 1 ? `${labelOf(items[0].auth.kind)} – ${items[0].traineeName}` : 'Autorisations');
   doc.setAuthor('CF Réseaux');
   const fontBytes = await fetch('/fonts/SpaceGrotesk-SemiBold.ttf').then((r) => {
     if (!r.ok) throw new Error('Police introuvable.');
@@ -136,7 +174,7 @@ export async function buildAuthorizationsPdf(items: AuthPdfItem[], cachetDataUrl
   const ctx: Ctx = { doc, value: await doc.embedFont(fontBytes, { subset: true }), cachet: await embedDataUrl(doc, cachetDataUrl) };
   const templates = new Map<string, PDFDocument>();
   for (const item of items) {
-    const path = AUTH_KIND[item.auth.kind].template;
+    const path = templateOf(item.auth.kind);
     if (!templates.has(path)) {
       const bytes = await fetch(path).then((r) => {
         if (!r.ok) throw new Error('Modèle introuvable.');

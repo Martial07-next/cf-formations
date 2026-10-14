@@ -14,6 +14,7 @@ import {
   Menu,
   Route,
   ClipboardList,
+  IdCard,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
@@ -47,6 +48,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
       links: [
         { href: '/formateurs', label: 'Formateurs', icon: GraduationCap },
         { href: '/stagiaires', label: 'Stagiaires', icon: Users },
+        { href: '/salaries', label: 'Salariés', icon: IdCard },
         { href: '/salles', label: 'Salles', icon: DoorOpen },
         { href: '/modeles', label: 'Formations', icon: FolderOpen },
       ],

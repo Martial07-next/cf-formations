@@ -771,3 +771,19 @@ a.poec-item:hover{background:var(--cf-mint-soft)}
 .autor-counter div{display:flex;align-items:center;gap:10px}
 .autor-counter strong{min-width:20px;text-align:center;font-size:18px}
 @media (max-width:760px){.autor-grid.with-qr{grid-template-columns:1fr}}
+
+/* ---------- Documents salariés ---------- */
+.autor-chip.wait{background:var(--wait-bg);color:var(--wait-ink)}
+.material-states{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.material-states .autor-chip{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
+.material-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 16px;margin-bottom:10px}
+.material-qty{display:flex;align-items:center;gap:8px;font-size:14px}
+.material-qty input{width:64px;padding:6px 8px;border:1px solid var(--line-strong);border-radius:8px;font-family:inherit;font-size:14px}
+.material-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.material-list li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:14px}
+.employee-docs{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.employee-docs li{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.employee-return{flex-basis:100%;display:flex;flex-direction:column;gap:8px}
+.link-like{background:none;border:none;padding:0;min-height:0;color:var(--ink);cursor:pointer;font-size:14px}
+.link-like:hover{background:none;text-decoration:underline}
+.muted-row td{opacity:.6}

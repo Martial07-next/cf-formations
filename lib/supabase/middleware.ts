@@ -33,7 +33,8 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') ||
     path.startsWith('/france-travail/') ||
-    path.startsWith('/autorisations/');
+    path.startsWith('/autorisations/') ||
+    path.startsWith('/salarie/');
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
