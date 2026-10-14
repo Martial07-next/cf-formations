@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { EmployeesManager } from '@/components/salaries/employees-manager';
 import { EMPLOYEE_DOC_SELECT, EMPLOYEE_SELECT, type Employee, type EmployeeDoc } from '@/lib/salaries';
@@ -9,7 +9,8 @@ export const metadata = { title: 'Salariés · CF Réseaux' };
 /** Documents des salariés : droit à l'image et remise de matériel, signés en ligne. */
 export default async function SalariesPage() {
   const profile = await getCurrentProfile();
-  if (!canManage(profile?.role)) redirect('/');
+  // Réservé à l'administrateur.
+  if (profile?.role !== 'admin') redirect('/');
   const supabase = await createClient();
   const [{ data: employees, error }, { data: docs }, { data: accounts }, { data: settings }] = await Promise.all([
     supabase.from('employees').select(EMPLOYEE_SELECT).order('active', { ascending: false }).order('full_name'),
@@ -23,7 +24,7 @@ export default async function SalariesPage() {
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Ressources</p>
+            <p className="eyebrow">Administrateur</p>
             <h1>Salariés</h1>
             <p>Droit à l’image et attestation de remise de matériel : chaque salarié signe en ligne avec son lien personnel.</p>
           </div>

@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 import { validSignature } from '@/lib/emargement';
 import { cleanMaterial, validEmployeeToken, EMPLOYEE_DOC_SELECT, type EmployeeDoc } from '@/lib/salaries';
 
@@ -30,7 +30,7 @@ function readEmployee(fd: FormData) {
 
 /** Nouveau salarié : son droit à l'image est préparé d'office (à signer). */
 export async function createEmployee(fd: FormData): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const e = readEmployee(fd);
   if (!e.full_name) return { ok: false, error: 'Indique le nom du salarié.' };
   const supabase = await createClient();
@@ -44,7 +44,7 @@ export async function createEmployee(fd: FormData): Promise<Result> {
 }
 
 export async function updateEmployee(id: string, fd: FormData): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const e = readEmployee(fd);
   if (!e.full_name) return { ok: false, error: 'Indique le nom du salarié.' };
   const supabase = await createClient();
@@ -55,7 +55,7 @@ export async function updateEmployee(id: string, fd: FormData): Promise<Result> 
 }
 
 export async function deleteEmployee(id: string): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('employees').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -65,7 +65,7 @@ export async function deleteEmployee(id: string): Promise<Result> {
 
 /** Matériel remis : préparé par le bureau, signé ensuite par le salarié. */
 export async function addMaterial(employeeId: string, fd: FormData): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const material = cleanMaterial(Object.fromEntries(fd.entries()));
   if (!Object.keys(material).length) return { ok: false, error: 'Coche au moins un équipement.' };
   const supabase = await createClient();
@@ -77,7 +77,7 @@ export async function addMaterial(employeeId: string, fd: FormData): Promise<Res
 
 /** Redemande le droit à l'image (ex. après un refus, ou changement d'avis). */
 export async function requestImage(employeeId: string): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { data: pending } = await supabase.from('employee_documents').select('id').eq('employee_id', employeeId).eq('kind', 'image').is('signed_at', null);
   if (pending?.length) return { ok: false, error: 'Un droit à l’image est déjà en attente de signature.' };
@@ -89,7 +89,7 @@ export async function requestImage(employeeId: string): Promise<Result> {
 
 /** Départ : matériel restitué, avec la signature du salarié (le cachet CF Réseaux est ajouté au PDF). */
 export async function recordReturn(docId: string, signature: string): Promise<Result> {
-  const profile = await requireManager();
+  const profile = await requireAdmin();
   if (!profile) return FORBIDDEN;
   if (!validSignature(signature)) return { ok: false, error: 'Le salarié doit signer la restitution.' };
   const supabase = await createClient();
@@ -104,7 +104,7 @@ export async function recordReturn(docId: string, signature: string): Promise<Re
 }
 
 export async function deleteEmployeeDoc(docId: string): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('employee_documents').delete().eq('id', docId);
   if (error) return { ok: false, error: error.message };
@@ -113,7 +113,7 @@ export async function deleteEmployeeDoc(docId: string): Promise<Result> {
 }
 
 export async function renewEmployeeLink(id: string): Promise<Result> {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('employees').update({ token: token() }).eq('id', id);
   if (error) return { ok: false, error: error.message };

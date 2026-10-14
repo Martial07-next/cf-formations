@@ -132,7 +132,7 @@ function SessionCard({
       {replacement && (
         <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
       )}
-      {by && <span className="sc-by">créé par {by}</span>}
+      {by && <span className="sc-by">Session créée par {by}</span>}
       {dossierDone && (
         <span className="sc-dossier"><FolderCheck size={11} aria-hidden /> Dossier complet</span>
       )}
@@ -549,7 +549,7 @@ export function Planning({
                           href={`/sessions/${s.id}`}
                           className="month-chip"
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
-                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · créé par ${createdBy[s.id]}` : ''}`}
+                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
@@ -560,6 +560,7 @@ export function Planning({
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
                           </span>
+                          {createdBy[s.id] && <span className="chip-by">Créée par {createdBy[s.id]}</span>}
                         </Link>
                       );
                     })}

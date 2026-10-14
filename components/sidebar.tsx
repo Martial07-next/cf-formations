@@ -48,14 +48,19 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
       links: [
         { href: '/formateurs', label: 'Formateurs', icon: GraduationCap },
         { href: '/stagiaires', label: 'Stagiaires', icon: Users },
-        { href: '/salaries', label: 'Salariés', icon: IdCard },
         { href: '/salles', label: 'Salles', icon: DoorOpen },
         { href: '/modeles', label: 'Formations', icon: FolderOpen },
       ],
     });
   }
   if (role === 'admin') {
-    groups.push({ label: 'Bureau administratif', links: [{ href: '/administration', label: 'Administration', icon: Settings }] });
+    groups.push({
+      label: 'Bureau administratif',
+      links: [
+        { href: '/administration', label: 'Administration', icon: Settings },
+        { href: '/salaries', label: 'Salariés', icon: IdCard },
+      ],
+    });
   }
   return groups;
 }

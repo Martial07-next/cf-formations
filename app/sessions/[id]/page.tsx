@@ -235,6 +235,7 @@ export default async function SessionDetailPage({
             managerId={(trackRow as any)?.manager_id ?? null}
             staff={staff}
             canManage={editable}
+            isAdmin={profile?.role === 'admin'}
           />
         )}
 
@@ -358,7 +359,7 @@ export default async function SessionDetailPage({
           />
         )}
 
-        {editable && <SessionHistory items={(activity as any) || []} staff={staff} />}
+        {editable && <SessionHistory items={(activity as any) || []} staff={staff} sessionId={session.id} isAdmin={profile?.role === 'admin'} />}
       </section>
     </main>
   );

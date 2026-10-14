@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { History, PhoneCall, UserRound } from 'lucide-react';
-import { setSessionManager, setFollowupOwner, recordFollowup } from '@/app/suivi/actions';
+import { History, PhoneCall, UserRound, Trash2 } from 'lucide-react';
+import { setSessionManager, setFollowupOwner, recordFollowup, setSessionCreator, deleteActivity, clearSessionHistory } from '@/app/suivi/actions';
 import { ACTIVITY_LABEL, activityDetail, frShortDate, since, type Staff } from '@/lib/tracking';
 
 export type TraineeTracking = {
@@ -27,7 +27,10 @@ export function SessionTrackingBar({
   managerId,
   staff,
   canManage,
+  isAdmin = false,
 }: {
+  /** Administrateur : peut changer le créateur. */
+  isAdmin?: boolean;
   sessionId: string;
   createdBy: string | null;
   createdAt: string | null;
@@ -41,7 +44,25 @@ export function SessionTrackingBar({
   return (
     <p className="tracking-bar">
       <span>
-        <UserRound size={13} aria-hidden /> Créée par <strong>{nameOf(staff, createdBy) || 'import / ancien enregistrement'}</strong>
+        <UserRound size={13} aria-hidden /> Session créée par{' '}
+        {isAdmin ? (
+          <select
+            aria-label="Créateur de la session"
+            value={createdBy || ''}
+            disabled={isPending}
+            onChange={(e) =>
+              startTransition(async () => {
+                const res = await setSessionCreator(sessionId, e.target.value || null);
+                setError(res.ok ? null : res.error);
+              })
+            }
+          >
+            <option value="">— inconnu —</option>
+            {staff.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+          </select>
+        ) : (
+          <strong>{nameOf(staff, createdBy) || 'import / ancien enregistrement'}</strong>
+        )}
         {createdAt ? ` le ${new Date(createdAt).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}` : ''}
       </span>
       <span>
@@ -165,22 +186,47 @@ export function FollowupCell({
 
 export type ActivityItem = { id: string; action: string; detail: string | null; created_at: string; actor_id: string | null };
 
-/** Historique de la session (replié par défaut). */
-export function SessionHistory({ items, staff }: { items: ActivityItem[]; staff: Staff[] }) {
+/** Historique de la session (replié par défaut) ; l'administrateur peut l'effacer. */
+export function SessionHistory({ items, staff, sessionId, isAdmin = false }: { items: ActivityItem[]; staff: Staff[]; sessionId: string; isAdmin?: boolean }) {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   if (!items.length) return null;
+  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>) =>
+    startTransition(async () => {
+      const r = await fn();
+      setError(r.ok ? null : r.error);
+    });
   return (
     <details className="panel history">
       <summary>
         <History size={16} aria-hidden /> <strong>Historique</strong> <span className="hint">· {items.length} action{items.length > 1 ? 's' : ''} · qui a fait quoi</span>
       </summary>
+      {error && <div role="alert" className="alert alert-error" style={{ marginTop: 10 }}>{error}</div>}
+      {isAdmin && (
+        <div className="form-actions" style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className="small danger"
+            disabled={isPending}
+            onClick={() => confirm('Effacer tout l’historique de cette session ? Cette action est définitive.') && run(() => clearSessionHistory(sessionId))}
+          >
+            <Trash2 size={14} aria-hidden /> Effacer l’historique
+          </button>
+        </div>
+      )}
       <ol className="history-list">
         {items.map((a) => (
-          <li key={a.id}>
+          <li key={a.id} className={isAdmin ? 'with-action' : ''}>
             <time>{new Date(a.created_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
             <span>
               <strong>{nameOf(staff, a.actor_id) || 'Automatique / stagiaire'}</strong> {ACTIVITY_LABEL[a.action] || a.action}{' '}
               {activityDetail(a.action, a.detail)}
             </span>
+            {isAdmin && (
+              <button type="button" className="tiny ghost" aria-label="Effacer cette ligne" title="Effacer cette ligne" disabled={isPending} onClick={() => run(() => deleteActivity(sessionId, a.id))}>
+                <Trash2 size={12} />
+              </button>
+            )}
           </li>
         ))}
       </ol>

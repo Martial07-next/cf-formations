@@ -30,6 +30,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   session_creee: 'a créé la session',
   session_modifiee: 'a modifié',
   gestionnaire: 'gestionnaire →',
+  createur: 'a changé le créateur →',
   stagiaire_valide: 'a inscrit (validé)',
   stagiaire_attente: 'a mis en attente',
   statut_valide: 'a validé',

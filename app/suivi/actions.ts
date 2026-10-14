@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { requireManager, requireAdmin, FORBIDDEN } from '@/lib/auth';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -63,6 +63,36 @@ export async function recordFollowup(sessionId: string, traineeId: string, note:
     .eq('session_id', sessionId)
     .eq('trainee_id', traineeId);
   if (error) return { ok: false, error: error.message };
+  refresh(sessionId);
+  return { ok: true };
+}
+
+/** Créateur de la session : modifiable par l'administrateur seul. */
+export async function setSessionCreator(sessionId: string, profileId: string | null): Promise<Result> {
+  if (!(await requireAdmin())) return { ok: false, error: 'Seul l’administrateur peut modifier le créateur de la session.' };
+  const supabase = await createClient();
+  const { error } = await supabase.from('sessions').update({ created_by: profileId || null }).eq('id', sessionId);
+  if (error) return { ok: false, error: /administrateur/.test(error.message) ? error.message : MIGRATION };
+  refresh(sessionId);
+  return { ok: true };
+}
+
+/** Efface une ligne de l'historique (administrateur seul). */
+export async function deleteActivity(sessionId: string, activityId: string): Promise<Result> {
+  if (!(await requireAdmin())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_activity').delete().eq('id', activityId).eq('session_id', sessionId);
+  if (error) return { ok: false, error: 'Exécute la migration 26 (supabase/migration_phase26.sql) dans Supabase.' };
+  refresh(sessionId);
+  return { ok: true };
+}
+
+/** Efface tout l'historique d'une session (administrateur seul). */
+export async function clearSessionHistory(sessionId: string): Promise<Result> {
+  if (!(await requireAdmin())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_activity').delete().eq('session_id', sessionId);
+  if (error) return { ok: false, error: 'Exécute la migration 26 (supabase/migration_phase26.sql) dans Supabase.' };
   refresh(sessionId);
   return { ok: true };
 }
