@@ -40,9 +40,18 @@ export async function getCurrentProfile() {
     .single();
   if (!profile) return null;
 
-  // Fiche formateur liée à ce compte (si un admin l'a associée).
-  const { data: trainer } = await supabase.from('trainers').select('id').eq('profile_id', user.id).maybeSingle();
-  return { ...profile, email: user.email, trainer_id: (trainer?.id as string | undefined) ?? null };
+  // Fiche formateur liée à ce compte (si un admin l'a associée) et accès Facturation
+  // (migration 30, ignoré si la colonne n'existe pas encore).
+  const [{ data: trainer }, { data: billing }] = await Promise.all([
+    supabase.from('trainers').select('id').eq('profile_id', user.id).maybeSingle(),
+    supabase.from('profiles').select('can_invoice').eq('id', user.id).maybeSingle(),
+  ]);
+  return {
+    ...profile,
+    email: user.email,
+    trainer_id: (trainer?.id as string | undefined) ?? null,
+    can_invoice: Boolean((billing as any)?.can_invoice),
+  };
 }
 
 export type { Role } from '@/lib/roles';

@@ -44,7 +44,13 @@ export default async function AdministrationPage() {
   } catch {
     serviceReady = false;
   }
-  const rows = (profiles || []).map((p: any) => ({ ...p, email: emails.get(p.id) || null }));
+  // Accès Facturation (migration 30) : null si la colonne n'existe pas encore.
+  const { data: billingRows, error: billingError } = await supabase.from('profiles').select('id, can_invoice');
+  const rows = (profiles || []).map((p: any) => ({
+    ...p,
+    email: emails.get(p.id) || null,
+    can_invoice: billingError ? null : Boolean(((billingRows as any[]) || []).find((b) => b.id === p.id)?.can_invoice),
+  }));
 
   return (
     <main>

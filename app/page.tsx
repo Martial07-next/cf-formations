@@ -244,6 +244,13 @@ export default async function Page({
     }
   }
 
+  // Facturation (migration 30) : pas de « Dossier complet » tant que la facturation n'est pas faite.
+  const completeIds = Object.keys(dossierComplete);
+  if (completeIds.length) {
+    const { data: billRows, error: billError } = await supabase.from('sessions').select('id, billing_done').in('id', completeIds);
+    if (!billError) for (const r of (billRows as any[]) || []) if (!r.billing_done) delete dossierComplete[r.id];
+  }
+
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await loadDayTrainers(supabase, sessionIds);
   // Places réservées par entreprise encore sans nom (migration 20).

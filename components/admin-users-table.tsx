@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { KeyRound, Trash2, Pencil, X } from 'lucide-react';
 import { updateRole, resetUserPassword, deleteUserAccess, updateUserAccess } from '@/app/administration/actions';
+import { setBillingAccess } from '@/app/facturation/actions';
 import { ROLE_LABELS, ROLE_OPTIONS, type Role } from '@/lib/roles';
 
-type Row = { id: string; full_name: string; role: string; created_at: string; email?: string | null };
+type Row = { id: string; full_name: string; role: string; created_at: string; email?: string | null; can_invoice?: boolean | null };
 
 /** Fenêtre « Modifier l'accès » : nom prénom, e-mail, mot de passe. */
 function EditAccess({ user, self, onClose, onDone }: { user: Row; self: boolean; onClose: () => void; onDone: (msg: string) => void }) {
@@ -105,6 +106,7 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
               <th>Nom prénom</th>
               <th>E-mail</th>
               <th>Type d’accès</th>
+              {rows.some((r) => r.can_invoice != null) && <th title="Seul un compte coché peut nommer les factures et cocher « Facturation faite »">Facturation</th>}
               <th>Créé le</th>
               <th><span className="sr-only">Actions</span></th>
             </tr>
@@ -129,6 +131,20 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
                       ))}
                     </select>
                   </td>
+                  {rows.some((r) => r.can_invoice != null) && (
+                    <td>
+                      <label className="check-line" title="Accès Facturation">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(u.can_invoice)}
+                          disabled={isPending}
+                          aria-label={`Accès Facturation pour ${u.full_name}`}
+                          onChange={(e) => run(() => setBillingAccess(u.id, e.target.checked), e.target.checked ? `${u.full_name} a maintenant l’accès Facturation.` : `Accès Facturation retiré à ${u.full_name}.`)}
+                        />
+                        <span className="hint">{u.can_invoice ? 'Oui' : 'Non'}</span>
+                      </label>
+                    </td>
+                  )}
                   <td>{new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
                   <td className="row-actions">
                     <button className="small" onClick={() => { setNotice(null); setEditing(u); }} disabled={isPending} title="Nom, e-mail, mot de passe">

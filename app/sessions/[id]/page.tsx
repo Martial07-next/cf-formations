@@ -4,6 +4,8 @@ import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/comp
 import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
 import { loadAuthorizations } from '@/lib/autorisations-server';
 import { sessionKinds } from '@/lib/autorisations';
+import { SessionBilling } from '@/components/billing/session-billing';
+import { INVOICE_SELECT, type Invoice } from '@/lib/billing';
 import { builtinActive, customDocs as customDocsOf } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { SessionLoans } from '@/components/vetements/loans-panel';
@@ -181,6 +183,19 @@ export default async function SessionDetailPage({
     supabase.from('session_activity').select('id, action, detail, created_at, actor_id').eq('session_id', id).order('created_at', { ascending: false }).limit(150),
     loadStaff(supabase as any),
   ]);
+  // Facturation (migration 30) : ignorée si la migration manque.
+  const [{ data: billRow, error: billError }, { data: invoiceRows }] = await Promise.all([
+    supabase.from('sessions').select('billing_done, billing_done_at, billing_done_by, billing_note').eq('id', id).maybeSingle(),
+    supabase.from('session_invoices').select(INVOICE_SELECT).eq('session_id', id).order('created_at'),
+  ]);
+  const billing = billError
+    ? null
+    : {
+        done: Boolean((billRow as any)?.billing_done),
+        doneAt: (billRow as any)?.billing_done_at ?? null,
+        doneBy: (billRow as any)?.billing_done_by ?? null,
+        note: (billRow as any)?.billing_note ?? null,
+      };
   // Initial / recyclage (migration 29) : ignoré si la migration manque.
   const { data: cursusRows, error: cursusError } = await supabase.from('session_trainees').select('trainee_id, cursus').eq('session_id', id);
   const cursus = cursusError ? null : Object.fromEntries(((cursusRows as any[]) || []).map((r) => [r.trainee_id, r.cursus ?? null]));
@@ -399,6 +414,18 @@ export default async function SessionDetailPage({
             dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
             place={room?.is_holding ? null : trainingPlace(room)}
             legal={legal}
+            billingDone={billing ? billing.done : null}
+          />
+        )}
+
+        {billing && (editable || profile?.can_invoice) && (
+          <SessionBilling
+            sessionId={session.id}
+            state={billing}
+            invoices={(invoiceRows as Invoice[]) || []}
+            companies={[...new Set(validatedTrainees.map((t) => t.company).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr'))}
+            canBill={Boolean(profile?.can_invoice)}
+            doneByName={billing.doneBy ? staff.find((p) => p.id === billing.doneBy)?.full_name || null : null}
           />
         )}
 

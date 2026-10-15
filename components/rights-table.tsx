@@ -9,6 +9,7 @@ export function RightsTable() {
     <div className="panel">
       <h2>Ce que chaque accès peut faire</h2>
       <p className="panel-intro">✓ oui · <strong>les siennes</strong> = uniquement ses propres sessions (formateur) ou son équipe (référent) · — non. Chaque compte peut aussi changer son nom et son mot de passe dans « Mon profil ».</p>
+      <p className="panel-intro"><strong>Accès Facturation</strong> (case à cocher sur le compte, en plus de son type d’accès) : page Facturation, noms des factures et case « Facturation faite », qui complète le dossier. Seuls les comptes cochés peuvent le faire ; l’administrateur consulte et donne ou retire l’accès.</p>
       <div className="table-wrap">
         <table className="data rights-table">
           <thead>

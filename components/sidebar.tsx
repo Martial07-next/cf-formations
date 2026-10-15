@@ -15,11 +15,12 @@ import {
   Route,
   ClipboardList,
   IdCard,
+  Receipt,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
 
-type Profile = { full_name: string; role: string; trainer_id?: string | null } | null;
+type Profile = { full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean } | null;
 type NavLink = { href: string; label: string; icon: typeof CalendarDays };
 
 function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
@@ -39,6 +40,8 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
   if (profile?.trainer_id) suivi.push({ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History });
   if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound });
   if (role === 'admin' || role === 'bureau') suivi.push({ href: '/suivi', label: 'Suivi interne', icon: ClipboardList });
+  // Facturation : accès coché sur le compte (et lecture pour l'administrateur).
+  if (profile?.can_invoice || role === 'admin') suivi.push({ href: '/facturation', label: 'Facturation', icon: Receipt });
   if (role === 'admin' || role === 'bureau') suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
   if (suivi.length) groups.push({ label: 'Suivi', links: suivi });
 

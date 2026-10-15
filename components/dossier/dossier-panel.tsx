@@ -69,6 +69,7 @@ export function DossierPanel({
   place = null,
   legal = null,
   dayTrainerNames = {},
+  billingDone = null,
   appreciation = null,
 }: {
   sessionId: string;
@@ -92,6 +93,8 @@ export function DossierPanel({
   legal?: Legal | null;
   /** Remplaçant certains jours : jour → nom du formateur ce jour-là. */
   dayTrainerNames?: Record<string, string>;
+  /** Facturation faite (migration 30) ; null = pas de suivi de facturation. */
+  billingDone?: boolean | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
   appreciation?: {
     required: boolean;
@@ -212,12 +215,16 @@ export function DossierPanel({
   }, [slots, expected, trainees, rows]);
   // Émargement masqué (géré dans Digiforma) : il ne compte plus dans le dossier.
   const emargOk = EMARGEMENT_ENABLED ? emargement.complete : true;
-  const complete =
+  const pedagogyComplete =
     emargOk &&
     progress.documents.done === progress.documents.needed &&
     (EMARGEMENT_ENABLED || progress.documents.needed > 0);
+  // Le dossier n'est complet qu'une fois la facturation faite.
+  const complete = pedagogyComplete && billingDone !== false;
   const remaining =
-    (EMARGEMENT_ENABLED ? emargement.needed - emargement.done : 0) + (progress.documents.needed - progress.documents.done);
+    (EMARGEMENT_ENABLED ? emargement.needed - emargement.done : 0) +
+    (progress.documents.needed - progress.documents.done) +
+    (billingDone === false ? 1 : 0);
   const now = currentSlot(slots);
   const lastDay = slots.length ? slots[slots.length - 1].day.split('-').reverse().join('/') : null;
 
@@ -400,6 +407,8 @@ export function DossierPanel({
         <h2><FolderCheck size={18} aria-hidden /> Dossier de formation</h2>
         {complete ? (
           <span className="badge validee dossier-badge"><CheckCircle2 size={13} aria-hidden /> Dossier complet</span>
+        ) : pedagogyComplete && billingDone === false ? (
+          <span className="badge planifiee dossier-badge"><CircleDashed size={13} aria-hidden /> Reste la facturation</span>
         ) : (
           <span className="badge brouillon dossier-badge"><CircleDashed size={13} aria-hidden /> {remaining} élément{remaining > 1 ? 's' : ''} à compléter</span>
         )}

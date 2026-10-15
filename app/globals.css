@@ -823,3 +823,22 @@ button.cursus-pill:hover{background:var(--surface-2)}
 span.cursus-pill{cursor:default}
 .cursus-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .cursus-head .sub-heading{margin-bottom:8px}
+
+/* ---------- Facturation ---------- */
+.billing-box{display:flex;flex-direction:column;gap:8px}
+.billing-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.invoice-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.invoice-list li{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+.invoice-form{display:grid;grid-template-columns:1.3fr 1.2fr .8fr 1.2fr auto;gap:6px}
+.invoice-form input{padding:7px 10px;min-height:36px;border:1px solid var(--line-strong);border-radius:8px;font-family:inherit;font-size:13.5px;min-width:0}
+.billing-actions{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-top:6px}
+.billing-done{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;padding:10px 16px;border:2px solid var(--line-strong);border-radius:12px;cursor:pointer;background:#fff}
+.billing-done.on{border-color:var(--ok-ink);background:var(--ok-bg);color:var(--ok-ink)}
+.billing-done input{width:18px;height:18px}
+.billing-companies{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.billing-tabs{display:flex;gap:4px;flex-wrap:wrap}
+.billing-tabs a{padding:7px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:13.5px;color:var(--ink-2);border:1px solid transparent}
+.billing-tabs a.active{background:var(--cf-dark);color:#fff}
+.billing-tabs a:hover:not(.active){background:var(--surface-2)}
+#facturation h2 svg{vertical-align:-3px}
+@media (max-width:760px){.invoice-form{grid-template-columns:1fr 1fr}}
