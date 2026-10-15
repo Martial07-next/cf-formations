@@ -25,6 +25,8 @@ export default async function ModelesPage() {
   const { data: objOpts } = await supabase.from('templates').select('id, objectifs, competences');
   // Autorisations stagiaire (migration 24).
   const { data: authOpts } = await supabase.from('templates').select('id, authorizations');
+  // Recyclage (migration 33).
+  const { data: recOpts } = await supabase.from('templates').select('id, recyclage_available, objectifs_recyclage, competences_recyclage');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -42,6 +44,9 @@ export default async function ModelesPage() {
     objectifs: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs ?? null,
     competences: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.competences ?? null,
     authorizations: ((authOpts as any[]) || []).find((x) => x.id === t.id)?.authorizations ?? null,
+    recyclage_available: Boolean(((recOpts as any[]) || []).find((x) => x.id === t.id)?.recyclage_available),
+    objectifs_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs_recyclage ?? null,
+    competences_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.competences_recyclage ?? null,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

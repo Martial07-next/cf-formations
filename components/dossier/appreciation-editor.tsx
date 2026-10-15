@@ -1,5 +1,6 @@
 'use client';
 
+import { codificationFor } from '@/lib/appreciation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { saveAppreciation } from '@/app/dossier/actions';
@@ -16,7 +17,7 @@ export type AppreciationSession = {
   lieu: string | null;
   trainerName: string | null;
   legal?: Legal | null;
-  trainees: { id: string; name: string; company: string | null }[];
+  trainees: { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null }[];
 };
 
 const frDate = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
@@ -156,7 +157,7 @@ export function AppreciationEditor({
             <div className="fai-info">
               <div><span>Participant</span><strong>{trainee?.name}</strong></div>
               <div><span>Entreprise</span><strong>{trainee?.company || '-'}</strong></div>
-              <div><span>Codification SERECT</span><strong>{session.codification}</strong></div>
+              <div><span>Codification SERECT</span><strong>{codificationFor(session.codification, trainee?.cursus)}</strong></div>
               <div><span>Dates du stage</span><strong>du {frDate(session.startDate)} au {frDate(session.endDate)}</strong></div>
               <div><span>Lieu de dispense</span><strong>{session.lieu || 'CF RÉSEAUX'}</strong></div>
               <div><span>Formateur</span><strong>{session.trainerName || '-'}</strong></div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { codificationFor } from '@/lib/appreciation';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { COMPANY, type Legal } from '@/lib/pdf-brand';
@@ -13,7 +14,7 @@ import type { AppreciationEntry } from '@/lib/appreciation';
  */
 
 export type AppreciationInput = {
-  trainees: { id: string; name: string; company: string | null }[];
+  trainees: { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null }[];
   entries: Record<string, AppreciationEntry>;
   codification: string;
   startDate: string; // AAAA-MM-JJ
@@ -142,7 +143,7 @@ export async function buildAppreciationPdf(input: AppreciationInput): Promise<Ui
   return doc.save();
 }
 
-function drawTexts(page: PDFPage, f: Fonts, input: AppreciationInput, t: { name: string; company: string | null }, e: AppreciationEntry) {
+function drawTexts(page: PDFPage, f: Fonts, input: AppreciationInput, t: { name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null }, e: AppreciationEntry) {
   const text = (s: string, x: number, y: number, size: number, font: PDFFont, color = INK) =>
     page.drawText(keep(font, s), { x, y, size, font, color });
 
@@ -166,7 +167,8 @@ function drawTexts(page: PDFPage, f: Fonts, input: AppreciationInput, t: { name:
   const ys = inline ? [632.9, 614.2, 595.6, 576.9] : [632.9, 615.9, 598.9, 581.9, 564.9];
   line('Nom & Prénom du participant :   ', t.name.toUpperCase(), ys[0]);
   line('Entreprise : ', (t.company || '').toUpperCase(), ys[1]);
-  line('Codification SERECT : ', input.codification, ys[2]);
+  // INITIALE / RECYCLAGE devant la codification (formations disponibles en recyclage).
+  line('Codification SERECT : ', codificationFor(input.codification, t.cursus), ys[2]);
   if (inline) {
     line(dates + 'Lieu de dispense : ', lieu, ys[3], f.light);
   } else {

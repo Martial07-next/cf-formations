@@ -1,8 +1,10 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { getSupabaseUrl, getSupabaseKey } from '@/lib/supabase-env';
 
-export async function createClient() {
+/** Client Supabase du compte connecté (un seul par requête grâce au cache). */
+export const createClient = cache(async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -26,33 +28,31 @@ export async function createClient() {
       },
     }
   );
-}
+});
 
-/** Récupère le profil (rôle inclus) de l'utilisateur connecté, ou null. */
-export async function getCurrentProfile() {
+/**
+ * Profil (rôle inclus) de l'utilisateur connecté, ou null. Mis en cache pour
+ * la requête : la page, la barre latérale et les vérifications de droits
+ * partagent le même résultat.
+ */
+export const getCurrentProfile = cache(async function getCurrentProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .eq('id', user.id)
-    .single();
-  if (!profile) return null;
-
-  // Fiche formateur liée à ce compte (si un admin l'a associée) et accès Facturation
-  // (migration 30, ignoré si la colonne n'existe pas encore).
-  const [{ data: trainer }, { data: billing }] = await Promise.all([
+  // Profil, fiche formateur liée et accès Facturation (migration 30) en parallèle.
+  const [{ data: profile }, { data: trainer }, { data: billing }] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, role').eq('id', user.id).single(),
     supabase.from('trainers').select('id').eq('profile_id', user.id).maybeSingle(),
     supabase.from('profiles').select('can_invoice').eq('id', user.id).maybeSingle(),
   ]);
+  if (!profile) return null;
   return {
     ...profile,
     email: user.email,
     trainer_id: (trainer?.id as string | undefined) ?? null,
     can_invoice: Boolean((billing as any)?.can_invoice),
   };
-}
+});
 
 export type { Role } from '@/lib/roles';
 export { ROLE_LABELS, canManage } from '@/lib/roles';

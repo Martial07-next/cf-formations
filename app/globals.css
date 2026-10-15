@@ -857,3 +857,15 @@ span.cursus-pill{cursor:default}
 .session-infos-fold > summary::-webkit-details-marker{display:none}
 .session-infos-fold[open] > summary{margin-bottom:12px}
 .session-infos-body > .panel{box-shadow:none;border-color:var(--line);margin-bottom:14px}
+
+/* ---------- Chargement ---------- */
+.page-loading-side{width:248px;flex-shrink:0;background:var(--cf-dark)}
+.skeleton{background:linear-gradient(90deg,var(--surface-2) 0%,#e9eeeb 50%,var(--surface-2) 100%);background-size:200% 100%;animation:skeleton 1.2s ease-in-out infinite;border-radius:var(--radius-sm)}
+.skeleton-title{height:30px;width:280px;margin-bottom:12px}
+.skeleton-line{height:14px;width:420px;max-width:100%;margin-bottom:24px}
+.skeleton-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.skeleton-card{height:84px;border-radius:var(--radius)}
+.skeleton-block{height:320px;border-radius:var(--radius)}
+@keyframes skeleton{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (max-width:900px){.page-loading-side{display:none}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none}}

@@ -35,6 +35,9 @@ type Template = {
   tour_de_table?: boolean;
   fiche_appreciation?: boolean;
   authorizations?: string[] | null;
+  recyclage_available?: boolean;
+  objectifs_recyclage?: string | null;
+  competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
   competences?: string | null;
@@ -70,6 +73,7 @@ function TemplateFields({
   );
   const update = (i: number, patch: Partial<ModuleRow>) => setModules((list) => list.map((m, j) => (j === i ? { ...m, ...patch } : m)));
   const [fai, setFai] = useState(Boolean(t?.fiche_appreciation));
+  const [recyclage, setRecyclage] = useState(Boolean(t?.recyclage_available));
   const [links, setLinks] = useState<{ label: string; url: string }[]>((t?.links || []).map((l) => ({ label: l.label, url: l.url })));
   const linksJson = JSON.stringify(links.filter((l) => l.label.trim() || l.url.trim()));
   const updateLink = (i: number, patch: Partial<{ label: string; url: string }>) =>
@@ -188,6 +192,11 @@ function TemplateFields({
           <input type="checkbox" name="tour_de_table" defaultChecked={t?.tour_de_table !== false} />
           Tour de table à remplir par le formateur dans le dossier de chaque session
         </label>
+        <input type="hidden" name="recyclage_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="recyclage_available" checked={recyclage} onChange={(e) => setRecyclage(e.target.checked)} />
+          Formation disponible en recyclage (boutons Initial / Recyclage pour chaque stagiaire de la session)
+        </label>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="fiche_appreciation" checked={fai} onChange={(e) => setFai(e.target.checked)} />
@@ -218,6 +227,20 @@ function TemplateFields({
               placeholder={'Ex. Comprendre et identifier le rôle de l’Exécutant sur l’ouvrage concerné ;\nIdentifier et maîtriser les risques liés aux travaux sous tension…'}
             />
           </label>
+          {recyclage && (
+            <>
+              <label style={{ fontWeight: 600 }}>
+                Objectifs de fin de formation · RECYCLAGE
+                <span className="hint" style={{ fontWeight: 500 }}>Utilisés pour les stagiaires en recyclage. Vide = les objectifs ci-dessus.</span>
+                <textarea name="objectifs_recyclage" rows={4} defaultValue={t?.objectifs_recyclage || ''} placeholder={'Ex. Maintenir et actualiser les compétences…\n- …'} />
+              </label>
+              <label style={{ fontWeight: 600 }}>
+                Compétences évaluées · RECYCLAGE
+                <span className="hint" style={{ fontWeight: 500 }}>Une compétence par ligne. Vide = les objectifs recyclage.</span>
+                <textarea name="competences_recyclage" rows={4} defaultValue={t?.competences_recyclage || ''} />
+              </label>
+            </>
+          )}
         </div>
         <input type="hidden" name="auth_present" value="1" />
         <div className="autor-kinds" role="group" aria-label="Autorisations à faire remplir aux stagiaires">

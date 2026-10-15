@@ -4,5 +4,8 @@
       "path": "/api/cron/digiforma-sync",
       "schedule": "0 5 * * *"
     }
+  ],
+  "regions": [
+    "fra1"
   ]
 }

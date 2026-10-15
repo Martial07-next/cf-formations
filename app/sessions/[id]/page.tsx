@@ -79,6 +79,55 @@ export default async function SessionDetailPage({
 
   if (!session) notFound();
 
+  // Vitesse : toutes les requêtes indépendantes partent tout de suite, en parallèle,
+  // au lieu de s'enchaîner une par une (chacune attendue plus bas, là où elle sert).
+  const start = <T,>(q: PromiseLike<T>) => Promise.resolve(q);
+  const earlyValidatedIds = ((links as any[]) || [])
+    .filter((l) => l.status === 'validee')
+    .map((l) => one<any>(l.trainees)?.id as string | undefined)
+    .filter(Boolean) as string[];
+  const early = {
+    settings: start(supabase.from('app_settings').select('*').eq('id', true).maybeSingle()),
+    dayTrainers: loadDayTrainers(supabase, [id]),
+    reservations: loadReservations(supabase, [id]),
+    absences: start(
+      supabase
+        .from('trainer_absences')
+        .select('id, trainer_id, start_date, end_date, kind, note')
+        .lte('start_date', session.end_at.slice(0, 10))
+        .gte('end_date', session.start_at.slice(0, 10))
+    ),
+    poec: start(supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle()),
+    track: Promise.all([
+      start(supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle()),
+      start(
+        supabase
+          .from('session_trainees')
+          .select('trainee_id, added_by, added_at, status_by, status_at, followup_by, followup_count, last_followup_at, last_followup_by, followup_note')
+          .eq('session_id', id)
+      ),
+      start(supabase.from('session_activity').select('id, action, detail, created_at, actor_id').eq('session_id', id).order('created_at', { ascending: false }).limit(150)),
+      loadStaff(supabase as any),
+    ]),
+    billing: Promise.all([
+      start(supabase.from('sessions').select('billing_done, billing_done_at, billing_done_by, billing_note').eq('id', id).maybeSingle()),
+      start(supabase.from('session_invoices').select(INVOICE_SELECT).eq('session_id', id).order('created_at')),
+    ]),
+    cursus: start(supabase.from('session_trainees').select('trainee_id, cursus').eq('session_id', id)),
+    docs: loadDocs(supabase as any),
+    docSigs: loadDocSignatures(supabase as any, 'trainee_id', earlyValidatedIds),
+    autor: loadAuthorizations(supabase as any, earlyValidatedIds),
+    loans: Promise.all([
+      start(
+        supabase
+          .from('clothing_loans')
+          .select(LOAN_SELECT)
+          .or(earlyValidatedIds.length ? `session_id.eq.${id},trainee_id.in.(${earlyValidatedIds.join(',')})` : `session_id.eq.${id}`)
+      ),
+      earlyValidatedIds.length ? start(supabase.from('trainees').select('id, address').in('id', earlyValidatedIds)) : Promise.resolve({ data: [] as any[] }),
+    ]),
+  };
+
   const [{ data: modules }, { data: moduleLinks }] = await Promise.all([
     supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').eq('session_id', id).order('position'),
     supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', id),
@@ -130,7 +179,7 @@ export default async function SessionDetailPage({
           completedAt: (formRow as any)?.completed_at ? new Date((formRow as any).completed_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : null,
         };
   // Mentions légales des documents (migration 18) ; ignorées si absentes.
-  const { data: settings } = await supabase.from('app_settings').select('*').eq('id', true).maybeSingle();
+  const { data: settings } = await early.settings;
   const legal = {
     siret: ((settings as any)?.siret as string) || null,
     nda: ((settings as any)?.nda as string) || null,
@@ -150,14 +199,10 @@ export default async function SessionDetailPage({
     for (const s of slots) expected[slotKey(s)] = expectedOn(s.day, validatedTrainees.map((t) => t.id), (modules as any) || [], traineeModules);
   }
   // Remplaçants jour par jour (migration 19) et congés des formateurs sur la période.
-  const dayTrainerMap = await loadDayTrainers(supabase, [id]);
-  const reservations = (await loadReservations(supabase, [id]))[id] || [];
+  const dayTrainerMap = await early.dayTrainers;
+  const reservations = (await early.reservations)[id] || [];
   const dayTrainers = dayTrainerMap[id] || {};
-  const { data: periodAbsences } = await supabase
-    .from('trainer_absences')
-    .select('id, trainer_id, start_date, end_date, kind, note')
-    .lte('start_date', session.end_at.slice(0, 10))
-    .gte('end_date', session.start_at.slice(0, 10));
+  const { data: periodAbsences } = await early.absences;
   const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
   const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
   const isOwn =
@@ -171,24 +216,13 @@ export default async function SessionDetailPage({
   const template = one((session as any).templates) as { title: string; category: string | null; duration_hours: number } | null;
   const hours = sessionHours(session.start_at, session.end_at, (dayRows as any) || []);
   // Parcours POEC (migration 23) : erreur ignorée si la migration manque.
-  const { data: poecRow } = await supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle();
+  const { data: poecRow } = await early.poec;
   const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string } | null;
 
   // Organisation interne (migration 24) : créée par, gestionnaire, suivi des inscriptions, historique.
-  const [{ data: trackRow, error: trackError }, { data: trackLinks }, { data: activity }, staff] = await Promise.all([
-    supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle(),
-    supabase
-      .from('session_trainees')
-      .select('trainee_id, added_by, added_at, status_by, status_at, followup_by, followup_count, last_followup_at, last_followup_by, followup_note')
-      .eq('session_id', id),
-    supabase.from('session_activity').select('id, action, detail, created_at, actor_id').eq('session_id', id).order('created_at', { ascending: false }).limit(150),
-    loadStaff(supabase as any),
-  ]);
+  const [{ data: trackRow, error: trackError }, { data: trackLinks }, { data: activity }, staff] = await early.track;
   // Facturation (migration 30) : ignorée si la migration manque.
-  const [{ data: billRow, error: billError }, { data: invoiceRows }] = await Promise.all([
-    supabase.from('sessions').select('billing_done, billing_done_at, billing_done_by, billing_note').eq('id', id).maybeSingle(),
-    supabase.from('session_invoices').select(INVOICE_SELECT).eq('session_id', id).order('created_at'),
-  ]);
+  const [{ data: billRow, error: billError }, { data: invoiceRows }] = await early.billing;
   const billing = billError
     ? null
     : {
@@ -198,8 +232,13 @@ export default async function SessionDetailPage({
         note: (billRow as any)?.billing_note ?? null,
       };
   // Initial / recyclage (migration 29) : ignoré si la migration manque.
-  const { data: cursusRows, error: cursusError } = await supabase.from('session_trainees').select('trainee_id, cursus').eq('session_id', id);
-  const cursus = cursusError ? null : Object.fromEntries(((cursusRows as any[]) || []).map((r) => [r.trainee_id, r.cursus ?? null]));
+  const { data: cursusRows, error: cursusError } = await early.cursus;
+  // Boutons Initial / Recyclage : seulement si la formation est « disponible en recyclage » (migration 33).
+  const recyclageOn = Boolean((tplOpt as any)?.recyclage_available);
+  const cursusMap: Record<string, 'initial' | 'recyclage' | null> = cursusError
+    ? {}
+    : Object.fromEntries(((cursusRows as any[]) || []).map((r) => [r.trainee_id, r.cursus ?? null]));
+  const cursus = cursusError || !recyclageOn ? null : cursusMap;
   const tracking: Record<string, TraineeTracking> | null = trackError
     ? null
     : Object.fromEntries(
@@ -213,22 +252,16 @@ export default async function SessionDetailPage({
       );
   // Autorisations (droit à l'image, livrets, vêtements TST) des stagiaires validés.
   // Documents à signer gérés par l'administrateur (migration 28).
-  const allDocs = await loadDocs(supabase as any);
+  const allDocs = await early.docs;
   const trainingDocs = customDocsOf(allDocs, 'stagiaire');
   const autorKinds = trackError
     ? []
     : sessionKinds((trackRow as any)?.authorizations ?? null, (tplOpt as any)?.authorizations ?? null).filter((k) => builtinActive(allDocs, k));
   const validatedIds = enrolled.filter((t: any) => t.status === 'validee').map((t: any) => t.id as string);
-  const docSigs = trainingDocs.length ? await loadDocSignatures(supabase as any, 'trainee_id', validatedIds) : [];
-  const autorRows = trackError ? [] : await loadAuthorizations(supabase as any, validatedIds);
+  const docSigs = trainingDocs.length ? await early.docSigs : [];
+  const autorRows = trackError ? [] : await early.autor;
   // Prêts de vêtements TST (migration 27) : ceux de la session + ceux pas rendus d'avant.
-  const [{ data: loanRows, error: loanError }, { data: addrRows }] = await Promise.all([
-    supabase
-      .from('clothing_loans')
-      .select(LOAN_SELECT)
-      .or(validatedIds.length ? `session_id.eq.${id},trainee_id.in.(${validatedIds.join(',')})` : `session_id.eq.${id}`),
-    validatedIds.length ? supabase.from('trainees').select('id, address').in('id', validatedIds) : Promise.resolve({ data: [] as any[] }),
-  ]);
+  const [{ data: loanRows, error: loanError }, { data: addrRows }] = await early.loans;
   const allLoans = ((loanRows as ClothingLoan[]) || []);
   const sessionLoans = allLoans.filter((l) => l.session_id === id);
   const otherOpenLoans = allLoans.filter((l) => l.session_id !== id && ['prete', 'incomplet'].includes(loanStatus(l)));
@@ -290,7 +323,7 @@ export default async function SessionDetailPage({
               room={room?.is_holding ? null : room?.name || null}
               trainerName={trainer?.full_name || null}
               slots={slots}
-              trainees={validatedTrainees}
+              trainees={validatedTrainees.map((t) => ({ ...t, cursus: recyclageOn ? cursusMap[t.id] ?? null : null }))}
               expected={expected}
               signatures={(sigRows as any) || []}
               documents={documents}

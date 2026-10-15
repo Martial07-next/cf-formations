@@ -4,3 +4,7 @@ out/
 *.tsbuildinfo
 .vercel
 .env*.local.bak
+
+# Secrets locaux : jamais dans le dépôt
+.env*.local
+.env

@@ -40,7 +40,7 @@ import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEnt
 import type { EntryData } from '@/lib/pdf-dossier';
 
 type Row = { signer: string; trainee_id: string | null; day: string; half: Half; status: string };
-type Trainee = { id: string; name: string; company: string | null };
+type Trainee = { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null };
 
 const frShort = (iso: string) => {
   const d = new Date(iso + 'T00:00:00Z');
@@ -112,6 +112,8 @@ export function DossierPanel({
       formationTitle: string;
       objectifs: string | null;
       competences: string | null;
+      objectifsRecyclage?: string | null;
+      competencesRecyclage?: string | null;
       days: number;
       hours: number;
       address: string | null;

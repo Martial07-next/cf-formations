@@ -21,6 +21,15 @@ function readTemplate(formData: FormData) {
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
+    // Formation disponible en recyclage + objectifs propres au recyclage (migration 33).
+    ...(formData.has('recyclage_present')
+      ? {
+          recyclage_available: formData.get('recyclage_available') === 'on',
+          ...(formData.has('objectifs_recyclage')
+            ? { objectifs_recyclage: get('objectifs_recyclage') || null, competences_recyclage: get('competences_recyclage') || null }
+            : {}),
+        }
+      : {}),
     // Autorisations stagiaire demandées (migration 24).
     ...(formData.has('auth_present')
       ? { authorizations: formData.getAll('authorizations').map(String).filter((k) => ['image', 'livret'].includes(k)) }
@@ -32,7 +41,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

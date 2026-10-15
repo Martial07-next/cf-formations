@@ -15,12 +15,15 @@ import { formatDays } from '@/lib/schedule';
  */
 
 export type FinFormationInput = {
-  trainees: { id: string; name: string; company: string | null }[];
+  trainees: { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null }[];
   entries: Record<string, AppreciationEntry>;
   actionTitle: string; // action de formation suivie (intitulé de la session)
   formationTitle: string; // intitulé de la formation (catalogue)
   objectifs: string | null;
   competences: string | null;
+  /** Objectifs / compétences des stagiaires en recyclage (vide = ceux de l'initiale). */
+  objectifsRecyclage?: string | null;
+  competencesRecyclage?: string | null;
   startDate: string; // AAAA-MM-JJ
   endDate: string;
   days: number; // jours précis à la demi-journée (ex. 3.5)
@@ -192,7 +195,7 @@ function stamp(page: PDFPage, img: PDFImage | null, box: { x: number; y: number;
 // Attestation de fin de formation (1 page par stagiaire)
 // ---------------------------------------------------------------------------
 
-function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInput, t: { name: string }, e: AppreciationEntry, k: number) {
+function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInput, t: { name: string; cursus?: 'initial' | 'recyclage' | null }, e: AppreciationEntry, k: number) {
   const { f } = ctx;
   const B = 12.5 * k;
   const step = 17.27 * k;
@@ -205,7 +208,8 @@ function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInpu
   y -= 25.1;
   heading(page, ctx, 'OBJECTIFS DE LA FORMATION', y);
   y -= 22.6 * Math.min(1, k + 0.1) - step;
-  const objs = objectiveLines(input.objectifs || '');
+  const recyc = t.cursus === 'recyclage';
+  const objs = objectiveLines((recyc && input.objectifsRecyclage) || input.objectifs || '');
   if (!objs.length) objs.push({ bullet: false, text: 'Objectifs de la formation à renseigner dans la fiche de la formation.' });
   for (const o of objs) {
     const x = o.bullet ? 44.4 : 23.1;
@@ -306,7 +310,7 @@ export async function buildAttestationsPdf(input: FinFormationInput): Promise<Ui
 // Appréciation des compétences (2 pages par stagiaire)
 // ---------------------------------------------------------------------------
 
-function competencesPage1(page: PDFPage | null, ctx: Ctx, input: FinFormationInput, t: { name: string }, e: AppreciationEntry, k: number) {
+function competencesPage1(page: PDFPage | null, ctx: Ctx, input: FinFormationInput, t: { name: string; cursus?: 'initial' | 'recyclage' | null }, e: AppreciationEntry, k: number) {
   const { f } = ctx;
   const B = 12.5;
   let y = 574.8;
@@ -335,7 +339,9 @@ function competencesPage1(page: PDFPage | null, ctx: Ctx, input: FinFormationInp
   y -= 2 * 17.25 * k + 34.5 * k;
   text(page, 'L’évaluation a porté notamment sur :', 23.1, y, B, f.bold);
   const LS = 11.5 * k;
-  const items = objectiveLines(input.competences || input.objectifs || '').map((o) => o.text);
+  const items = objectiveLines(
+    (t.cursus === 'recyclage' && (input.competencesRecyclage || input.objectifsRecyclage)) || input.competences || input.objectifs || ''
+  ).map((o) => o.text);
   if (!items.length) items.push('Compétences à renseigner dans la fiche de la formation.');
   y -= 15.8 * k;
   items.forEach((it, idx) => {

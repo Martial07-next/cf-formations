@@ -24,3 +24,11 @@ export function appreciationDone(data: AppreciationData | null | undefined, trai
 export function codificationOf(codification: string | null | undefined, title: string) {
   return (codification || '').trim() || title.toUpperCase();
 }
+
+export type Cursus = 'initial' | 'recyclage';
+
+/** Codification de la fiche précédée de INITIALE / RECYCLAGE (formations disponibles en recyclage). */
+export function codificationFor(codification: string, cursus?: Cursus | null): string {
+  if (!cursus) return codification;
+  return `${cursus === 'recyclage' ? 'RECYCLAGE' : 'INITIALE'} ${codification}`;
+}

@@ -7,6 +7,7 @@ import { appreciationRequired } from '@/lib/appreciation';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { shortName } from '@/lib/tracking';
+import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -59,47 +60,92 @@ export default async function Page({
     rangeEnd = addDays(monday, 5);
   }
 
-  // Requête légèrement élargie (±1 jour) pour ne pas rater une session
-  // multi-jours qui commence avant ou finit après la période visible.
-  const { data: sessions } = await supabase
-    .from('sessions')
-    .select(SESSION_SELECT)
-    .lt('start_at', isoDate(rangeEnd))
-    .gt('end_at', isoDate(addDays(rangeStart, -1)))
-    .order('start_at');
-
-  // Ateliers (bouton sur le planning) et congés des formateurs (à partir du début de la période visible).
+  // Vitesse : les requêtes de la période partent toutes en même temps.
+  const start = <T,>(q: PromiseLike<T>) => Promise.resolve(q);
   const absencesFrom = isoDate(rangeStart) < isoDate(new Date()) ? isoDate(rangeStart) : isoDate(new Date());
-  const [{ data: workshops }, { data: absences }, { data: roomTemplates }] = await Promise.all([
-    supabase.from('room_workshops').select('id, room_id, name').order('name'),
-    supabase
-      .from('trainer_absences')
-      .select('id, trainer_id, start_date, end_date, kind, note')
-      .gte('end_date', absencesFrom)
-      .order('start_date')
-      .limit(2000),
-    supabase.from('room_templates').select('room_id, template_id'),
-  ]);
+  const period = {
+    // Requête légèrement élargie (±1 jour) pour ne pas rater une session
+    // multi-jours qui commence avant ou finit après la période visible.
+    sessions: start(
+      supabase
+        .from('sessions')
+        .select(SESSION_SELECT)
+        .lt('start_at', isoDate(rangeEnd))
+        .gt('end_at', isoDate(addDays(rangeStart, -1)))
+        .order('start_at')
+    ),
+    // Ateliers (bouton sur le planning) et congés des formateurs (à partir du début de la période visible).
+    side: Promise.all([
+      start(supabase.from('room_workshops').select('id, room_id, name').order('name')),
+      start(
+        supabase
+          .from('trainer_absences')
+          .select('id, trainer_id, start_date, end_date, kind, note')
+          .gte('end_date', absencesFrom)
+          .order('start_date')
+          .limit(2000)
+      ),
+      start(supabase.from('room_templates').select('room_id, template_id')),
+    ]),
+    // Évènements de la période (repas, CACES/SST, recrutement, forums…) : aperçu seulement.
+    events: start(
+      supabase
+        .from('planning_events')
+        .select('id, kind, title, start_date, end_date, start_time, end_time, location, participants, notes, planning_event_trainers(trainer_id)')
+        .lte('start_date', isoDate(addDays(rangeEnd, -1)))
+        .gte('end_date', isoDate(rangeStart))
+        .order('start_date')
+    ),
+    // Stages en entreprise des parcours POEC (migration 23).
+    stages: start(
+      supabase
+        .from('poec_periods')
+        .select('id, label, start_date, end_date, program_id, poec_programs(title, poec_trainees(trainee_id))')
+        .lte('start_date', isoDate(addDays(rangeEnd, -1)))
+        .gte('end_date', isoDate(rangeStart))
+        .order('start_date')
+    ),
+    // Liens utiles (bouton du planning) et supports des formations (migration 15).
+    links: Promise.all([
+      start(supabase.from('useful_links').select('id, category, label, url, description, position').order('position')),
+      start(supabase.from('template_links').select('id, template_id, label, url, position').order('position')),
+    ]),
+  };
+  const { data: sessions } = await period.sessions;
+  const sessionIdsEarly = ((sessions as any[]) || []).map((s) => s.id as string);
+  // Données des sessions affichées, en parallèle elles aussi.
+  const per = {
+    dayRows: sessionIdsEarly.length
+      ? start(supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIdsEarly))
+      : Promise.resolve({ data: [] as any[] }),
+    modules: sessionIdsEarly.length
+      ? Promise.all([
+          start(supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day').in('session_id', sessionIdsEarly).order('position')),
+          start(supabase.from('session_trainee_modules').select('session_id, trainee_id, module_id').in('session_id', sessionIdsEarly)),
+        ])
+      : Promise.resolve([{ data: [] as any[] }, { data: [] as any[] }] as const),
+    poec: sessionIdsEarly.length
+      ? start(supabase.from('sessions').select('id, poec_programs(title)').in('id', sessionIdsEarly).not('poec_id', 'is', null))
+      : Promise.resolve({ data: [] as any[] }),
+    by: sessionIdsEarly.length
+      ? start(supabase.from('sessions').select('id, created_by, profiles!sessions_created_by_fkey(full_name)').in('id', sessionIdsEarly))
+      : Promise.resolve({ data: [] as any[] }),
+    billing: sessionIdsEarly.length
+      ? start(supabase.from('sessions').select('id, billing_done').in('id', sessionIdsEarly))
+      : Promise.resolve({ data: [] as any[], error: null }),
+    dayTrainers: loadDayTrainers(supabase, sessionIdsEarly),
+    reservations: loadReservations(supabase, sessionIdsEarly),
+  };
 
-  // Évènements de la période (repas, CACES/SST, recrutement, forums…) : aperçu seulement.
-  const { data: eventRows } = await supabase
-    .from('planning_events')
-    .select('id, kind, title, start_date, end_date, start_time, end_time, location, participants, notes, planning_event_trainers(trainer_id)')
-    .lte('start_date', isoDate(addDays(rangeEnd, -1)))
-    .gte('end_date', isoDate(rangeStart))
-    .order('start_date');
+  const [{ data: workshops }, { data: absences }, { data: roomTemplates }] = await period.side;
+  const { data: eventRows } = await period.events;
   const events = ((eventRows as any[]) || []).map((e) => ({
     ...e,
     trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
   }));
 
   // Stages en entreprise des parcours POEC (migration 23) : affichés comme évènements.
-  const { data: stageRows } = await supabase
-    .from('poec_periods')
-    .select('id, label, start_date, end_date, program_id, poec_programs(title, poec_trainees(trainee_id))')
-    .lte('start_date', isoDate(addDays(rangeEnd, -1)))
-    .gte('end_date', isoDate(rangeStart))
-    .order('start_date');
+  const { data: stageRows } = await period.stages;
   for (const p of (stageRows as any[]) || []) {
     const prog = Array.isArray(p.poec_programs) ? p.poec_programs[0] : p.poec_programs;
     const n = prog?.poec_trainees?.length || 0;
@@ -120,10 +166,7 @@ export default async function Page({
   }
 
   // Liens utiles (bouton du planning) et supports des formations. Erreur ignorée si la migration 15 manque.
-  const [{ data: usefulLinks }, { data: tLinks }] = await Promise.all([
-    supabase.from('useful_links').select('id, category, label, url, description, position').order('position'),
-    supabase.from('template_links').select('id, template_id, label, url, position').order('position'),
-  ]);
+  const [{ data: usefulLinks }, { data: tLinks }] = await period.links;
   const templateTitles = new Map(((templates as any[]) || []).map((t) => [t.id, t.title as string]));
   const templateLinks = [...new Set(((tLinks as any[]) || []).map((l) => l.template_id))]
     .filter((id) => templateTitles.has(id))
@@ -135,17 +178,10 @@ export default async function Page({
     .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
   const sessionIds = (sessions || []).map((s: any) => s.id);
-  const { data: dayRows } = sessionIds.length
-    ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', sessionIds)
-    : { data: [] as any[] };
+  const { data: dayRows } = await per.dayRows;
 
   // Modules : quel module a lieu chaque jour, et combien de stagiaires validés sont présents ce jour-là.
-  const [{ data: moduleRows }, { data: linkRows }] = sessionIds.length
-    ? await Promise.all([
-        supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day').in('session_id', sessionIds).order('position'),
-        supabase.from('session_trainee_modules').select('session_id, trainee_id, module_id').in('session_id', sessionIds),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const [{ data: moduleRows }, { data: linkRows }] = await per.modules;
   const dayInfo: Record<string, Record<string, { modules: string[]; present: number }>> = {};
   for (const s of (sessions as any[]) || []) {
     const mods = (moduleRows || []).filter((m: any) => m.session_id === s.id);
@@ -166,7 +202,8 @@ export default async function Page({
   const dossierComplete: Record<string, boolean> = {};
   if (sessionIds.length) {
     const sigs: any[] = [];
-    for (let from = 0; from < 50000; from += 1000) {
+    // Émargement géré dans Digiforma (désactivé ici) : inutile de charger les signatures.
+    for (let from = 0; EMARGEMENT_ENABLED && from < 50000; from += 1000) {
       const { data, error } = await supabase
         .from('attendance_signatures')
         .select('session_id, signer, trainee_id, day, half')
@@ -227,7 +264,7 @@ export default async function Page({
   // Sessions rattachées à un parcours POEC (migration 23) : badge sur le planning.
   const poecTitles: Record<string, string> = {};
   if (sessionIds.length) {
-    const { data: poecRows } = await supabase.from('sessions').select('id, poec_programs(title)').in('id', sessionIds).not('poec_id', 'is', null);
+    const { data: poecRows } = await per.poec;
     for (const r of (poecRows as any[]) || []) {
       const prog = Array.isArray(r.poec_programs) ? r.poec_programs[0] : r.poec_programs;
       if (prog?.title) poecTitles[r.id] = prog.title;
@@ -237,7 +274,7 @@ export default async function Page({
   // Créée par (migration 24) : affiché en petit sur le planning.
   const createdBy: Record<string, string> = {};
   if (sessionIds.length) {
-    const { data: byRows } = await supabase.from('sessions').select('id, created_by, profiles!sessions_created_by_fkey(full_name)').in('id', sessionIds);
+    const { data: byRows } = await per.by;
     for (const r of (byRows as any[]) || []) {
       const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
       if (p?.full_name) createdBy[r.id] = shortName(p.full_name);
@@ -247,14 +284,14 @@ export default async function Page({
   // Facturation (migration 30) : pas de « Dossier complet » tant que la facturation n'est pas faite.
   const completeIds = Object.keys(dossierComplete);
   if (completeIds.length) {
-    const { data: billRows, error: billError } = await supabase.from('sessions').select('id, billing_done').in('id', completeIds);
+    const { data: billRows, error: billError } = await per.billing;
     if (!billError) for (const r of (billRows as any[]) || []) if (!r.billing_done) delete dossierComplete[r.id];
   }
 
   // Remplaçants certains jours (migration 19).
-  const dayTrainers = await loadDayTrainers(supabase, sessionIds);
+  const dayTrainers = await per.dayTrainers;
   // Places réservées par entreprise encore sans nom (migration 20).
-  const reservations = await loadReservations(supabase, sessionIds);
+  const reservations = await per.reservations;
   const reservedSeats: Record<string, number> = {};
   for (const s of (sessions as any[]) || []) {
     if (!reservations[s.id]) continue;
