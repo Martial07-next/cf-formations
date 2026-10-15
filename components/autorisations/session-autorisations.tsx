@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, CircleDashed, QrCode, Download, Settings2, Ban, ExternalLink } from 'lucide-react';
+import { CheckCircle2, CircleDashed, QrCode, Download, Settings2, Ban, ExternalLink, Maximize2, X } from 'lucide-react';
 import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actions';
 import type { AuthPdfItem } from '@/lib/pdf-autorisations';
 import { missingDocs, type DocSignature, type SignableDoc } from '@/lib/documents';
@@ -61,7 +61,10 @@ export function SessionAutorisations({
   rows,
   cachet,
   customDocs = [],
+  title = '',
 }: {
+  /** Intitulé de la session (affiché sur le QR code en grand). */
+  title?: string;
   /** Documents ajoutés par l'administrateur (ex. règlement intérieur). */
   customDocs?: SignableDoc[];
   sessionId: string;
@@ -78,6 +81,30 @@ export function SessionAutorisations({
   const [editKinds, setEditKinds] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  // QR code en grand (vidéoprojecteur / écran de la salle).
+  const [big, setBig] = useState<string | null>(null);
+  const bigRef = useRef<HTMLDivElement>(null);
+  const openBig = async () => {
+    if (!qr) return;
+    const QRCode = (await import('qrcode')).default;
+    setBig(await QRCode.toDataURL(qr.url, { width: 1400, margin: 2, errorCorrectionLevel: 'M' }));
+  };
+  const closeBig = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setBig(null);
+  };
+  useEffect(() => {
+    if (!big) return;
+    bigRef.current?.requestFullscreen?.().catch(() => {});
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setBig(null);
+    const onFs = () => !document.fullscreenElement && setBig(null);
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFs);
+    };
+  }, [big]);
   // QR affiché : la liste se met à jour toute seule pendant que les stagiaires signent.
   useEffect(() => {
     if (!qr) return;
@@ -158,9 +185,12 @@ export function SessionAutorisations({
           {qr && (
             <div className="autor-qr">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr.image} alt="QR code des autorisations" />
+              <button type="button" className="autor-qr-zoom" onClick={openBig} title="Afficher en grand">
+                <img src={qr.image} alt="QR code des autorisations" />
+              </button>
               <p className="hint">Les stagiaires scannent, choisissent leur nom et signent seulement ce qui manque.</p>
               <span className="row-actions">
+                <button type="button" className="small primary" onClick={openBig}><Maximize2 size={14} aria-hidden /> Afficher en grand</button>
                 <a className="btn small" href={qr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden /> Remplir sur cette tablette</a>
                 {canManage && (
                   <button type="button" className="small ghost" onClick={() => confirm('Nouveau QR code ? L’ancien ne fonctionnera plus.') && showQr(true)}>Nouveau QR</button>
@@ -200,6 +230,33 @@ export function SessionAutorisations({
               <AuthPdfButton items={signedHere} cachet={cachet} fileName="Autorisations de la session.pdf" label="Toutes les autorisations (PDF)" className="small" />
             )}
           </div>
+        </div>
+      )}
+      {big && (
+        <div ref={bigRef} className="qr-big" role="dialog" aria-modal="true" aria-label="QR code des autorisations en grand">
+          <button type="button" className="qr-big-close" onClick={closeBig} aria-label="Fermer"><X size={22} /> Fermer</button>
+          <div className="qr-big-main">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-cf-reseaux.svg" alt="CF Réseaux" className="qr-big-logo" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={big} alt="QR code des autorisations" className="qr-big-code" />
+          </div>
+          <aside className="qr-big-side">
+            <p className="qr-big-kicker">Autorisations</p>
+            {title && <h2>{title}</h2>}
+            <ol className="qr-big-steps">
+              <li>Scannez le QR code avec votre téléphone</li>
+              <li>Choisissez votre nom</li>
+              <li>Signez une seule fois</li>
+            </ol>
+            <p className="qr-big-count"><strong>{ok.length}/{rows.length}</strong> à jour</p>
+            {todo.length > 0 && (
+              <>
+                <p className="qr-big-kicker">Reste à signer</p>
+                <ul className="qr-big-todo">{todo.map((t) => <li key={t.id}>{t.name}</li>)}</ul>
+              </>
+            )}
+          </aside>
         </div>
       )}
     </section>

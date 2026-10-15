@@ -290,6 +290,7 @@ export default async function SessionDetailPage({
           {!trackError && (
             <SessionAutorisations
               sessionId={session.id}
+              title={session.title}
               kinds={autorKinds}
               overridden={(trackRow as any)?.authorizations != null}
               canManage={editable}
