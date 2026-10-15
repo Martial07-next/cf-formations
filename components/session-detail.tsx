@@ -18,7 +18,7 @@ import type { SessionModule } from '@/lib/modules';
 import { DigiformaPanel } from '@/components/digiforma-panel';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
-import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2 } from 'lucide-react';
+import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2 } from 'lucide-react';
 import { LinkRow } from '@/components/useful-links';
 import type { LinkItem } from '@/lib/links';
 import { ReservationsBox } from '@/components/reservations-box';
@@ -85,7 +85,18 @@ export function SessionDetailView({
   tracking = null,
   staff = [],
   cursus = null,
+  started = false,
+  sessionEnded = false,
+  isAdminUser = false,
+  workPanels = null,
 }: {
+  /** La session a commencé : liste des stagiaires figée. */
+  started?: boolean;
+  sessionEnded?: boolean;
+  /** Administrateur : peut corriger une liste figée. */
+  isAdminUser?: boolean;
+  /** Pendant / après la session : blocs utiles affichés juste après les stagiaires. */
+  workPanels?: React.ReactNode;
   /** Initial / recyclage par stagiaire (migration 29) ; null si la migration manque. */
   cursus?: Record<string, Cursus | null> | null;
   /** Organisation interne (migration 24) : qui a inscrit, qui relance. */
@@ -120,6 +131,10 @@ export function SessionDetailView({
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [traineeQuery, setTraineeQuery] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const locked = started && !unlocked;
+  // Inscriptions modifiables : bureau / admin, tant que la session n'a pas commencé.
+  const canManageTrainees = isAdmin && !locked;
 
   const validated = enrolled.filter((t) => t.status === 'validee');
   const waiting = enrolled.filter((t) => t.status === 'en_attente');
@@ -146,11 +161,34 @@ export function SessionDetailView({
 
   const traineeBlock = (
     <>
-      {isAdmin && <PasteImport sessionId={session.id} />}
-      {isAdmin && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
+      {canManageTrainees && <PasteImport sessionId={session.id} />}
+      {canManageTrainees && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
 
-      <div className="panel">
-        <h2 id="stagiaires">Stagiaires</h2>
+      <div className={`panel${locked ? ' trainees-locked' : ''}`}>
+        <div className="panel-head">
+          <h2 id="stagiaires">Stagiaires</h2>
+          {started && (
+            <span className="row-actions">
+              {locked ? (
+                <span className="badge brouillon"><Lock size={12} aria-hidden /> Liste figée</span>
+              ) : (
+                <span className="badge indisponible"><LockOpen size={12} aria-hidden /> Correction en cours</span>
+              )}
+              {isAdminUser && (
+                <button type="button" className="small" onClick={() => setUnlocked((v) => !v)}>
+                  {locked ? <><LockOpen size={14} aria-hidden /> Corriger la liste</> : <><Lock size={14} aria-hidden /> Refiger</>}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+        {started && (
+          <p className="panel-intro">
+            {locked
+              ? `La session a commencé${sessionEnded ? ' (terminée)' : ''} : la liste des stagiaires est figée. Plus d’ajout, de retrait ni de modification${isAdminUser ? ' (l’administrateur peut corriger une erreur avec « Corriger la liste »)' : ''}.`
+              : 'Mode correction (administrateur) : chaque changement est noté dans l’historique de la session.'}
+          </p>
+        )}
         {overCapacity && (
           <div role="alert" className="alert alert-warning">
             <AlertTriangle size={16} aria-hidden /> Capacité dépassée : {occupied} places occupées
@@ -168,17 +206,19 @@ export function SessionDetailView({
               <span>réservée{resa.unnamed > 1 ? 's' : ''} sans nom</span>
             </div>
           )}
-          <div className="counter-chip">
-            <strong>{waiting.length}</strong>
-            <span>en attente</span>
-          </div>
+          {!locked && (
+            <div className="counter-chip">
+              <strong>{waiting.length}</strong>
+              <span>en attente</span>
+            </div>
+          )}
           {cursus && validated.some((t) => cursus[t.id]) && (
             <div className="counter-chip">
               <strong>{validated.filter((t) => cursus[t.id] === 'initial').length} · {validated.filter((t) => cursus[t.id] === 'recyclage').length}</strong>
               <span>initial · recyclage</span>
             </div>
           )}
-          {remaining != null && (
+          {remaining != null && !locked && (
             <div className={`counter-chip${remaining < 0 ? ' over' : ''}`}>
               <strong>{remaining}</strong>
               <span>places restantes</span>
@@ -190,10 +230,10 @@ export function SessionDetailView({
           sessionId={session.id}
           rows={resa.rows}
           companies={[...new Set(allTrainees.map((t) => t.company).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr'))}
-          canEdit={isAdmin}
+          canEdit={canManageTrainees}
         />
 
-        {isAdmin && (
+        {canManageTrainees && (
           <div className="trainee-search" style={{ marginTop: 16 }}>
             <label className="search" style={{ maxWidth: 420 }}>
               <Search size={15} aria-hidden />
@@ -228,7 +268,7 @@ export function SessionDetailView({
 
         <div className="cursus-head">
           <h3 className="sub-heading">Stagiaires validés</h3>
-          {cursus && isAdmin && validated.length > 1 && (
+          {cursus && canManageTrainees && validated.length > 1 && (
             <span className="row-actions">
               <span className="hint">Tous en :</span>
               <button type="button" className="small cursus-pill initial" disabled={isPending} onClick={() => handleCursus(validated.map((t) => t.id), 'initial')}>Initial</button>
@@ -240,14 +280,14 @@ export function SessionDetailView({
           <p className="empty">Aucun stagiaire validé pour l'instant.</p>
         ) : (
           <table className="data">
-            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{canManageTrainees && <th></th>}</tr></thead>
             <tbody>
               {validated.map((t) => (
                 <tr key={t.id}>
                   <td>
                     <span className="name-cursus">
                       <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
-                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={isAdmin} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />
                   </td>
@@ -258,13 +298,13 @@ export function SessionDetailView({
                         traineeId={t.id}
                         modules={modules}
                         chosen={traineeModules[t.id] || []}
-                        canEdit={isAdmin}
+                        canEdit={canManageTrainees}
                       />
                     </td>
                   )}
                   <td>{t.email || '-'}</td>
                   <td>{t.company || '-'}</td>
-                  {isAdmin && (
+                  {canManageTrainees && (
                     <td className="row-actions">
                       <button className="small" onClick={() => handleStatusChange(t.id, 'en_attente')} disabled={isPending}>Mettre en attente</button>
                       <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
@@ -276,19 +316,27 @@ export function SessionDetailView({
           </table>
         )}
 
+        {locked ? (
+          waiting.length > 0 && (
+            <details className="waiting-locked">
+              <summary className="hint">{waiting.length} stagiaire{waiting.length > 1 ? 's' : ''} resté{waiting.length > 1 ? 's' : ''} en attente (non inscrit{waiting.length > 1 ? 's' : ''} à la session)</summary>
+              <ul>{waiting.map((t) => <li key={t.id}><a href={`/stagiaires/${t.id}`}>{t.full_name}</a>{t.company ? ` · ${t.company}` : ''}</li>)}</ul>
+            </details>
+          )
+        ) : (<>
         <h3 className="sub-heading">Stagiaires en attente</h3>
         {waiting.length === 0 ? (
           <p className="empty">Aucun stagiaire en attente.</p>
         ) : (
           <table className="data">
-            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{tracking && <th>Suivi des relances</th>}{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Nom</th>{modules.length > 0 && <th>Modules suivis</th>}<th>E-mail</th><th>Entreprise</th>{tracking && <th>Suivi des relances</th>}{canManageTrainees && <th></th>}</tr></thead>
             <tbody>
               {waiting.map((t) => (
                 <tr key={t.id}>
                   <td>
                     <span className="name-cursus">
                       <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
-                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={isAdmin} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />
                   </td>
@@ -299,16 +347,16 @@ export function SessionDetailView({
                         traineeId={t.id}
                         modules={modules}
                         chosen={traineeModules[t.id] || []}
-                        canEdit={isAdmin}
+                        canEdit={canManageTrainees}
                       />
                     </td>
                   )}
                   <td>{t.email || '-'}</td>
                   <td>{t.company || '-'}</td>
                   {tracking && (
-                    <td><FollowupCell sessionId={session.id} traineeId={t.id} t={tracking[t.id]} staff={staff} canManage={isAdmin} /></td>
+                    <td><FollowupCell sessionId={session.id} traineeId={t.id} t={tracking[t.id]} staff={staff} canManage={canManageTrainees} /></td>
                   )}
-                  {isAdmin && (
+                  {canManageTrainees && (
                     <td className="row-actions">
                       <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>
                       <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
@@ -319,6 +367,7 @@ export function SessionDetailView({
             </tbody>
           </table>
         )}
+        </>)}
       </div>
     </>
   );
@@ -406,6 +455,16 @@ export function SessionDetailView({
         </div>
       )}
 
+      {started ? (
+        <>
+          {traineeBlock}
+          {workPanels}
+          <details className="panel session-infos-fold">
+            <summary>
+              <Settings2 size={16} aria-hidden /> <strong>Informations, horaires et modules</strong>
+              <span className="hint"> · salle, formateur, dates, horaires par jour</span>
+            </summary>
+            <div className="session-infos-body">
       <div className="panel">
         <div className="panel-head">
           <h2>Informations</h2>
@@ -468,7 +527,77 @@ export function SessionDetailView({
         canEdit={isAdmin}
       />
 
-      {!isNew && traineeBlock}
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+      <div className="panel">
+        <div className="panel-head">
+          <h2>Informations</h2>
+          {template && (
+            <span className="hint">
+              Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
+            </span>
+          )}
+        </div>
+        <SessionForm
+          formId="session-edit-form"
+          showTemplate={false}
+          disabled={!canEditSession}
+          rooms={rooms}
+          trainers={trainers}
+          templates={[]}
+          defaults={{
+            title: session.title,
+            room_id: session.room_id,
+            trainer_id: session.trainer_id,
+            status: session.status,
+            max_trainees: session.max_trainees,
+            notes: session.notes,
+            start_date: session.start_at.slice(0, 10),
+            end_date: session.end_at.slice(0, 10),
+            start_time: session.start_at.slice(11, 16),
+            end_time: session.end_at.slice(11, 16),
+          }}
+          onSubmit={handleUpdate}
+        />
+        {canEditSession && (
+          <div className="form-actions">
+            <button type="submit" form="session-edit-form" className="primary" disabled={isPending}>
+              {isPending ? 'Enregistrement…' : 'Enregistrer les modifications'}
+            </button>
+            <span className="spacer" style={{ flex: 1 }} />
+            {isAdmin && <button type="button" className="danger" onClick={handleDeleteSession} disabled={isPending}>
+              <Trash2 size={15} aria-hidden /> Supprimer la session
+            </button>}
+          </div>
+        )}
+      </div>
+
+      <DayTimesPanel
+        isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
+        ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
+        sessionId={session.id}
+        startAt={session.start_at}
+        endAt={session.end_at}
+        overrides={dayOverrides}
+      />
+
+      <SessionModulesPanel
+        sessionId={session.id}
+        startAt={session.start_at}
+        endAt={session.end_at}
+        modules={modules}
+        traineeModules={traineeModules}
+        validatedIds={validated.map((t) => t.id)}
+        canEdit={isAdmin}
+      />
+
+          {!isNew && traineeBlock}
+          {workPanels}
+        </>
+      )}
     </>
   );
 }

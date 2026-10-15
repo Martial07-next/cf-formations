@@ -7,6 +7,7 @@ import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { buildFullName, duplicateMessage, isDuplicateError } from '@/lib/trainee-name';
 import { validSignature } from '@/lib/emargement';
 import { COMPANY_FIELDS, newToken } from '@/lib/poec';
+import { sessionStarted } from '@/lib/session-lock';
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -110,9 +111,14 @@ async function enrollGroup(supabase: Awaited<ReturnType<typeof createClient>>, p
   const ids =
     traineeIds ??
     (((await supabase.from('poec_trainees').select('trainee_id').eq('program_id', programId)).data as any[]) || []).map((r) => r.trainee_id);
-  const sids =
+  let sids: string[] =
     sessionIds ?? (((await supabase.from('sessions').select('id').eq('poec_id', programId)).data as any[]) || []).map((r) => r.id);
   if (!ids.length || !sids.length) return;
+  // Formations déjà commencées : liste figée, on n'y touche pas.
+  const { data: starts } = await supabase.from('sessions').select('id, start_at').in('id', sids);
+  const open = new Set(((starts as any[]) || []).filter((x) => !sessionStarted(x.start_at)).map((x) => x.id));
+  sids = sids.filter((sid) => open.has(sid));
+  if (!sids.length) return;
   const rows = sids.flatMap((sid) => ids.map((tid) => ({ session_id: sid, trainee_id: tid, status: 'validee' })));
   for (let i = 0; i < rows.length; i += 500) {
     await supabase.from('session_trainees').upsert(rows.slice(i, i + 500), { onConflict: 'session_id,trainee_id' });

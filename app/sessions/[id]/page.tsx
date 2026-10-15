@@ -4,6 +4,7 @@ import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/comp
 import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
 import { loadAuthorizations } from '@/lib/autorisations-server';
 import { sessionKinds } from '@/lib/autorisations';
+import { sessionStarted, parisNowKey } from '@/lib/session-lock';
 import { SessionBilling } from '@/components/billing/session-billing';
 import { INVOICE_SELECT, type Invoice } from '@/lib/billing';
 import { builtinActive, customDocs as customDocsOf } from '@/lib/documents';
@@ -233,6 +234,110 @@ export default async function SessionDetailPage({
   const otherOpenLoans = allLoans.filter((l) => l.session_id !== id && ['prete', 'incomplet'].includes(loanStatus(l)));
   const addressOf = (tid: string) => ((addrRows as any[]) || []).find((r) => r.id === tid)?.address || null;
 
+  // Session commencée / terminée : liste des stagiaires figée, fiche réorganisée.
+  const started = sessionStarted(session.start_at);
+  const ended = session.end_at.slice(0, 16) <= parisNowKey();
+  const sessionDays = weekdaysBetween(session.start_at, session.end_at);
+  const todayIndex = sessionDays.indexOf(parisNowKey().slice(0, 10));
+
+  // Blocs de travail (vêtements, autorisations, dossier) : juste après les stagiaires.
+  const workPanels = (
+      <>
+          {!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn) && (
+            <SessionLoans
+              sessionId={session.id}
+              trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
+              loans={sessionLoans}
+              otherOpen={otherOpenLoans}
+              canManage={editable}
+              cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+            />
+          )}
+
+          {!trackError && (
+            <SessionAutorisations
+              sessionId={session.id}
+              kinds={autorKinds}
+              overridden={(trackRow as any)?.authorizations != null}
+              canManage={editable}
+              canCollect={canEditStartTimes(profile?.role) || isOwn}
+              rows={validatedTrainees.map((t) => ({
+                id: t.id,
+                name: t.name,
+                auths: autorRows.filter((a) => a.trainee_id === t.id),
+                docSigs: docSigs.filter((x) => x.trainee_id === t.id),
+              }))}
+              customDocs={trainingDocs}
+              cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+            />
+          )}
+
+          {dossierError ? (
+            editable && (
+              <div role="status" className="alert alert-warning">
+                Dossier de formation dématérialisé : exécute la migration 16 (supabase/migration_phase16.sql) dans Supabase pour l’activer.
+              </div>
+            )
+          ) : (
+            <DossierPanel
+              sessionId={session.id}
+              title={session.title}
+              period={
+                session.start_at.slice(0, 10) === session.end_at.slice(0, 10)
+                  ? `Le ${session.start_at.slice(0, 10).split('-').reverse().join('/')}`
+                  : `Du ${session.start_at.slice(0, 10).split('-').reverse().join('/')} au ${session.end_at.slice(0, 10).split('-').reverse().join('/')}`
+              }
+              room={room?.is_holding ? null : room?.name || null}
+              trainerName={trainer?.full_name || null}
+              slots={slots}
+              trainees={validatedTrainees}
+              expected={expected}
+              signatures={(sigRows as any) || []}
+              documents={documents}
+              entries={(entryRows as any) || []}
+              canFill={canEditStartTimes(profile?.role) || isOwn}
+              canManage={editable}
+              tourDeTable={tourDeTable}
+              appreciation={
+                faiError || flagError
+                  ? null
+                  : {
+                      required: appreciationRequired((sessFlag as any)?.fiche_appreciation ?? null, (tplOpt as any)?.fiche_appreciation),
+                      sessionFlag: (sessFlag as any)?.fiche_appreciation ?? null,
+                      templateFlag: Boolean((tplOpt as any)?.fiche_appreciation),
+                      data: ((faiRow as any)?.data as any) || null,
+                      codification: codificationOf((tplOpt as any)?.codification, (tplOpt as any)?.title || session.title),
+                      startDate: session.start_at.slice(0, 10),
+                      endDate: session.end_at.slice(0, 10),
+                      lieu: room?.is_holding ? null : buildingAddress(room),
+                      trainerNames: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                      // Attestation / appréciation des compétences : bureau et administrateur uniquement.
+                      finFormation: editable
+                        ? {
+                            actionTitle: session.title,
+                            formationTitle: (tplOpt as any)?.title || session.title,
+                            objectifs: (tplOpt as any)?.objectifs ?? null,
+                            competences: (tplOpt as any)?.competences ?? null,
+                            // Jours précis : un jour de moins de 5 h compte pour une demi-journée.
+                            days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
+                            hours,
+                            address: room?.is_holding ? null : streetAddress(room),
+                            signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
+                            agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
+                            cachet: ((settings as any)?.cachet_image as string) || null,
+                          }
+                        : null,
+                    }
+              }
+              dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
+              place={room?.is_holding ? null : trainingPlace(room)}
+              legal={legal}
+              billingDone={billing ? billing.done : null}
+            />
+          )}
+      </>
+    );
+
   return (
     <main>
       <Sidebar active="/sessions" profile={profile} />
@@ -266,6 +371,17 @@ export default async function SessionDetailPage({
             </p>
           </div>
         </header>
+
+        {started && (
+          <div role="status" className={`session-live ${ended ? 'ended' : 'live'}`}>
+            <strong>{ended ? 'Session terminée' : todayIndex >= 0 ? `Session en cours · jour ${todayIndex + 1} sur ${sessionDays.length}` : 'Session en cours'}</strong>
+            <span>
+              {ended
+                ? 'Liste des stagiaires figée. Reste à boucler le dossier : documents, attestations, facturation.'
+                : 'Liste des stagiaires figée. Ci-dessous : stagiaires, autorisations (QR code), vêtements et dossier de formation.'}
+            </span>
+          </div>
+        )}
 
         {tracking && (
           <SessionTrackingBar
@@ -313,36 +429,11 @@ export default async function SessionDetailPage({
           tracking={tracking}
           staff={staff}
           cursus={cursus}
+          started={started}
+          sessionEnded={ended}
+          isAdminUser={profile?.role === 'admin'}
+          workPanels={workPanels}
         />
-
-        {!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn) && (
-          <SessionLoans
-            sessionId={session.id}
-            trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
-            loans={sessionLoans}
-            otherOpen={otherOpenLoans}
-            canManage={editable}
-            cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
-          />
-        )}
-
-        {!trackError && (
-          <SessionAutorisations
-            sessionId={session.id}
-            kinds={autorKinds}
-            overridden={(trackRow as any)?.authorizations != null}
-            canManage={editable}
-            canCollect={canEditStartTimes(profile?.role) || isOwn}
-            rows={validatedTrainees.map((t) => ({
-              id: t.id,
-              name: t.name,
-              auths: autorRows.filter((a) => a.trainee_id === t.id),
-              docSigs: docSigs.filter((x) => x.trainee_id === t.id),
-            }))}
-            customDocs={trainingDocs}
-            cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
-          />
-        )}
 
         <DayTrainersPanel
           sessionId={session.id}
@@ -353,70 +444,6 @@ export default async function SessionDetailPage({
           absences={(periodAbsences as any) || []}
           canEdit={editable}
         />
-
-        {dossierError ? (
-          editable && (
-            <div role="status" className="alert alert-warning">
-              Dossier de formation dématérialisé : exécute la migration 16 (supabase/migration_phase16.sql) dans Supabase pour l’activer.
-            </div>
-          )
-        ) : (
-          <DossierPanel
-            sessionId={session.id}
-            title={session.title}
-            period={
-              session.start_at.slice(0, 10) === session.end_at.slice(0, 10)
-                ? `Le ${session.start_at.slice(0, 10).split('-').reverse().join('/')}`
-                : `Du ${session.start_at.slice(0, 10).split('-').reverse().join('/')} au ${session.end_at.slice(0, 10).split('-').reverse().join('/')}`
-            }
-            room={room?.is_holding ? null : room?.name || null}
-            trainerName={trainer?.full_name || null}
-            slots={slots}
-            trainees={validatedTrainees}
-            expected={expected}
-            signatures={(sigRows as any) || []}
-            documents={documents}
-            entries={(entryRows as any) || []}
-            canFill={canEditStartTimes(profile?.role) || isOwn}
-            canManage={editable}
-            tourDeTable={tourDeTable}
-            appreciation={
-              faiError || flagError
-                ? null
-                : {
-                    required: appreciationRequired((sessFlag as any)?.fiche_appreciation ?? null, (tplOpt as any)?.fiche_appreciation),
-                    sessionFlag: (sessFlag as any)?.fiche_appreciation ?? null,
-                    templateFlag: Boolean((tplOpt as any)?.fiche_appreciation),
-                    data: ((faiRow as any)?.data as any) || null,
-                    codification: codificationOf((tplOpt as any)?.codification, (tplOpt as any)?.title || session.title),
-                    startDate: session.start_at.slice(0, 10),
-                    endDate: session.end_at.slice(0, 10),
-                    lieu: room?.is_holding ? null : buildingAddress(room),
-                    trainerNames: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
-                    // Attestation / appréciation des compétences : bureau et administrateur uniquement.
-                    finFormation: editable
-                      ? {
-                          actionTitle: session.title,
-                          formationTitle: (tplOpt as any)?.title || session.title,
-                          objectifs: (tplOpt as any)?.objectifs ?? null,
-                          competences: (tplOpt as any)?.competences ?? null,
-                          // Jours précis : un jour de moins de 5 h compte pour une demi-journée.
-                          days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
-                          hours,
-                          address: room?.is_holding ? null : streetAddress(room),
-                          signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
-                          agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
-                          cachet: ((settings as any)?.cachet_image as string) || null,
-                        }
-                      : null,
-                  }
-            }
-            dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
-            place={room?.is_holding ? null : trainingPlace(room)}
-            legal={legal}
-            billingDone={billing ? billing.done : null}
-          />
-        )}
 
         {billing && (editable || profile?.can_invoice) && (
           <SessionBilling

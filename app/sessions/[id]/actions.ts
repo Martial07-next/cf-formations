@@ -5,6 +5,7 @@ import { canManage, canEditStartTimes } from '@/lib/roles';
 import { effectiveDayTime } from '@/lib/week';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { traineesLockError } from '@/lib/session-lock';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTraineeConflictsBulk, sessionLinks, upsertSessionLinks } from '@/lib/trainee-conflict';
 
@@ -37,6 +38,9 @@ export async function addTraineeToSession(
   status: 'validee' | 'en_attente'
 ): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   if (!traineeId) return { ok: false, error: 'Choisis un stagiaire.' };
   const supabase = await createClient();
 
@@ -63,6 +67,9 @@ export async function addTraineeToSession(
 
 export async function removeTraineeFromSession(sessionId: string, traineeId: string): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const supabase = await createClient();
   const { error } = await supabase
     .from('session_trainees')
@@ -80,6 +87,9 @@ export async function setTraineeStatus(
   status: 'validee' | 'en_attente'
 ): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const supabase = await createClient();
 
   if (status === 'validee') {
@@ -176,6 +186,9 @@ export type CsvImportResult =
  */
 export async function importTraineesCsv(sessionId: string, formData: FormData): Promise<CsvImportResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Choisis un fichier Excel (.xlsx) ou CSV.' };
 
@@ -268,6 +281,9 @@ export type DigiformaImportResult =
  */
 export async function importFromDigiforma(sessionId: string, digiformaRef: string): Promise<DigiformaImportResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   if (!digiformaRef.trim()) return { ok: false, error: 'Renseigne la référence/l\'id de session Digiforma.' };
 
   const { digiformaFetchSessionTrainees } = await import('@/lib/digiforma');
@@ -324,6 +340,9 @@ function refreshSession(sessionId: string) {
 /** Choisit les modules suivis par un stagiaire. Tous (ou aucun) = session complète. */
 export async function setTraineeModules(sessionId: string, traineeId: string, moduleIds: string[]): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const supabase = await createClient();
   const { data: all } = await supabase.from('session_modules').select('id').eq('session_id', sessionId);
   const allIds = (all || []).map((m: any) => m.id as string);
@@ -495,6 +514,9 @@ const reservationError = (msg: string) =>
 /** Places réservées pour une entreprise, sans les noms des stagiaires. */
 export async function addReservation(sessionId: string, formData: FormData): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const company = String(formData.get('company') || '').trim().slice(0, 120);
   const seats = Number.parseInt(String(formData.get('seats') || ''), 10);
   const note = String(formData.get('note') || '').trim().slice(0, 200) || null;
@@ -515,6 +537,9 @@ export async function addReservation(sessionId: string, formData: FormData): Pro
 
 export async function updateReservationSeats(sessionId: string, id: string, seats: number): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   const supabase = await createClient();
   const { error } =
     seats > 0
@@ -529,6 +554,9 @@ export async function updateReservationSeats(sessionId: string, id: string, seat
 /** Initial / recyclage d'un ou plusieurs stagiaires de la session (vide = non précisé). */
 export async function setTraineeCursus(sessionId: string, traineeIds: string[], cursus: 'initial' | 'recyclage' | null): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
+  // Session commencée : liste des stagiaires figée (sauf administrateur).
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
   if (cursus && cursus !== 'initial' && cursus !== 'recyclage') return { ok: false, error: 'Valeur inconnue.' };
   if (!traineeIds.length) return { ok: true };
   const supabase = await createClient();

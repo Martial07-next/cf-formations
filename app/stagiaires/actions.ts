@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { traineesLockError } from '@/lib/session-lock';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { resolveTraineesBulk, findTraineeConflictsBulk, upsertSessionLinks } from '@/lib/trainee-conflict';
 import { parseNameList } from '@/lib/name-list';
@@ -176,6 +177,10 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
     ? (await supabase.from('sessions').select('id, start_at, end_at').eq('id', sessionId).maybeSingle()).data
     : null;
   if (sessionId && !session) return { ok: false, error: 'Session introuvable.' };
+  if (sessionId) {
+    const locked = await traineesLockError(sessionId);
+    if (locked) return { ok: false, error: locked };
+  }
 
   let created = 0;
   let matched = 0;

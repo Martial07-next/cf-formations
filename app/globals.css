@@ -842,3 +842,18 @@ span.cursus-pill{cursor:default}
 .billing-tabs a:hover:not(.active){background:var(--surface-2)}
 #facturation h2 svg{vertical-align:-3px}
 @media (max-width:760px){.invoice-form{grid-template-columns:1fr 1fr}}
+
+/* ---------- Session commencée : liste figée ---------- */
+.session-live{display:flex;flex-direction:column;gap:2px;border-radius:var(--radius);padding:12px 16px;margin:-8px 0 16px;border:1px solid}
+.session-live.live{background:#ecfdf3;border-color:#a7e9c3;color:var(--ok-ink)}
+.session-live.ended{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-2)}
+.session-live strong{font-size:15px}
+.session-live span{font-size:13px}
+.trainees-locked .panel-head{margin-bottom:6px}
+.waiting-locked{margin-top:12px}
+.waiting-locked summary{cursor:pointer}
+.waiting-locked ul{margin:8px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-2)}
+.session-infos-fold > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
+.session-infos-fold > summary::-webkit-details-marker{display:none}
+.session-infos-fold[open] > summary{margin-bottom:12px}
+.session-infos-body > .panel{box-shadow:none;border-color:var(--line);margin-bottom:14px}
