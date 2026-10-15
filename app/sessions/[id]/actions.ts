@@ -525,3 +525,16 @@ export async function updateReservationSeats(sessionId: string, id: string, seat
   revalidatePath('/');
   return { ok: true };
 }
+
+/** Initial / recyclage d'un ou plusieurs stagiaires de la session (vide = non précisé). */
+export async function setTraineeCursus(sessionId: string, traineeIds: string[], cursus: 'initial' | 'recyclage' | null): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  if (cursus && cursus !== 'initial' && cursus !== 'recyclage') return { ok: false, error: 'Valeur inconnue.' };
+  if (!traineeIds.length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from('session_trainees').update({ cursus }).eq('session_id', sessionId).in('trainee_id', traineeIds);
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 29 (supabase/migration_phase29.sql) dans Supabase.' };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}

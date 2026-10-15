@@ -9,9 +9,9 @@ import {
   setTraineeStatus,
   setSessionDayTime,
   resetSessionDayTime,
+  setTraineeCursus,
 } from '@/app/sessions/[id]/actions';
 import { deleteSession } from '@/app/sessions/actions';
-import { CsvImportTrainees } from '@/components/csv-import';
 import { PasteImport } from '@/components/paste-import';
 import { SessionModulesPanel, TraineeModuleToggles } from '@/components/session-modules';
 import type { SessionModule } from '@/lib/modules';
@@ -27,6 +27,28 @@ import { AddedBy, FollowupCell, type TraineeTracking } from '@/components/tracki
 import type { Staff } from '@/lib/tracking';
 
 type Trainee = { id: string; full_name: string; email: string | null; company: string | null };
+type Cursus = 'initial' | 'recyclage';
+
+/** Initial / recyclage d'un stagiaire : deux pastilles (un clic sur la pastille active l'efface). */
+function CursusToggle({ value, canEdit, disabled, onChange }: { value: Cursus | null | undefined; canEdit: boolean; disabled: boolean; onChange: (v: Cursus | null) => void }) {
+  if (!canEdit) return value ? <span className={`cursus-pill ${value} on`}>{value === 'initial' ? 'Initial' : 'Recyclage'}</span> : null;
+  return (
+    <span className="cursus-toggle" role="group" aria-label="Initial ou recyclage">
+      {(['initial', 'recyclage'] as Cursus[]).map((c) => (
+        <button
+          key={c}
+          type="button"
+          className={`cursus-pill ${c}${value === c ? ' on' : ''}`}
+          aria-pressed={value === c}
+          disabled={disabled}
+          onClick={() => onChange(value === c ? null : c)}
+        >
+          {c === 'initial' ? 'Initial' : 'Recyclage'}
+        </button>
+      ))}
+    </span>
+  );
+}
 type EnrolledTrainee = Trainee & { status: 'validee' | 'en_attente' };
 
 type SessionDetail = {
@@ -62,7 +84,10 @@ export function SessionDetailView({
   dayOverrides,
   tracking = null,
   staff = [],
+  cursus = null,
 }: {
+  /** Initial / recyclage par stagiaire (migration 29) ; null si la migration manque. */
+  cursus?: Record<string, Cursus | null> | null;
   /** Organisation interne (migration 24) : qui a inscrit, qui relance. */
   tracking?: Record<string, TraineeTracking> | null;
   staff?: Staff[];
@@ -123,7 +148,6 @@ export function SessionDetailView({
     <>
       {isAdmin && <PasteImport sessionId={session.id} />}
       {isAdmin && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
-      {isAdmin && <CsvImportTrainees sessionId={session.id} />}
 
       <div className="panel">
         <h2 id="stagiaires">Stagiaires</h2>
@@ -148,6 +172,12 @@ export function SessionDetailView({
             <strong>{waiting.length}</strong>
             <span>en attente</span>
           </div>
+          {cursus && validated.some((t) => cursus[t.id]) && (
+            <div className="counter-chip">
+              <strong>{validated.filter((t) => cursus[t.id] === 'initial').length} · {validated.filter((t) => cursus[t.id] === 'recyclage').length}</strong>
+              <span>initial · recyclage</span>
+            </div>
+          )}
           {remaining != null && (
             <div className={`counter-chip${remaining < 0 ? ' over' : ''}`}>
               <strong>{remaining}</strong>
@@ -191,12 +221,21 @@ export function SessionDetailView({
               </div>
             )}
             {traineeQuery.trim().length >= 2 && matches.length === 0 && (
-              <p className="hint">Aucun stagiaire trouvé : ajoute-le avec « Coller une liste » ou l’import de fichier ci-dessus.</p>
+              <p className="hint">Aucun stagiaire trouvé : ajoute-le avec « Coller une liste » ci-dessus, ou importe ton fichier Excel depuis la page Stagiaires.</p>
             )}
           </div>
         )}
 
-        <h3 className="sub-heading">Stagiaires validés</h3>
+        <div className="cursus-head">
+          <h3 className="sub-heading">Stagiaires validés</h3>
+          {cursus && isAdmin && validated.length > 1 && (
+            <span className="row-actions">
+              <span className="hint">Tous en :</span>
+              <button type="button" className="small cursus-pill initial" disabled={isPending} onClick={() => handleCursus(validated.map((t) => t.id), 'initial')}>Initial</button>
+              <button type="button" className="small cursus-pill recyclage" disabled={isPending} onClick={() => handleCursus(validated.map((t) => t.id), 'recyclage')}>Recyclage</button>
+            </span>
+          )}
+        </div>
         {validated.length === 0 ? (
           <p className="empty">Aucun stagiaire validé pour l'instant.</p>
         ) : (
@@ -205,7 +244,13 @@ export function SessionDetailView({
             <tbody>
               {validated.map((t) => (
                 <tr key={t.id}>
-                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a><AddedBy t={tracking?.[t.id]} staff={staff} /></td>
+                  <td>
+                    <span className="name-cursus">
+                      <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={isAdmin} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                    </span>
+                    <AddedBy t={tracking?.[t.id]} staff={staff} />
+                  </td>
                   {modules.length > 0 && (
                     <td>
                       <TraineeModuleToggles
@@ -240,7 +285,13 @@ export function SessionDetailView({
             <tbody>
               {waiting.map((t) => (
                 <tr key={t.id}>
-                  <td><a href={`/stagiaires/${t.id}`}>{t.full_name}</a><AddedBy t={tracking?.[t.id]} staff={staff} /></td>
+                  <td>
+                    <span className="name-cursus">
+                      <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={isAdmin} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                    </span>
+                    <AddedBy t={tracking?.[t.id]} staff={staff} />
+                  </td>
                   {modules.length > 0 && (
                     <td>
                       <TraineeModuleToggles
@@ -294,6 +345,13 @@ export function SessionDetailView({
     });
   }
 
+  function handleCursus(ids: string[], value: Cursus | null) {
+    startTransition(async () => {
+      const result = await setTraineeCursus(session.id, ids, value);
+      if (!result.ok) setError(result.error);
+    });
+  }
+
   function handleRemove(traineeId: string) {
     startTransition(async () => {
       const result = await removeTraineeFromSession(session.id, traineeId);
@@ -327,7 +385,7 @@ export function SessionDetailView({
           <div className="next-step" role="status">
             <h2><CheckCircle2 size={17} aria-hidden style={{ verticalAlign: '-3px' }} /> Session créée</h2>
             <p style={{ margin: 0 }}>
-              <UserPlus size={15} aria-hidden style={{ verticalAlign: '-2px' }} /> Étape suivante : ajoute les stagiaires (recherche, liste collée ou fichier Excel). Les informations de la session sont plus bas.
+              <UserPlus size={15} aria-hidden style={{ verticalAlign: '-2px' }} /> Étape suivante : ajoute les stagiaires (recherche ou liste collée). Les informations de la session sont plus bas.
             </p>
             <div className="row-actions">
               <button type="button" className="small" onClick={() => router.replace(`/sessions/${session.id}`, { scroll: false })}>

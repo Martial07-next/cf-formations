@@ -181,6 +181,9 @@ export default async function SessionDetailPage({
     supabase.from('session_activity').select('id, action, detail, created_at, actor_id').eq('session_id', id).order('created_at', { ascending: false }).limit(150),
     loadStaff(supabase as any),
   ]);
+  // Initial / recyclage (migration 29) : ignoré si la migration manque.
+  const { data: cursusRows, error: cursusError } = await supabase.from('session_trainees').select('trainee_id, cursus').eq('session_id', id);
+  const cursus = cursusError ? null : Object.fromEntries(((cursusRows as any[]) || []).map((r) => [r.trainee_id, r.cursus ?? null]));
   const tracking: Record<string, TraineeTracking> | null = trackError
     ? null
     : Object.fromEntries(
@@ -294,6 +297,7 @@ export default async function SessionDetailPage({
           dayOverrides={(dayRows as any) || []}
           tracking={tracking}
           staff={staff}
+          cursus={cursus}
         />
 
         {!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn) && (

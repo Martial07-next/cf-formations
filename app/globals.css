@@ -812,3 +812,14 @@ a.poec-item:hover{background:var(--cf-mint-soft)}
 .rights-table th:first-child{text-align:left}
 .rights-group td{background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
 .rights-table td:first-child{min-width:340px}
+
+/* ---------- Initial / recyclage ---------- */
+.name-cursus{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cursus-toggle{display:inline-flex;gap:3px}
+.cursus-pill{font-size:11px;font-weight:800;padding:1px 8px;min-height:22px;border-radius:999px;border:1px solid var(--line-strong);background:#fff;color:var(--muted);cursor:pointer;line-height:1.6}
+button.cursus-pill:hover{background:var(--surface-2)}
+.cursus-pill.initial.on{background:#e0f2fe;border-color:#7dd3fc;color:#075985}
+.cursus-pill.recyclage.on{background:#f3e8ff;border-color:#d8b4fe;color:#6b21a8}
+span.cursus-pill{cursor:default}
+.cursus-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cursus-head .sub-heading{margin-bottom:8px}
