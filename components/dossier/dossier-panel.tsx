@@ -615,6 +615,11 @@ export function DossierPanel({
           {!fin.objectifs && (
             <p className="hint fin-warn">Objectifs de la formation non renseignés : ajoute-les dans Formations disponibles › Modifier.</p>
           )}
+          {trainees.some((t) => t.cursus === 'recyclage') && !fin.objectifsRecyclage && (
+            <p className="hint fin-warn">
+              Stagiaires en recyclage : les objectifs du recyclage ne sont pas renseignés, ceux de l’initiale sont repris. Ajoute-les dans Formations › Modifier › « Objectifs de fin de formation · RECYCLAGE ».
+            </p>
+          )}
           {!fin.cachet && <p className="hint fin-warn">Cachet et signature non ajoutés : Administration › Paramètres.</p>}
           <div className="row-actions" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
             <button className="small primary" disabled={!finReady.length || !!busy} onClick={() => downloadFin('attestation')}>

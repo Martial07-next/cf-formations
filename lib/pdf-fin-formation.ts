@@ -1,5 +1,6 @@
 'use client';
 
+import { codificationFor } from '@/lib/appreciation';
 import { PDFDocument, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { COMPANY, type Legal } from '@/lib/pdf-brand';
@@ -201,8 +202,9 @@ function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInpu
   const step = 17.27 * k;
   let y = 576.2;
   text(page, `M./Mme → ${t.name}`, 23.1, y, 13.88, f.bold);
-  y = labelValue(page, { text: 'a suivi l’action de formation suivante → ', font: f.semibold }, { text: input.actionTitle, font: f.regular }, 12.88, y - 18, 18);
-  y = labelValue(page, { text: 'Intitulé de formation → ', font: f.semibold }, { text: input.formationTitle, font: f.regular }, 12.88, y - 18, 18);
+  // INITIALE / RECYCLAGE devant l'intitulé, comme sur la fiche d'appréciation.
+  y = labelValue(page, { text: 'a suivi l’action de formation suivante → ', font: f.semibold }, { text: codificationFor(input.actionTitle, t.cursus), font: f.regular }, 12.88, y - 18, 18);
+  y = labelValue(page, { text: 'Intitulé de formation → ', font: f.semibold }, { text: codificationFor(input.formationTitle, t.cursus), font: f.regular }, 12.88, y - 18, 18);
 
   // Objectifs
   y -= 25.1;
@@ -316,7 +318,7 @@ function competencesPage1(page: PDFPage | null, ctx: Ctx, input: FinFormationInp
   let y = 574.8;
   heading(page, ctx, 'INFORMATIONS RELATIVES À LA FORMATION', y);
   y -= 26.4;
-  y = labelValue(page, { text: 'Intitulé de la formation → ', font: f.regular }, { text: input.formationTitle, font: f.regular }, B, y, 17.25);
+  y = labelValue(page, { text: 'Intitulé de la formation → ', font: f.regular }, { text: codificationFor(input.formationTitle, t.cursus), font: f.regular }, B, y, 17.25);
   y -= 17.25;
   text(page, `Période de réalisation → ${frDate(input.startDate)} au ${frDate(input.endDate)}`, 23.1, y, B, f.regular);
   y -= 17.25;
