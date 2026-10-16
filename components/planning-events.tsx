@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { MapPin, Utensils, Award, Handshake, Megaphone, Pin, CalendarOff, X, Plus, Pencil, Trash2, Users, Briefcase, ArrowRight } from 'lucide-react';
@@ -215,14 +216,14 @@ export function EventForm({
       <form
         className="modal-body"
         style={{ paddingBottom: 18 }}
-        action={(fd) => {
+        onSubmit={submitWith((fd) => {
           setError(null);
           startTransition(async () => {
             const res = event ? await updateEvent(event.id, fd) : await createEvent(fd);
             if (!res.ok) setError(res.error);
             else onDone();
           });
-        }}
+        })}
       >
         {error && <div role="alert" className="alert alert-error">{error}</div>}
         <p className="hint" style={{ marginTop: 0 }}>

@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { Layers, Plus, Pencil, Trash2, Scissors } from 'lucide-react';
 import {
@@ -115,7 +116,7 @@ export function SessionModulesPanel({
       <div className="module-cards">
         {modules.map((m) =>
           editing === m.id ? (
-            <form key={m.id} className="workshop-card editing" action={(fd) => run(() => updateSessionModule(sessionId, m.id, fd), () => setEditing(null))}>
+            <form key={m.id} className="workshop-card editing" onSubmit={submitWith((fd) => run(() => updateSessionModule(sessionId, m.id, fd), () => setEditing(null)))}>
               <ModuleFields m={m} days={days} />
               <div className="row-actions">
                 <button type="submit" className="primary small" disabled={isPending}>Enregistrer</button>
@@ -151,7 +152,7 @@ export function SessionModulesPanel({
       </div>
 
       {canEdit && adding && (
-        <form className="workshop-card editing" action={(fd) => run(() => addSessionModule(sessionId, fd), () => setAdding(false))}>
+        <form className="workshop-card editing" onSubmit={submitWith((fd) => run(() => addSessionModule(sessionId, fd), () => setAdding(false)))}>
           <ModuleFields days={days} />
           <div className="row-actions">
             <button type="submit" className="primary small" disabled={isPending}>Ajouter le module</button>

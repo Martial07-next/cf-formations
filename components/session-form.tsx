@@ -183,7 +183,15 @@ export function SessionForm({
   const modulePlan = template?.modules?.length && startDate ? placeModules(startDate, startTime, template.modules) : [];
 
   return (
-    <form id={formId} action={onSubmit}>
+    // Envoi sans « action » React : sinon React remet le formulaire à zéro après
+    // l'enregistrement et réaffiche les anciennes valeurs (salle, formateur…).
+    <form
+      id={formId}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(new FormData(e.currentTarget));
+      }}
+    >
       <fieldset className="plain" disabled={disabled}>
         {showTemplate && (
           <div className="form-row">

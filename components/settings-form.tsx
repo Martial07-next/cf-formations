@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { updateSettings } from '@/app/administration/parametres/actions';
 
@@ -60,7 +61,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
       <h2>Informations générales</h2>
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
       {error && <div role="alert" className="alert alert-error">{error}</div>}
-      <form action={handle}>
+      <form onSubmit={submitWith(handle)}>
         <div className="form-row">
           <label>
             Nom de l'entreprise

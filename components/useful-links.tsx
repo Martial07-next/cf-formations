@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
@@ -27,14 +28,14 @@ function LinkForm({ link, onDone }: { link?: UsefulLink; onDone: () => void }) {
   return (
     <form
       className="link-form"
-      action={(fd) => {
+      onSubmit={submitWith((fd) => {
         setError(null);
         startTransition(async () => {
           const res = link ? await updateUsefulLink(link.id, fd) : await createUsefulLink(fd);
           if (!res.ok) setError(res.error);
           else onDone();
         });
-      }}
+      })}
     >
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       <div className="form-row">

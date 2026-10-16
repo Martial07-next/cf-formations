@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { useMemo, useState, useTransition } from 'react';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -341,7 +342,7 @@ export function TemplateCatalog({
     return (
       <form
         className="inline-form"
-        action={(fd) => run(() => createFolder(String(fd.get('name') || ''), parentId), () => setNewFolder(null))}
+        onSubmit={submitWith((fd) => run(() => createFolder(String(fd.get('name') || ''), parentId), () => setNewFolder(null)))}
         style={{ padding: '10px 18px' }}
       >
         <input name="name" required autoFocus className="input" placeholder={parentId ? 'Nom du sous-dossier' : 'Nom du dossier'} aria-label="Nom" />
@@ -356,7 +357,7 @@ export function TemplateCatalog({
       <>
         {canEdit && addIn === (folderId ?? '') && (
           <div className="folder-add">
-            <form action={(fd) => run(() => createTemplate(fd), () => setAddIn(null))}>
+            <form onSubmit={submitWith((fd) => run(() => createTemplate(fd), () => setAddIn(null)))}>
               <TemplateFields folders={folderOptions} trainers={trainers} folder={folderId} />
               <div className="row-actions">
                 <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Ajouter la formation'}</button>
@@ -382,7 +383,7 @@ export function TemplateCatalog({
                   editingId === t.id ? (
                     <tr key={t.id}>
                       <td colSpan={canEdit ? 5 : 4} style={{ background: 'var(--surface-2)', padding: 16 }}>
-                        <form action={(fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null))}>
+                        <form onSubmit={submitWith((fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null)))}>
                           <TemplateFields t={t} folders={folderOptions} trainers={trainers} />
                           <div className="row-actions">
                             <button type="submit" className="primary" disabled={isPending}>Enregistrer</button>
@@ -464,7 +465,7 @@ export function TemplateCatalog({
       <form
         className="inline-form"
         style={{ padding: '0 18px 12px 46px' }}
-        action={(fd) => run(() => renameFolder(f.id, String(fd.get('name') || '')), () => setRenaming(null))}
+        onSubmit={submitWith((fd) => run(() => renameFolder(f.id, String(fd.get('name') || '')), () => setRenaming(null)))}
       >
         <input name="name" required autoFocus defaultValue={f.name} className="input" aria-label="Nouveau nom du dossier" />
         <button type="submit" className="primary small" disabled={isPending}>Renommer</button>

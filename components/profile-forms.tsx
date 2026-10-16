@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { updateOwnName, updateOwnPassword, type ActionResult } from '@/app/profil/actions';
 
@@ -19,7 +20,7 @@ export function NameForm({ fullName }: { fullName: string }) {
     <div className="panel" style={{ maxWidth: 460 }}>
       <h2>Informations</h2>
       {msg && <div role="alert" className={`alert ${msg.error ? 'alert-error' : 'alert-success'}`}>{msg.text}</div>}
-      <form action={handle}>
+      <form onSubmit={submitWith(handle)}>
         <div className="form-row">
           <label>
             Nom complet
@@ -55,7 +56,7 @@ export function PasswordForm() {
     <div className="panel" style={{ maxWidth: 460 }}>
       <h2>Sécurité</h2>
       {msg && <div role="alert" className={`alert ${msg.error ? 'alert-error' : 'alert-success'}`}>{msg.text}</div>}
-      <form id="password-form" action={handle}>
+      <form id="password-form" onSubmit={submitWith(handle)}>
         <div className="form-row">
           <label>
             Mot de passe actuel

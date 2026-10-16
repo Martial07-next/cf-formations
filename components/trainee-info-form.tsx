@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { updateTrainee } from '@/app/stagiaires/actions';
 
@@ -34,7 +35,7 @@ export function TraineeInfoForm({
       <h2>Informations</h2>
       {notice && <div role="status" className={`alert ${notice.error ? 'alert-error' : 'alert-success'}`}>{notice.text}</div>}
       <fieldset disabled={!isAdmin} style={{ border: 'none', padding: 0, margin: 0 }}>
-        <form action={handle}>
+        <form onSubmit={submitWith(handle)}>
           <div className="form-row">
             <label>
               Prénom

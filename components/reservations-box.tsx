@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { Building2, Minus, Plus, Trash2 } from 'lucide-react';
 import { addReservation, updateReservationSeats } from '@/app/sessions/[id]/actions';
@@ -59,7 +60,7 @@ export function ReservationsBox({
       {canEdit && open && (
         <form
           className="inline-form reservation-form"
-          action={(fd) => run(() => addReservation(sessionId, fd), () => setOpen(false))}
+          onSubmit={submitWith((fd) => run(() => addReservation(sessionId, fd), () => setOpen(false)))}
         >
           <datalist id={`companies-${sessionId}`}>
             {companies.map((c) => <option key={c} value={c} />)}

@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 
@@ -191,7 +192,7 @@ export function CrudTable({
                     <td colSpan={columns.length + (statusField ? 1 : 0) + 1} style={{ padding: 14, background: 'var(--surface-2)' }}>
                       {error && <div role="alert" className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}
                       <form
-                        action={(fd) => handleUpdate(row.id, fd)}
+                        onSubmit={submitWith((fd) => handleUpdate(row.id, fd))}
                         style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, alignItems: 'end' }}
                       >
                         {editableFields.map((f) => (

@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { CalendarOff, Plus, Trash2 } from 'lucide-react';
 import { addAbsence, deleteAbsence, type AbsenceResult } from '@/app/formateurs/actions';
@@ -63,7 +64,7 @@ export function AbsencesPanel({ trainerId, absences, canEdit }: { trainerId: str
 
       {canEdit && open && (
         <form
-          action={(fd) => run(() => addAbsence(trainerId, fd), () => { setOpen(false); setStart(''); })}
+          onSubmit={submitWith((fd) => run(() => addAbsence(trainerId, fd), () => { setOpen(false); setStart(''); }))}
           style={{ marginBottom: 14 }}
         >
           <div className="form-row">

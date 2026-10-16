@@ -1,5 +1,6 @@
 'use client';
 
+import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { Wrench, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
 import { createWorkshop, updateWorkshop, deleteWorkshop, setRoomTemplates } from '@/app/salles/actions';
@@ -46,14 +47,14 @@ function RoomTemplatesEditor({
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {canEdit && open && (
         <form
-          action={(fd) => {
+          onSubmit={submitWith((fd) => {
             setError(null);
             startTransition(async () => {
               const res = await setRoomTemplates(room.id, fd.getAll('template_ids').map(String));
               if (!res.ok) setError(res.error || 'Une erreur est survenue.');
               else setOpen(false);
             });
-          }}
+          })}
         >
           <p className="hint">
             Coche les formations qu’on peut faire dans {room.name} : à la création d’une session, cette salle sera
@@ -134,7 +135,7 @@ export function RoomWorkshops({
                 {list.length === 0 && adding !== r.id && <span className="hint">Aucun atelier.</span>}
                 {list.map((w) =>
                   editing === w.id ? (
-                    <form key={w.id} className="inline-form" action={(fd) => run(() => updateWorkshop(w.id, fd), () => setEditing(null))}>
+                    <form key={w.id} className="inline-form" onSubmit={submitWith((fd) => run(() => updateWorkshop(w.id, fd), () => setEditing(null)))}>
                       <input name="name" required defaultValue={w.name} aria-label="Nom de l’atelier" className="input" />
                       <button type="submit" className="primary small" disabled={isPending}>OK</button>
                       <button type="button" className="small" onClick={() => setEditing(null)}>Annuler</button>
@@ -162,7 +163,7 @@ export function RoomWorkshops({
                 )}
                 {canEdit &&
                   (adding === r.id ? (
-                    <form className="inline-form" action={(fd) => run(() => createWorkshop(r.id, fd), () => setAdding(null))}>
+                    <form className="inline-form" onSubmit={submitWith((fd) => run(() => createWorkshop(r.id, fd), () => setAdding(null)))}>
                       <input name="name" required autoFocus placeholder="Ex. Atelier électricité" aria-label="Nom de l’atelier" className="input" />
                       <button type="submit" className="primary small" disabled={isPending}>Ajouter</button>
                       <button type="button" className="small" onClick={() => setAdding(null)}>Annuler</button>
