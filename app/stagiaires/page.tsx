@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Download, Search } from 'lucide-react';
 import { Pagination } from '@/components/pagination';
@@ -32,6 +33,8 @@ export default async function StagiairesPage({
 
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
+  if (!canManage(profile?.role)) redirect('/');
 
   const SELECT = 'id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))';
   const withCompany = <Q extends { is: any; eq: any }>(query: Q): Q =>

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -21,6 +22,8 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
+  if (!canManage(profile?.role)) redirect('/');
 
   const [{ data: trainee }, { data: links }] = await Promise.all([
     supabase.from('trainees').select('id, full_name, first_name, last_name, email, company').eq('id', id).maybeSingle(),

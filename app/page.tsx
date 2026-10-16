@@ -327,18 +327,19 @@ export default async function Page({
     for (const s of (sessions as any[]) || []) {
       const complete = Boolean(dossierComplete[s.id]);
       const done = billError ? true : billed.get(s.id) ?? true;
-      const started = s.start_at.slice(0, 16) <= nowKey;
       const ended = s.end_at.slice(0, 16) <= nowKey;
       const left = todo[s.id];
       if (complete && done) dossierBadge[s.id] = { kind: 'complet' };
       else if (!staffView) {
-        // Formateur : ce qu'il lui reste à remplir (dès le début de la session), puis « rempli ».
+        // Formateur : seulement ses propres sessions (les autres dossiers ne lui sont pas lisibles).
+        if (!profile?.trainer_id || s.trainer_id !== profile.trainer_id) continue;
+        // Formateur : ce qu'il lui reste à remplir, puis « rempli ».
         if (trainerDone[s.id]) dossierBadge[s.id] = { kind: 'formateur' };
-        else if (started && left?.trainer) dossierBadge[s.id] = { kind: 'a-remplir', n: left.trainer };
+        else if (left?.trainer) dossierBadge[s.id] = { kind: 'a-remplir', n: left.trainer };
       } else if (s.status !== 'brouillon' && left) {
         // Équipe : formateur, puis bureau, puis facturation.
-        if (started && left.trainer) dossierBadge[s.id] = { kind: 'attente-formateur', n: left.trainer };
-        else if (started && left.office) dossierBadge[s.id] = { kind: 'bureau', n: left.office };
+        if (left.trainer) dossierBadge[s.id] = { kind: 'attente-formateur', n: left.trainer };
+        else if (left.office) dossierBadge[s.id] = { kind: 'bureau', n: left.office };
         else if (!billError && !done) {
           const step = billingStep(invCount[s.id] || 0, complete, ended);
           if (step) dossierBadge[s.id] = { kind: step };
@@ -400,6 +401,7 @@ export default async function Page({
         reservedSeats={reservedSeats}
         poecTitles={poecTitles}
         createdBy={createdBy}
+        renderedAt={Date.now()}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
       />
     </main>

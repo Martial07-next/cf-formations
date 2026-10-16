@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import Papa from 'papaparse';
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -7,6 +7,9 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 }
 
 export async function GET() {
+  // Export réservé à l'équipe (administrateur, bureau).
+  const profile = await getCurrentProfile();
+  if (!canManage(profile?.role)) return new Response('Accès refusé.', { status: 403 });
   const supabase = await createClient();
   const { data: sessions } = await supabase
     .from('sessions')

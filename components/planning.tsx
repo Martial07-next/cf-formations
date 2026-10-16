@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle } from 'lucide-react';
@@ -167,6 +167,7 @@ export function Planning({
   poecTitles = {},
   createdBy = {},
   alerts = null,
+  renderedAt = 0,
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -197,12 +198,30 @@ export function Planning({
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
   alerts?: React.ReactNode;
+  /** Heure du rendu serveur : une page restaurée (retour arrière) trop ancienne est rechargée. */
+  renderedAt?: number;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
   const dayAnchor = new Date(dayIso + 'T00:00:00Z');
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Suivi en direct : pastilles et relances à jour quand on revient sur l'onglet, et toutes les minutes.
+  useEffect(() => {
+    const refresh = () => document.visibilityState === 'visible' && router.refresh();
+    if (renderedAt && Date.now() - renderedAt > 15000) router.refresh();
+    const t = setInterval(refresh, 60000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', refresh);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pageshow', refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   const [query, setQuery] = useState('');
   const [trainerFilter, setTrainerFilter] = useState<string>('');

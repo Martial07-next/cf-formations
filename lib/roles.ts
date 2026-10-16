@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'bureau' | 'referent' | 'formateur' | 'consultation';
+export type Role = 'admin' | 'bureau' | 'referent' | 'formateur' | 'consultation' | 'aucun';
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Administrateur',
@@ -6,9 +6,10 @@ export const ROLE_LABELS: Record<Role, string> = {
   referent: 'Référent cadre',
   formateur: 'Formateur',
   consultation: 'Consultation',
+  aucun: 'Aucun accès',
 };
 
-export const ROLE_OPTIONS: Role[] = ['admin', 'bureau', 'referent', 'formateur', 'consultation'];
+export const ROLE_OPTIONS: Role[] = ['admin', 'bureau', 'referent', 'formateur', 'consultation', 'aucun'];
 
 /**
  * Droits par rôle :
@@ -20,6 +21,7 @@ export const ROLE_OPTIONS: Role[] = ['admin', 'bureau', 'referent', 'formateur',
  *    de début (jour par jour) ; suit son équipe et gère les congés de ses formateurs.
  *  · Formateur : consulte le planning, peut changer l'heure de début de ses sessions.
  *  · Consultation : lecture seule du planning.
+ *  · Aucun accès : compte non validé ou suspendu (migration 35), ne voit rien.
  */
 export function canManage(role: string | undefined | null): boolean {
   return role === 'admin' || role === 'bureau';

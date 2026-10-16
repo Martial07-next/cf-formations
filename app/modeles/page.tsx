@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
@@ -6,6 +7,8 @@ import { TemplateCatalog } from '@/components/template-catalog';
 export default async function ModelesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
+  if (!canManage(profile?.role)) redirect('/');
   const [{ data: templates }, { data: trainers }, { data: folders }] = await Promise.all([
     supabase
       .from('templates')

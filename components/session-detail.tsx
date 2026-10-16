@@ -147,6 +147,9 @@ export function SessionDetailView({
   const remaining = capacity != null ? capacity - occupied : null;
   const overCapacity = capacity != null && occupied > capacity;
   const enrolledIds = new Set(enrolled.map((e) => e.id));
+  // Fiche stagiaire (base de données) : réservée à l'équipe, simple nom pour le formateur.
+  const traineeName = (t: { id: string; full_name: string }) =>
+    isAdmin ? <a href={`/stagiaires/${t.id}`}>{t.full_name}</a> : <strong>{t.full_name}</strong>;
   // Recherche rapide (nom, prénom dans n'importe quel ordre, entreprise), 8 résultats les plus pertinents.
   const matches =
     traineeQuery.trim().length < 2
@@ -280,7 +283,7 @@ export function SessionDetailView({
                 <tr key={t.id}>
                   <td>
                     <span className="name-cursus">
-                      <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
+                      {traineeName(t)}
                       {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />
@@ -314,7 +317,7 @@ export function SessionDetailView({
           waiting.length > 0 && (
             <details className="waiting-locked">
               <summary className="hint">{waiting.length} stagiaire{waiting.length > 1 ? 's' : ''} resté{waiting.length > 1 ? 's' : ''} en attente (non inscrit{waiting.length > 1 ? 's' : ''} à la session)</summary>
-              <ul>{waiting.map((t) => <li key={t.id}><a href={`/stagiaires/${t.id}`}>{t.full_name}</a>{t.company ? ` · ${t.company}` : ''}</li>)}</ul>
+              <ul>{waiting.map((t) => <li key={t.id}>{traineeName(t)}{t.company ? ` · ${t.company}` : ''}</li>)}</ul>
             </details>
           )
         ) : (<>
@@ -329,7 +332,7 @@ export function SessionDetailView({
                 <tr key={t.id}>
                   <td>
                     <span className="name-cursus">
-                      <a href={`/stagiaires/${t.id}`}>{t.full_name}</a>
+                      {traineeName(t)}
                       {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />

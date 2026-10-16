@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
@@ -10,6 +11,8 @@ import { createTrainer, deleteTrainer, updateTrainer, updateTrainerStatus } from
 export default async function FormateursPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
+  if (!canManage(profile?.role)) redirect('/');
   const [{ data: trainers }, { data: profiles }] = await Promise.all([
     supabase
       .from('trainers')

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail } from 'lucide-react';
@@ -43,6 +44,10 @@ export default async function TrainerDetailPage({
   ]);
 
   if (!trainer) notFound();
+  // Fiche formateur : l'équipe, le formateur lui-même ou son référent.
+  const allowed =
+    canManage(profile?.role) || profile?.trainer_id === trainer.id || (profile?.role === 'referent' && trainer.referent_id === profile.id);
+  if (!allowed) redirect('/');
 
   // + sessions où il remplace le formateur principal certains jours.
   const { sessions: allSessions, dayTrainers } = await sessionsWithReplacements(

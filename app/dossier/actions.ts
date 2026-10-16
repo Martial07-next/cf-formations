@@ -46,6 +46,13 @@ function refresh(sessionId: string) {
   revalidatePath('/');
 }
 
+/** Lire le dossier (signatures, documents remplis) : équipe, formateur de la session, compte Facturation. */
+async function canReadDossier(sessionId: string) {
+  const profile = await getCurrentProfile();
+  if (!profile) return false;
+  return profile.can_invoice || Boolean(await fillRights(sessionId));
+}
+
 /** Jeton secret du QR code d'émargement (créé à la première ouverture). */
 export async function ensureSignToken(sessionId: string, renew = false): Promise<Result<{ token: string }>> {
   if (!EMARGEMENT_ENABLED) return EMARG_OFF;
@@ -66,8 +73,7 @@ export async function ensureSignToken(sessionId: string, renew = false): Promise
 
 /** État de l'émargement, sans les images (rafraîchissement en direct). */
 export async function attendanceState(sessionId: string): Promise<Result<{ rows: { signer: string; trainee_id: string | null; day: string; half: Half; status: string }[] }>> {
-  const profile = await getCurrentProfile();
-  if (!profile) return FORBIDDEN;
+  if (!(await canReadDossier(sessionId))) return FORBIDDEN;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('attendance_signatures')
@@ -143,8 +149,7 @@ export async function dossierExport(sessionId: string): Promise<
     files: Record<string, string>;
   }>
 > {
-  const profile = await getCurrentProfile();
-  if (!profile) return FORBIDDEN;
+  if (!(await canReadDossier(sessionId))) return FORBIDDEN;
   const supabase = await createClient();
   const [{ data: signatures, error }, { data: entries }, { data: s }] = await Promise.all([
     supabase.from('attendance_signatures').select('signer, trainee_id, day, half, status, signature, signer_name, signed_at').eq('session_id', sessionId),

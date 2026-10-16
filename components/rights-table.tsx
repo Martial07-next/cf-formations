@@ -4,6 +4,9 @@ import { RIGHTS } from '@/lib/rights';
 import { ROLE_LABELS, ROLE_OPTIONS } from '@/lib/roles';
 
 /** Ce que chaque type d'accès peut faire et ne pas faire. */
+
+// « Aucun accès » : rien n'est autorisé, inutile d'en faire une colonne.
+const SHOWN_ROLES = ROLE_OPTIONS.filter((r) => r !== 'aucun');
 export function RightsTable() {
   return (
     <div className="panel">
@@ -15,17 +18,17 @@ export function RightsTable() {
           <thead>
             <tr>
               <th>Action</th>
-              {ROLE_OPTIONS.map((r) => <th key={r}><span className={`badge ${r}`}>{ROLE_LABELS[r]}</span></th>)}
+              {SHOWN_ROLES.map((r) => <th key={r}><span className={`badge ${r}`}>{ROLE_LABELS[r]}</span></th>)}
             </tr>
           </thead>
           <tbody>
             {RIGHTS.map((g) => (
               <Fragment key={g.group}>
-                <tr className="rights-group"><td colSpan={ROLE_OPTIONS.length + 1}>{g.group}</td></tr>
+                <tr className="rights-group"><td colSpan={SHOWN_ROLES.length + 1}>{g.group}</td></tr>
                 {g.items.map((it) => (
                   <tr key={it.label}>
                     <td>{it.label}</td>
-                    {ROLE_OPTIONS.map((r) => {
+                    {SHOWN_ROLES.map((r) => {
                       const v = it.roles[r];
                       return (
                         <td key={r} className={`right ${v === true ? 'yes' : v === 'own' ? 'own' : 'no'}`}>
