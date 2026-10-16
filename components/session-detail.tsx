@@ -1,5 +1,7 @@
 'use client';
 
+import { searchTrainees } from '@/lib/trainee-search';
+
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -145,19 +147,11 @@ export function SessionDetailView({
   const remaining = capacity != null ? capacity - occupied : null;
   const overCapacity = capacity != null && occupied > capacity;
   const enrolledIds = new Set(enrolled.map((e) => e.id));
-  // Recherche rapide (nom, prénom dans n'importe quel ordre, entreprise), 8 résultats.
-  const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const words = fold(traineeQuery).split(/\s+/).filter(Boolean);
+  // Recherche rapide (nom, prénom dans n'importe quel ordre, entreprise), 8 résultats les plus pertinents.
   const matches =
     traineeQuery.trim().length < 2
       ? []
-      : allTrainees
-          .filter((t) => !enrolledIds.has(t.id))
-          .filter((t) => {
-            const hay = fold(`${t.full_name} ${t.company || ''} ${t.email || ''}`);
-            return words.every((w) => hay.includes(w));
-          })
-          .slice(0, 8);
+      : searchTrainees(allTrainees.filter((t) => !enrolledIds.has(t.id)), traineeQuery, 8);
 
   const traineeBlock = (
     <>
@@ -511,7 +505,6 @@ export function SessionDetailView({
       <DayTimesPanel
         isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
         ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
-        startOnly={!canEditSession && !isOwnTrainer && canEditStartTimes}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}
@@ -579,7 +572,6 @@ export function SessionDetailView({
       <DayTimesPanel
         isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
         ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
-        startOnly={!canEditSession && !isOwnTrainer && canEditStartTimes}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}

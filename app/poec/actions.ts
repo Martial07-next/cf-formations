@@ -1,5 +1,7 @@
 'use server';
 
+import { searchTrainees as rankTrainees } from '@/lib/trainee-search';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -403,11 +405,13 @@ export async function searchTrainees(q: string): Promise<{ id: string; full_name
   const term = q.trim().replace(/[%,()]/g, ' ').slice(0, 60);
   if (term.length < 2) return [];
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('trainees')
-    .select('id, full_name, company')
-    .or(`full_name.ilike.%${term}%,company.ilike.%${term}%`)
-    .order('full_name')
-    .limit(20);
-  return (data as any[]) || [];
+  // Classement par pertinence, sans accents, nom / prénom dans n'importe quel ordre.
+  const all: any[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data } = await supabase.from('trainees').select('id, full_name, first_name, last_name, company').order('id').range(from, from + 999);
+    if (!data?.length) break;
+    all.push(...data);
+    if (data.length < 1000) break;
+  }
+  return rankTrainees(all, term, 20).map((t) => ({ id: t.id, full_name: t.full_name, company: t.company }));
 }

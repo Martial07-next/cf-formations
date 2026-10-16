@@ -3,8 +3,8 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck } from 'lucide-react';
-import { DOSSIER_BADGE_LABEL, type DossierBadge } from '@/lib/billing';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle } from 'lucide-react';
+import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -136,7 +136,7 @@ function SessionCard({
       )}
       {by && <span className="sc-by">Session créée par {by}</span>}
       {dossier && (
-        <span className={`sc-dossier ${dossier}`}><DossierIcon badge={dossier} /> {DOSSIER_BADGE_LABEL[dossier]}</span>
+        <span className={`sc-dossier ${dossier.kind}`}><DossierIcon badge={dossier} /> {dossierBadgeLabel(dossier)}</span>
       )}
     </Link>
   );
@@ -166,6 +166,7 @@ export function Planning({
   reservedSeats = {},
   poecTitles = {},
   createdBy = {},
+  alerts = null,
 }: {
   view: 'day' | 'week' | 'month';
   canEdit: boolean;
@@ -194,6 +195,8 @@ export function Planning({
   reservedSeats?: Record<string, number>;
   poecTitles?: Record<string, string>;
   createdBy?: Record<string, string>;
+  /** Bandeau de relances (équipe). */
+  alerts?: React.ReactNode;
 }) {
   const monday = new Date(mondayIso + 'T00:00:00Z');
   const monthAnchor = new Date(monthAnchorIso + 'T00:00:00Z');
@@ -373,6 +376,8 @@ export function Planning({
           )}
         </div>
       </header>
+
+      {alerts}
 
       <div className="toolbar" role="toolbar" aria-label="Navigation du planning">
         <div className="period">
@@ -586,8 +591,9 @@ export function Planning({
                             <span className="chip-room">{s.title}</span>
                             {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
                             {dossierBadge[s.id] && (
-                              <span className={`chip-dossier ${dossierBadge[s.id]}`} title={DOSSIER_BADGE_LABEL[dossierBadge[s.id]]}>
-                                <DossierIcon badge={dossierBadge[s.id]} label={DOSSIER_BADGE_LABEL[dossierBadge[s.id]]} />
+                              <span className={`chip-dossier ${dossierBadge[s.id].kind}`} title={dossierBadgeLabel(dossierBadge[s.id])}>
+                                <DossierIcon badge={dossierBadge[s.id]} label={dossierBadgeLabel(dossierBadge[s.id])} />
+                                {dossierBadge[s.id].n ? <b>{dossierBadge[s.id].n}</b> : null}
                               </span>
                             )}
                           </span>
@@ -701,8 +707,10 @@ export function Planning({
 
 function DossierIcon({ badge, label }: { badge: DossierBadge; label?: string }) {
   const props = { size: 11, 'aria-hidden': label ? undefined : true, 'aria-label': label } as const;
-  if (badge === 'complet') return <FolderCheck {...props} />;
-  if (badge === 'formateur') return <ClipboardCheck {...props} />;
-  if (badge === 'en-attente') return <Hourglass {...props} />;
+  const k = badge.kind;
+  if (k === 'complet') return <FolderCheck {...props} />;
+  if (k === 'formateur') return <ClipboardCheck {...props} />;
+  if (k === 'a-remplir' || k === 'attente-formateur' || k === 'bureau') return <FileClock {...props} />;
+  if (k === 'en-attente') return <Hourglass {...props} />;
   return <Receipt {...props} />;
 }

@@ -33,25 +33,34 @@ export function companiesSummary(companies: (string | null | undefined)[]) {
 }
 
 /**
- * Pastille dossier sur le planning :
- * - complet : dossier rempli et facturation faite ;
- * - formateur : (vue formateur) tour de table / appréciation remplis ;
- * - a-facturer : il ne reste que la facturation ;
- * - en-cours : facture nommée, pas encore cochée « faite » ;
- * - en-attente : session terminée, dossier formateur pas encore rempli.
+ * Pastille dossier sur le planning (où en est la session) :
+ * - a-remplir : (vue formateur) documents qu'il lui reste à remplir ;
+ * - attente-formateur : (vue équipe) documents attendus du formateur ;
+ * - bureau : documents à compléter par le bureau ;
+ * - formateur : (vue formateur) sa partie est remplie ;
+ * - en-attente / a-facturer / en-cours : facturation ;
+ * - complet : dossier rempli et facturation faite.
  */
-export type DossierBadge = 'complet' | 'formateur' | 'a-facturer' | 'en-cours' | 'en-attente';
+export type DossierBadgeKind = 'complet' | 'formateur' | 'a-remplir' | 'attente-formateur' | 'bureau' | 'a-facturer' | 'en-cours' | 'en-attente';
+export type DossierBadge = { kind: DossierBadgeKind; n?: number };
 
-export const DOSSIER_BADGE_LABEL: Record<DossierBadge, string> = {
-  complet: 'Dossier complet',
-  formateur: 'Dossier rempli par le formateur',
-  'a-facturer': 'Facturation à faire',
-  'en-cours': 'Facturation en cours',
-  'en-attente': 'Facturation en attente',
-};
+const docs = (n = 0) => `${n} document${n > 1 ? 's' : ''}`;
+
+export function dossierBadgeLabel(b: DossierBadge): string {
+  switch (b.kind) {
+    case 'complet': return 'Dossier complet';
+    case 'formateur': return 'Dossier rempli par le formateur';
+    case 'a-remplir': return `${docs(b.n)} à remplir`;
+    case 'attente-formateur': return `${docs(b.n)} en attente du formateur`;
+    case 'bureau': return `${docs(b.n)} à compléter (bureau)`;
+    case 'a-facturer': return 'Facturation à faire';
+    case 'en-cours': return 'Facturation en cours';
+    case 'en-attente': return 'Facturation en attente';
+  }
+}
 
 /** État de facturation d'une session (non facturée). */
-export function billingStep(invoiceCount: number, dossierReady: boolean, ended: boolean): Exclude<DossierBadge, 'complet' | 'formateur'> | null {
+export function billingStep(invoiceCount: number, dossierReady: boolean, ended: boolean): 'a-facturer' | 'en-cours' | 'en-attente' | null {
   if (invoiceCount > 0) return 'en-cours';
   if (dossierReady) return 'a-facturer';
   return ended ? 'en-attente' : null;

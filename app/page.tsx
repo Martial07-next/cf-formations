@@ -8,6 +8,9 @@ import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { shortName } from '@/lib/tracking';
 import { billingStep, type DossierBadge } from '@/lib/billing';
+import { parisNowKey, parisToday } from '@/lib/session-lock';
+import { ALERT_DAYS, sessionAlerts, type SessionAlert } from '@/lib/session-alerts';
+import { SessionAlerts } from '@/components/session-alerts';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
@@ -112,6 +115,22 @@ export default async function Page({
       start(supabase.from('template_links').select('id, template_id, label, url, position').order('position')),
     ]),
   };
+  // Relances (équipe) : sessions qui commencent dans les 7 jours et ne sont pas prêtes.
+  const today = parisToday();
+  const alertsQuery = canManage(profile?.role)
+    ? (async () => {
+        const base = (withManager: boolean) =>
+          supabase
+            .from('sessions')
+            .select(`id, title, start_at, status, trainer_id, session_trainees(status)${withManager ? ', manager:profiles!sessions_manager_id_fkey(full_name)' : ''}`)
+            .gte('start_at', today)
+            .lt('start_at', isoDate(addDays(new Date(today + 'T00:00:00Z'), ALERT_DAYS + 1)))
+            .order('start_at');
+        let { data, error } = await base(true);
+        if (error) ({ data } = await base(false));
+        return sessionAlerts((data as any[]) || [], today);
+      })()
+    : Promise.resolve([] as SessionAlert[]);
   const { data: sessions } = await period.sessions;
   const sessionIdsEarly = ((sessions as any[]) || []).map((s) => s.id as string);
   // Données des sessions affichées, en parallèle elles aussi.
@@ -207,6 +226,8 @@ export default async function Page({
   const dossierComplete: Record<string, boolean> = {};
   // Partie du formateur faite : tour de table, appréciation et documents « formateur ».
   const trainerDone: Record<string, boolean> = {};
+  // Documents qui restent à remplir : par le formateur / par le bureau.
+  const todo: Record<string, { trainer: number; office: number }> = {};
   if (sessionIds.length) {
     const sigs: any[] = [];
     // Émargement géré dans Digiforma (désactivé ici) : inutile de charger les signatures.
@@ -267,6 +288,9 @@ export default async function Page({
       if (dossierProgress(input).complete) dossierComplete[s.id] = true;
       const mine = { ...input, documents: input.documents.filter((d: any) => d.filled_by === 'formateur') };
       if (dossierProgress(mine).complete) trainerDone[s.id] = true;
+      const missing = (who: string) =>
+        input.documents.filter((d: any) => d.required && d.filled_by === who && !input.entries.some((e: any) => e.document_id === d.id && e.completed)).length;
+      todo[s.id] = { trainer: missing('formateur') + input.forms.filter((f) => !f.completed).length, office: missing('bureau') };
     }
   }
 
@@ -299,16 +323,27 @@ export default async function Page({
     const billed = new Map<string, boolean>(((billRows as any[]) || []).map((r) => [r.id, Boolean(r.billing_done)]));
     const invCount: Record<string, number> = {};
     for (const r of (invRows as any[]) || []) invCount[r.session_id] = (invCount[r.session_id] || 0) + 1;
-    const nowIso = new Date().toISOString();
+    const nowKey = parisNowKey();
     for (const s of (sessions as any[]) || []) {
       const complete = Boolean(dossierComplete[s.id]);
       const done = billError ? true : billed.get(s.id) ?? true;
-      if (complete && done) dossierBadge[s.id] = 'complet';
-      else if (staffView && !billError && !done && s.status !== 'brouillon') {
-        const hasTrainees = (s.session_trainees || []).some((t: any) => t.status === 'validee');
-        const step = hasTrainees ? billingStep(invCount[s.id] || 0, complete, s.end_at < nowIso) : null;
-        if (step) dossierBadge[s.id] = step;
-      } else if (!staffView && trainerDone[s.id]) dossierBadge[s.id] = 'formateur';
+      const started = s.start_at.slice(0, 16) <= nowKey;
+      const ended = s.end_at.slice(0, 16) <= nowKey;
+      const left = todo[s.id];
+      if (complete && done) dossierBadge[s.id] = { kind: 'complet' };
+      else if (!staffView) {
+        // Formateur : ce qu'il lui reste à remplir (dès le début de la session), puis « rempli ».
+        if (trainerDone[s.id]) dossierBadge[s.id] = { kind: 'formateur' };
+        else if (started && left?.trainer) dossierBadge[s.id] = { kind: 'a-remplir', n: left.trainer };
+      } else if (s.status !== 'brouillon' && left) {
+        // Équipe : formateur, puis bureau, puis facturation.
+        if (started && left.trainer) dossierBadge[s.id] = { kind: 'attente-formateur', n: left.trainer };
+        else if (started && left.office) dossierBadge[s.id] = { kind: 'bureau', n: left.office };
+        else if (!billError && !done) {
+          const step = billingStep(invCount[s.id] || 0, complete, ended);
+          if (step) dossierBadge[s.id] = { kind: step };
+        }
+      }
     }
   }
 
@@ -365,6 +400,7 @@ export default async function Page({
         reservedSeats={reservedSeats}
         poecTitles={poecTitles}
         createdBy={createdBy}
+        alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
       />
     </main>
   );

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Download, Search } from 'lucide-react';
 import { Pagination } from '@/components/pagination';
 import { nameFields } from '@/lib/trainee-name';
+import { searchTrainees } from '@/lib/trainee-search';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
@@ -32,20 +33,40 @@ export default async function StagiairesPage({
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
-  let query = supabase
-    .from('trainees')
-    .select('id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))', {
-      count: 'exact',
-    })
-    .order('last_name', { ascending: true, nullsFirst: false })
-    .order('full_name', { ascending: true })
-    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-  if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,company.ilike.%${q}%`);
-  if (company === '__none') query = query.is('company', null);
-  else if (company) query = query.eq('company', company);
+  const SELECT = 'id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))';
+  const withCompany = <Q extends { is: any; eq: any }>(query: Q): Q =>
+    company === '__none' ? query.is('company', null) : company ? query.eq('company', company) : query;
+
+  // Recherche : classée par pertinence (sans accents, nom / prénom dans n'importe quel ordre).
+  const load = async (): Promise<{ data: any[]; count: number }> => {
+    if (!q) {
+      const { data, count } = await withCompany(
+        supabase
+          .from('trainees')
+          .select(SELECT, { count: 'exact' })
+          .order('last_name', { ascending: true, nullsFirst: false })
+          .order('full_name', { ascending: true })
+          .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+      );
+      return { data: (data as any[]) || [], count: count ?? 0 };
+    }
+    const all: any[] = [];
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data } = await withCompany(supabase.from('trainees').select('id, full_name, first_name, last_name, email, company').order('id').range(from, from + 999));
+      if (!data?.length) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+    }
+    const ranked = searchTrainees(all, q);
+    const ids = ranked.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((t) => t.id);
+    if (!ids.length) return { data: [], count: ranked.length };
+    const { data } = await supabase.from('trainees').select(SELECT).in('id', ids);
+    const byId = new Map(((data as any[]) || []).map((t) => [t.id, t]));
+    return { data: ids.map((id) => byId.get(id)).filter(Boolean), count: ranked.length };
+  };
 
   const [{ data: trainees, count }, { data: companyRows }] = await Promise.all([
-    query,
+    load(),
     supabase.from('trainees').select('company').not('company', 'is', null).order('company').limit(5000),
   ]);
   const companies = [...new Set((companyRows || []).map((r: any) => (r.company as string).trim()).filter(Boolean))];

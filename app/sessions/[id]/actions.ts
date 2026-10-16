@@ -114,9 +114,8 @@ export async function setTraineeStatus(
 
 
 /**
- * Horaires par jour : 'all' pour le bureau / l'admin et le formateur de la
- * session (début et fin) ; 'start' pour un référent cadre (heure de début
- * seulement) ; null sinon.
+ * Horaires par jour : 'all' (début et fin) pour le bureau / l'admin, le
+ * référent cadre et le formateur de la session ; null sinon.
  */
 async function timeRights(sessionId: string): Promise<'all' | 'start' | null> {
   const profile = await getCurrentProfile();
@@ -127,7 +126,8 @@ async function timeRights(sessionId: string): Promise<'all' | 'start' | null> {
     const { data } = await supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle();
     if (data?.trainer_id === profile.trainer_id) return 'all';
   }
-  return canEditStartTimes(profile.role) ? 'start' : null;
+  // Référent cadre : début et fin, comme le formateur.
+  return canEditStartTimes(profile.role) ? 'all' : null;
 }
 
 export async function setSessionDayTime(
