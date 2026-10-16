@@ -511,6 +511,7 @@ export function SessionDetailView({
       <DayTimesPanel
         isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
         ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
+        startOnly={!canEditSession && !isOwnTrainer && canEditStartTimes}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}
@@ -578,6 +579,7 @@ export function SessionDetailView({
       <DayTimesPanel
         isAdmin={canEditSession || canEditStartTimes || isOwnTrainer}
         ownTrainer={!canEditSession && (canEditStartTimes || isOwnTrainer)}
+        startOnly={!canEditSession && !isOwnTrainer && canEditStartTimes}
         sessionId={session.id}
         startAt={session.start_at}
         endAt={session.end_at}
@@ -605,6 +607,7 @@ export function SessionDetailView({
 function DayTimesPanel({
   isAdmin,
   ownTrainer,
+  startOnly = false,
   sessionId,
   startAt,
   endAt,
@@ -612,6 +615,8 @@ function DayTimesPanel({
 }: {
   isAdmin: boolean;
   ownTrainer: boolean;
+  /** Référent cadre : heure de début seulement. */
+  startOnly?: boolean;
   sessionId: string;
   startAt: string;
   endAt: string;
@@ -627,7 +632,7 @@ function DayTimesPanel({
       <h2>Horaires par jour</h2>
       <p className="panel-intro">
         {ownTrainer
-          ? 'Tu peux changer l’heure de début de chaque jour. Les autres informations de la session sont gérées par le bureau administratif.'
+          ? `Tu peux changer l’heure de ${startOnly ? 'début' : 'début et de fin'} de chaque jour. Les autres informations de la session sont gérées par le bureau administratif.`
           : 'Par défaut, chaque jour reprend l’horaire global de la session. Modifie une ligne pour donner un horaire différent à ce jour précis.'}
       </p>
       <table className="data">
@@ -644,7 +649,7 @@ function DayTimesPanel({
               endAt={endAt}
               overrides={overrides}
               isAdmin={isAdmin}
-              startOnly={ownTrainer}
+              startOnly={startOnly}
             />
           ))}
         </tbody>
