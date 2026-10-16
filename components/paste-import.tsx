@@ -9,7 +9,7 @@ import { parseNameList, type NameOrder } from '@/lib/name-list';
  * Import le plus simple : copier les colonnes Nom et Prénom dans Excel et les
  * coller ici. Aucune entreprise ni e-mail nécessaire, aucune API externe.
  */
-export function PasteImport({ sessionId }: { sessionId?: string }) {
+export function PasteImport({ sessionId, recyclage = false }: { sessionId?: string; /** Formation disponible en recyclage : choix initial / recyclage. */ recyclage?: boolean }) {
   const [text, setText] = useState('');
   const [order, setOrder] = useState<NameOrder>('nom_prenom');
   const [result, setResult] = useState<PasteImportResult | null>(null);
@@ -78,6 +78,13 @@ export function PasteImport({ sessionId }: { sessionId?: string }) {
             <select name="enroll_status" className="input" defaultValue="validee" aria-label="Statut d’inscription">
               <option value="validee">Inscrire en « validé »</option>
               <option value="en_attente">Inscrire en « en attente »</option>
+            </select>
+          )}
+          {sessionId && recyclage && (
+            <select name="enroll_cursus" className="input" defaultValue="initial" aria-label="Initial ou recyclage">
+              <option value="initial">en Initial</option>
+              <option value="recyclage">en Recyclage</option>
+              <option value="">sans préciser</option>
             </select>
           )}
         </div>

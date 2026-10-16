@@ -1,5 +1,7 @@
 'use client';
 
+import { DigiformaDocs } from '@/components/dossier/digiforma-docs';
+
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
@@ -71,6 +73,7 @@ export function DossierPanel({
   dayTrainerNames = {},
   billingDone = null,
   appreciation = null,
+  digiforma = null,
 }: {
   sessionId: string;
   title: string;
@@ -93,6 +96,8 @@ export function DossierPanel({
   legal?: Legal | null;
   /** Remplaçant certains jours : jour → nom du formateur ce jour-là. */
   dayTrainerNames?: Record<string, string>;
+  /** Lien Digiforma des autres documents à remplir (null si la migration 36 manque). */
+  digiforma?: { url: string | null; done: boolean } | null;
   /** Facturation faite (migration 30) ; null = pas de suivi de facturation. */
   billingDone?: boolean | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
@@ -193,13 +198,18 @@ export function DossierPanel({
   useEffect(() => setRows(signatures), [signatures]);
   useEffect(() => setLocalEntries(entries), [entries]);
 
+  // Documents à remplir sur Digiforma (lien renseigné) : coché par le formateur.
+  const [dfDone, setDfDone] = useState(Boolean(digiforma?.done));
+  useEffect(() => setDfDone(Boolean(digiforma?.done)), [digiforma?.done]);
+  const dfOn = Boolean(digiforma?.url);
   // Documents obligatoires terminés.
   const requiredDocs = documents.filter((d) => d.required && d.filled_by !== 'aucun');
   const docsDone =
     requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length +
     (tdt?.completed ? 1 : 0) +
-    (faiDone ? 1 : 0);
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) } };
+    (faiDone ? 1 : 0) +
+    (dfOn && dfDone ? 1 : 0);
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (dfOn ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -421,6 +431,10 @@ export function DossierPanel({
           : 'Plus de papier : le formateur remplit les documents en ligne et tout s’enregistre automatiquement. Quand tout est rempli, la session affiche « Dossier complet » sur le planning. L’émargement se fait dans Digiforma.'}
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
+
+      {digiforma && (
+        <DigiformaDocs sessionId={sessionId} url={digiforma.url} done={dfDone} canEdit={canManage} canFill={canFill} onDone={setDfDone} />
+      )}
 
       <div className="dossier-actions">
         {EMARGEMENT_ENABLED && canFill && (

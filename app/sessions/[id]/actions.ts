@@ -35,7 +35,8 @@ export async function updateSessionDetails(sessionId: string, formData: FormData
 export async function addTraineeToSession(
   sessionId: string,
   traineeId: string,
-  status: 'validee' | 'en_attente'
+  status: 'validee' | 'en_attente',
+  cursus: 'initial' | 'recyclage' | null = null
 ): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   // Session commencée : liste des stagiaires figée (sauf administrateur).
@@ -56,7 +57,7 @@ export async function addTraineeToSession(
 
   const { error } = await supabase
     .from('session_trainees')
-    .insert({ session_id: sessionId, trainee_id: traineeId, status });
+    .insert({ session_id: sessionId, trainee_id: traineeId, status, ...(cursus === 'initial' || cursus === 'recyclage' ? { cursus } : {}) });
   if (error) {
     if (error.code === '23505') return { ok: false, error: 'Ce stagiaire est déjà inscrit à cette session.' };
     return { ok: false, error: error.message };
@@ -565,5 +566,23 @@ export async function setTraineeCursus(sessionId: string, traineeIds: string[], 
   if (error) return { ok: false, error: 'Exécute d’abord la migration 29 (supabase/migration_phase29.sql) dans Supabase.' };
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath('/');
+  return { ok: true };
+}
+
+/** Lien Digiforma des autres documents à remplir (vide = retiré). */
+export async function setDigiformaDocsUrl(sessionId: string, raw: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const url = String(raw || '').trim().slice(0, 1000);
+  if (url) {
+    let ok = false;
+    try {
+      ok = ['https:', 'http:'].includes(new URL(url).protocol);
+    } catch {}
+    if (!ok) return { ok: false, error: 'Colle un lien complet (qui commence par https://).' };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.from('sessions').update({ digiforma_docs_url: url || null }).eq('id', sessionId);
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
+  revalidatePath(`/sessions/${sessionId}`);
   return { ok: true };
 }

@@ -2,7 +2,7 @@
 
 import { searchTrainees } from '@/lib/trainee-search';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   updateSessionDetails,
@@ -133,6 +133,10 @@ export function SessionDetailView({
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [traineeQuery, setTraineeQuery] = useState('');
+  // Ajout rapide : initial / recyclage choisi une fois, stagiaires ajoutés masqués tout de suite.
+  const [addCursus, setAddCursus] = useState<Cursus>('initial');
+  const [justAdded, setJustAdded] = useState<Set<string>>(new Set());
+  const searchRef = useRef<HTMLInputElement>(null);
   const [unlocked, setUnlocked] = useState(false);
   const locked = started && !unlocked;
   // Inscriptions modifiables : bureau / admin, tant que la session n'a pas commencé.
@@ -154,11 +158,11 @@ export function SessionDetailView({
   const matches =
     traineeQuery.trim().length < 2
       ? []
-      : searchTrainees(allTrainees.filter((t) => !enrolledIds.has(t.id)), traineeQuery, 8);
+      : searchTrainees(allTrainees.filter((t) => !enrolledIds.has(t.id) && !justAdded.has(t.id)), traineeQuery, 8);
 
   const traineeBlock = (
     <>
-      {canManageTrainees && <PasteImport sessionId={session.id} />}
+      {canManageTrainees && <PasteImport sessionId={session.id} recyclage={Boolean(cursus)} />}
       {canManageTrainees && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
 
       <div className={`panel${locked ? ' trainees-locked' : ''}`}>
@@ -232,15 +236,34 @@ export function SessionDetailView({
 
         {canManageTrainees && (
           <div className="trainee-search" style={{ marginTop: 16 }}>
-            <label className="search" style={{ maxWidth: 420 }}>
-              <Search size={15} aria-hidden />
-              <span className="sr-only">Rechercher un stagiaire à ajouter</span>
-              <input
-                placeholder="Ajouter un stagiaire : tape son nom…"
-                value={traineeQuery}
-                onChange={(e) => setTraineeQuery(e.target.value)}
-              />
-            </label>
+            <div className="trainee-add-bar">
+              <label className="search" style={{ maxWidth: 420, flex: 1 }}>
+                <Search size={15} aria-hidden />
+                <span className="sr-only">Rechercher un stagiaire à ajouter</span>
+                <input
+                  ref={searchRef}
+                  placeholder="Ajouter un stagiaire : tape son nom… (Entrée = valider le 1er)"
+                  value={traineeQuery}
+                  onChange={(e) => setTraineeQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && matches[0]) {
+                      e.preventDefault();
+                      handleAddTrainee(matches[0].id, 'validee');
+                    }
+                  }}
+                />
+              </label>
+              {cursus && (
+                <span className="cursus-toggle add-cursus" role="group" aria-label="Inscrire en initial ou en recyclage">
+                  <span className="hint">Inscrire en</span>
+                  {(['initial', 'recyclage'] as Cursus[]).map((c) => (
+                    <button key={c} type="button" className={`cursus-pill ${c}${addCursus === c ? ' on' : ''}`} aria-pressed={addCursus === c} onClick={() => setAddCursus(c)}>
+                      {c === 'initial' ? 'Initial' : 'Recyclage'}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </div>
             {matches.length > 0 && (
               <div className="trainee-results">
                 {matches.map((t) => (
@@ -250,8 +273,10 @@ export function SessionDetailView({
                       {t.company && <span className="hint"> · {t.company}</span>}
                     </span>
                     <span className="row-actions">
-                      <button type="button" className="small primary" onClick={() => handleAddTrainee(t.id, 'validee')} disabled={isPending}>+ Valider</button>
-                      <button type="button" className="small" onClick={() => handleAddTrainee(t.id, 'en_attente')} disabled={isPending}>+ En attente</button>
+                      <button type="button" className="small primary" onClick={() => handleAddTrainee(t.id, 'validee')}>
+                        + Valider{cursus ? ` (${addCursus === 'initial' ? 'initial' : 'recyclage'})` : ''}
+                      </button>
+                      <button type="button" className="small" onClick={() => handleAddTrainee(t.id, 'en_attente')}>+ En attente</button>
                     </span>
                   </div>
                 ))}
@@ -384,10 +409,20 @@ export function SessionDetailView({
 
   function handleAddTrainee(traineeId: string, status: 'validee' | 'en_attente') {
     setError(null);
+    // Ajout immédiat à l'écran ; on peut enchaîner le stagiaire suivant sans attendre.
+    setJustAdded((s) => new Set(s).add(traineeId));
+    setTraineeQuery('');
+    searchRef.current?.focus();
     startTransition(async () => {
-      const result = await addTraineeToSession(session.id, traineeId, status);
-      if (!result.ok) setError(result.error);
-      else setTraineeQuery('');
+      const result = await addTraineeToSession(session.id, traineeId, status, cursus ? addCursus : null);
+      if (!result.ok) {
+        setError(result.error);
+        setJustAdded((s) => {
+          const n = new Set(s);
+          n.delete(traineeId);
+          return n;
+        });
+      }
     });
   }
 

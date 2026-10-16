@@ -167,6 +167,8 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
   const order = formData.get('order') === 'prenom_nom' ? 'prenom_nom' : 'nom_prenom';
   const sessionId = String(formData.get('session_id') || '') || null;
   const enrollStatus = formData.get('enroll_status') === 'validee' ? 'validee' : 'en_attente';
+  const rawCursus = formData.get('enroll_cursus');
+  const enrollCursus = rawCursus === 'initial' || rawCursus === 'recyclage' ? rawCursus : null;
 
   const rows = parseNameList(text, order);
   if (rows.length === 0) return { ok: false, error: 'Aucun nom trouvé. Colle une personne par ligne (Nom et Prénom).' };
@@ -221,6 +223,12 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
       const msg = failed.get(id);
       if (msg) errors.push(`${label(i)} : ${msg}`);
       else enrolled++;
+    }
+    // Initial / recyclage choisi pour toute la liste.
+    const ok = ids.map((x) => x.id).filter((id) => !failed.get(id));
+    if (enrollCursus && ok.length) {
+      const { error } = await supabase.from('session_trainees').update({ cursus: enrollCursus }).eq('session_id', session.id).in('trainee_id', ok);
+      if (error) errors.push('Initial / recyclage non enregistré (migration 29 à exécuter).');
     }
   }
 

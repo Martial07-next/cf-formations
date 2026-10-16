@@ -426,3 +426,17 @@ export async function setSessionAppreciation(sessionId: string, value: boolean |
   refresh(sessionId);
   return { ok: true };
 }
+
+/** « Documents remplis sur Digiforma » : coché par le formateur (suivi du dossier). */
+export async function setDigiformaDone(sessionId: string, done: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const now = new Date().toISOString();
+  const { error } = await r.supabase.from('session_forms').upsert(
+    { session_id: sessionId, kind: 'digiforma', data: {}, completed: done, completed_at: done ? now : null, updated_by: r.profile.id, updated_at: now },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
+  refresh(sessionId);
+  return { ok: true };
+}

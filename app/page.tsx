@@ -253,11 +253,15 @@ export default async function Page({
     ]);
     const tdtOff = new Set(((tplOpts as any[]) || []).filter((t) => t.tour_de_table === false).map((t) => t.id));
     // Fiches d'appréciation (migration 21) : ignorées si la migration manque.
-    const [{ data: faiForms, error: faiErr }, { data: faiSess }, { data: faiTpl }] = await Promise.all([
+    const [{ data: faiForms, error: faiErr }, { data: faiSess }, { data: faiTpl }, { data: dfSess, error: dfErr }, { data: dfForms }] = await Promise.all([
       supabase.from('session_forms').select('session_id, completed').eq('kind', 'appreciation').in('session_id', sessionIds),
       supabase.from('sessions').select('id, fiche_appreciation').in('id', sessionIds),
       templateIds.length ? supabase.from('templates').select('id, fiche_appreciation').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
+      // Autres documents sur Digiforma (migration 36) : lien renseigné → case « fait » du formateur.
+      supabase.from('sessions').select('id').in('id', sessionIds).not('digiforma_docs_url', 'is', null),
+      supabase.from('session_forms').select('session_id, completed').eq('kind', 'digiforma').in('session_id', sessionIds),
     ]);
+    const dfOn = new Set(dfErr ? [] : ((dfSess as any[]) || []).map((r) => r.id as string));
     for (const s of (sessions as any[]) || []) {
       const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
       if (!traineeIds.length) continue;
@@ -283,6 +287,7 @@ export default async function Page({
           )
             ? [{ completed: ((faiForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]
             : []),
+          ...(dfOn.has(s.id) ? [{ completed: ((dfForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
         ],
       };
       if (dossierProgress(input).complete) dossierComplete[s.id] = true;

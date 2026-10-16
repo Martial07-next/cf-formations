@@ -98,6 +98,9 @@ export default async function SessionDetailPage({
         .gte('end_date', session.start_at.slice(0, 10))
     ),
     poec: start(supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle()),
+    // Lien Digiforma des autres documents (migration 36).
+    digiforma: start(supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle()),
+    digiformaDone: start(supabase.from('session_forms').select('completed').eq('session_id', id).eq('kind', 'digiforma').maybeSingle()),
     track: Promise.all([
       start(supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle()),
       start(
@@ -205,6 +208,11 @@ export default async function SessionDetailPage({
   const { data: periodAbsences } = await early.absences;
   const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
   const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
+  const { data: dfRow, error: dfError } = await early.digiforma;
+  const { data: dfDoneRow } = await early.digiformaDone;
+  const digiformaDocs = dfError
+    ? null
+    : { url: ((dfRow as any)?.digiforma_docs_url as string | null) ?? null, done: Boolean((dfDoneRow as any)?.completed) };
   const isOwn =
     Boolean(profile?.trainer_id) &&
     (profile?.trainer_id === (session as any).trainer_id || Object.values(dayTrainers).some((d) => d.trainer_id === profile?.trainer_id));
@@ -332,6 +340,7 @@ export default async function SessionDetailPage({
               canFill={canEditStartTimes(profile?.role) || isOwn}
               canManage={editable}
               tourDeTable={tourDeTable}
+              digiforma={digiformaDocs}
               appreciation={
                 faiError || flagError
                   ? null

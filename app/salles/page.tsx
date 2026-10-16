@@ -9,8 +9,8 @@ import { createRoom, deleteRoom, updateRoom, updateRoomStatus } from './actions'
 export default async function SallesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
-  // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
-  if (!canManage(profile?.role)) redirect('/');
+  // Réservé à l'administrateur (le bureau n'en a pas l'utilité).
+  if (profile?.role !== 'admin') redirect('/');
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name, capacity, location, status')

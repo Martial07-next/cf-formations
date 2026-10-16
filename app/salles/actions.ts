@@ -2,10 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { requireManager, FORBIDDEN } from '@/lib/auth';
+import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 
 export async function createRoom(formData: FormData) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
@@ -20,7 +20,7 @@ export async function createRoom(formData: FormData) {
 }
 
 export async function deleteRoom(id: string) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('rooms').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -30,7 +30,7 @@ export async function deleteRoom(id: string) {
 }
 
 export async function updateRoom(id: string, formData: FormData) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const name = String(formData.get('name') || '').trim();
   const capacity = Number(formData.get('capacity') || 0);
@@ -44,7 +44,7 @@ export async function updateRoom(id: string, formData: FormData) {
 }
 
 export async function updateRoomStatus(id: string, status: string) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('rooms').update({ status }).eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -63,7 +63,7 @@ function refreshWorkshops() {
 }
 
 export async function createWorkshop(roomId: string, formData: FormData) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const w = readWorkshop(formData);
   if (!w.name) return { ok: false, error: "Le nom de l'atelier est requis." };
   const supabase = await createClient();
@@ -74,7 +74,7 @@ export async function createWorkshop(roomId: string, formData: FormData) {
 }
 
 export async function updateWorkshop(id: string, formData: FormData) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const w = readWorkshop(formData);
   if (!w.name) return { ok: false, error: "Le nom de l'atelier est requis." };
   const supabase = await createClient();
@@ -85,7 +85,7 @@ export async function updateWorkshop(id: string, formData: FormData) {
 }
 
 export async function deleteWorkshop(id: string) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const { error } = await supabase.from('room_workshops').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
@@ -95,7 +95,7 @@ export async function deleteWorkshop(id: string) {
 
 /** Formations réalisables dans une salle (aucune = toutes les formations). */
 export async function setRoomTemplates(roomId: string, templateIds: string[]) {
-  if (!(await requireManager())) return FORBIDDEN;
+  if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
   const ids = [...new Set(templateIds.filter(Boolean))];
   const { error: delError } = await supabase.from('room_templates').delete().eq('room_id', roomId);

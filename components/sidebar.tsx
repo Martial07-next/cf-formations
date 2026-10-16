@@ -49,9 +49,10 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
     groups.push({
       label: 'Ressources',
       links: [
-        { href: '/formateurs', label: 'Formateurs', icon: GraduationCap },
+        // Formateurs et salles : administrateur seulement (inutiles au bureau).
+        ...(role === 'admin' ? [{ href: '/formateurs', label: 'Formateurs', icon: GraduationCap }] : []),
         { href: '/stagiaires', label: 'Stagiaires', icon: Users },
-        { href: '/salles', label: 'Salles', icon: DoorOpen },
+        ...(role === 'admin' ? [{ href: '/salles', label: 'Salles', icon: DoorOpen }] : []),
         { href: '/modeles', label: 'Formations', icon: FolderOpen },
       ],
     });
