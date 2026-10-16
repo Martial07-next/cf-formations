@@ -352,6 +352,8 @@ export default async function SessionDetailPage({
                             formationTitle: (tplOpt as any)?.title || session.title,
                             objectifs: (tplOpt as any)?.objectifs ?? null,
                             competences: (tplOpt as any)?.competences ?? null,
+                            objectifsRecyclage: (tplOpt as any)?.objectifs_recyclage ?? null,
+                            competencesRecyclage: (tplOpt as any)?.competences_recyclage ?? null,
                             // Jours précis : un jour de moins de 5 h compte pour une demi-journée.
                             days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
                             hours,
