@@ -31,3 +31,28 @@ export function companiesSummary(companies: (string | null | undefined)[]) {
   }
   return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ company: k, count: n }));
 }
+
+/**
+ * Pastille dossier sur le planning :
+ * - complet : dossier rempli et facturation faite ;
+ * - formateur : (vue formateur) tour de table / appréciation remplis ;
+ * - a-facturer : il ne reste que la facturation ;
+ * - en-cours : facture nommée, pas encore cochée « faite » ;
+ * - en-attente : session terminée, dossier formateur pas encore rempli.
+ */
+export type DossierBadge = 'complet' | 'formateur' | 'a-facturer' | 'en-cours' | 'en-attente';
+
+export const DOSSIER_BADGE_LABEL: Record<DossierBadge, string> = {
+  complet: 'Dossier complet',
+  formateur: 'Dossier rempli par le formateur',
+  'a-facturer': 'Facturation à faire',
+  'en-cours': 'Facturation en cours',
+  'en-attente': 'Facturation en attente',
+};
+
+/** État de facturation d'une session (non facturée). */
+export function billingStep(invoiceCount: number, dossierReady: boolean, ended: boolean): Exclude<DossierBadge, 'complet' | 'formateur'> | null {
+  if (invoiceCount > 0) return 'en-cours';
+  if (dossierReady) return 'a-facturer';
+  return ended ? 'en-attente' : null;
+}

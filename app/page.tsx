@@ -7,6 +7,7 @@ import { appreciationRequired } from '@/lib/appreciation';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { shortName } from '@/lib/tracking';
+import { billingStep, type DossierBadge } from '@/lib/billing';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
@@ -133,6 +134,10 @@ export default async function Page({
     billing: sessionIdsEarly.length
       ? start(supabase.from('sessions').select('id, billing_done').in('id', sessionIdsEarly))
       : Promise.resolve({ data: [] as any[], error: null }),
+    // Factures nommées (lecture réservée à l'équipe et au compte Facturation).
+    invoices: sessionIdsEarly.length
+      ? start(supabase.from('session_invoices').select('session_id').in('session_id', sessionIdsEarly))
+      : Promise.resolve({ data: [] as any[], error: null }),
     dayTrainers: loadDayTrainers(supabase, sessionIdsEarly),
     reservations: loadReservations(supabase, sessionIdsEarly),
   };
@@ -200,6 +205,8 @@ export default async function Page({
 
   // Dossiers complets (émargement + documents obligatoires), si la migration 16 est faite.
   const dossierComplete: Record<string, boolean> = {};
+  // Partie du formateur faite : tour de table, appréciation et documents « formateur ».
+  const trainerDone: Record<string, boolean> = {};
   if (sessionIds.length) {
     const sigs: any[] = [];
     // Émargement géré dans Digiforma (désactivé ici) : inutile de charger les signatures.
@@ -235,7 +242,7 @@ export default async function Page({
       if (!traineeIds.length) continue;
       const traineeModules: Record<string, string[]> = {};
       for (const l of (linkRows || []).filter((x: any) => x.session_id === s.id)) (traineeModules[l.trainee_id] ||= []).push(l.module_id);
-      const p = dossierProgress({
+      const input = {
         slots: sessionSlots(s.start_at, s.end_at, (dayRows || []).filter((d: any) => d.session_id === s.id) as any),
         traineeIds,
         modules: (moduleRows || []).filter((m: any) => m.session_id === s.id),
@@ -256,8 +263,10 @@ export default async function Page({
             ? [{ completed: ((faiForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]
             : []),
         ],
-      });
-      if (p.complete) dossierComplete[s.id] = true;
+      };
+      if (dossierProgress(input).complete) dossierComplete[s.id] = true;
+      const mine = { ...input, documents: input.documents.filter((d: any) => d.filled_by === 'formateur') };
+      if (dossierProgress(mine).complete) trainerDone[s.id] = true;
     }
   }
 
@@ -281,11 +290,26 @@ export default async function Page({
     }
   }
 
-  // Facturation (migration 30) : pas de « Dossier complet » tant que la facturation n'est pas faite.
-  const completeIds = Object.keys(dossierComplete);
-  if (completeIds.length) {
-    const { data: billRows, error: billError } = await per.billing;
-    if (!billError) for (const r of (billRows as any[]) || []) if (!r.billing_done) delete dossierComplete[r.id];
+  // Pastille dossier (migration 30) : « Dossier complet » seulement une fois la facturation faite.
+  // L'équipe voit où en est la facturation ; le formateur voit si sa partie est remplie.
+  const dossierBadge: Record<string, DossierBadge> = {};
+  const staffView = canManage(profile?.role) || Boolean(profile?.can_invoice);
+  {
+    const [{ data: billRows, error: billError }, { data: invRows }] = await Promise.all([per.billing, per.invoices]);
+    const billed = new Map<string, boolean>(((billRows as any[]) || []).map((r) => [r.id, Boolean(r.billing_done)]));
+    const invCount: Record<string, number> = {};
+    for (const r of (invRows as any[]) || []) invCount[r.session_id] = (invCount[r.session_id] || 0) + 1;
+    const nowIso = new Date().toISOString();
+    for (const s of (sessions as any[]) || []) {
+      const complete = Boolean(dossierComplete[s.id]);
+      const done = billError ? true : billed.get(s.id) ?? true;
+      if (complete && done) dossierBadge[s.id] = 'complet';
+      else if (staffView && !billError && !done && s.status !== 'brouillon') {
+        const hasTrainees = (s.session_trainees || []).some((t: any) => t.status === 'validee');
+        const step = hasTrainees ? billingStep(invCount[s.id] || 0, complete, s.end_at < nowIso) : null;
+        if (step) dossierBadge[s.id] = step;
+      } else if (!staffView && trainerDone[s.id]) dossierBadge[s.id] = 'formateur';
+    }
   }
 
   // Remplaçants certains jours (migration 19).
@@ -336,7 +360,7 @@ export default async function Page({
         events={events}
         usefulLinks={(usefulLinks as any) || []}
         templateLinks={templateLinks}
-        dossierComplete={dossierComplete}
+        dossierBadge={dossierBadge}
         dayTrainers={dayTrainers}
         reservedSeats={reservedSeats}
         poecTitles={poecTitles}

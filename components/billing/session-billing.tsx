@@ -2,15 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { Receipt, Trash2, CheckCircle2, CircleDashed, Plus } from 'lucide-react';
-import { addInvoice, deleteInvoice, setBillingDone, setBillingNote } from '@/app/facturation/actions';
-import { euros, type BillingState, type Invoice } from '@/lib/billing';
+import { addInvoice, deleteInvoice, setBillingDone } from '@/app/facturation/actions';
+import type { BillingState, Invoice } from '@/lib/billing';
 
 type Result = { ok: true } | { ok: false; error: string };
 
 /**
- * Facturation d'une session : factures (nom / n°, entreprise, montant) et
- * case « Facturation faite », réservées au compte Facturation. Les autres
- * comptes voient l'état sans pouvoir le modifier.
+ * Facturation d'une session (la facture elle-même est faite dans Digiforma) :
+ * nom de la facture, entreprise, et case « Facturation faite », réservés au
+ * compte Facturation. Les autres comptes voient l'état sans le modifier.
  */
 export function BillingBox({
   sessionId,
@@ -32,9 +32,6 @@ export function BillingBox({
 }) {
   const [label, setLabel] = useState('');
   const [company, setCompany] = useState(companies.length === 1 ? companies[0] : '');
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [billNote, setBillNote] = useState(state.note || '');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const run = (fn: () => Promise<Result>, after?: () => void) =>
@@ -46,7 +43,6 @@ export function BillingBox({
         after?.();
       }
     });
-  const total = invoices.reduce((n, i) => n + (Number(i.amount) || 0), 0);
   const listId = `companies-${sessionId}`;
 
   return (
@@ -54,10 +50,11 @@ export function BillingBox({
       <div className="billing-status">
         {state.done ? (
           <span className="badge validee"><CheckCircle2 size={13} aria-hidden /> Facturée{state.doneAt ? ` le ${new Date(state.doneAt).toLocaleDateString('fr-FR')}` : ''}{doneByName ? ` par ${doneByName}` : ''}</span>
+        ) : invoices.length ? (
+          <span className="badge planifiee"><CircleDashed size={13} aria-hidden /> En cours</span>
         ) : (
-          <span className="badge planifiee"><CircleDashed size={13} aria-hidden /> À facturer</span>
+          <span className="badge planifiee"><CircleDashed size={13} aria-hidden /> À faire</span>
         )}
-        {total > 0 && <span className="hint">Total : <strong>{euros(total)}</strong></span>}
       </div>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
@@ -68,8 +65,6 @@ export function BillingBox({
               <span>
                 <strong>{i.label}</strong>
                 {i.company && <span className="hint"> · {i.company}</span>}
-                {i.amount != null && <span> · {euros(Number(i.amount))}</span>}
-                {i.note && <span className="hint"> · {i.note}</span>}
               </span>
               {canBill && !state.done && (
                 <button type="button" className="small icon ghost" aria-label={`Supprimer la facture ${i.label}`} disabled={isPending} onClick={() => confirm(`Supprimer la facture « ${i.label} » ?`) && run(() => deleteInvoice(sessionId, i.id))}>
@@ -88,29 +83,18 @@ export function BillingBox({
           className="invoice-form"
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => addInvoice(sessionId, { label, company, amount, note }), () => { setLabel(''); setAmount(''); setNote(''); });
+            run(() => addInvoice(sessionId, { label, company }), () => setLabel(''));
           }}
         >
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nom / n° de facture *" aria-label="Nom ou numéro de la facture" required />
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nom de la facture *" aria-label="Nom de la facture" required />
           <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Entreprise" aria-label="Entreprise facturée" list={listId} />
           <datalist id={listId}>{companies.map((c) => <option key={c} value={c} />)}</datalist>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Montant HT (€)" aria-label="Montant" inputMode="decimal" />
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (facultatif)" aria-label="Note" />
           <button type="submit" className="small" disabled={isPending || !label.trim()}><Plus size={14} aria-hidden /> Ajouter</button>
         </form>
       )}
 
       {canBill ? (
         <div className="billing-actions">
-          <label className="field" style={{ flex: 1, minWidth: 220 }}>
-            Note de suivi
-            <input
-              value={billNote}
-              onChange={(e) => setBillNote(e.target.value)}
-              onBlur={() => billNote !== (state.note || '') && run(() => setBillingNote(sessionId, billNote))}
-              placeholder="Ex. en attente du bon de commande OPCO"
-            />
-          </label>
           <label className={`billing-done${state.done ? ' on' : ''}`}>
             <input
               type="checkbox"
@@ -125,10 +109,7 @@ export function BillingBox({
           </label>
         </div>
       ) : (
-        <>
-          {state.note && <p className="hint" style={{ margin: '6px 0 0' }}>Note : {state.note}</p>}
-          <p className="hint" style={{ margin: '6px 0 0' }}>Seul le compte Facturation renseigne les factures et coche « Facturation faite ».</p>
-        </>
+        <p className="hint" style={{ margin: '6px 0 0' }}>Seul le compte Facturation renseigne les factures et coche « Facturation faite ».</p>
       )}
     </div>
   );

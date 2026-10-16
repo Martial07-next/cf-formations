@@ -20,21 +20,16 @@ function refresh(sessionId: string) {
   revalidatePath('/');
 }
 
-/** Ajoute une facture (nom / n°, entreprise, montant) à la session. */
-export async function addInvoice(sessionId: string, input: { label: string; company: string; amount: string; note: string }): Promise<Result> {
+/** Ajoute une facture (nom donné dans Digiforma, entreprise) à la session. */
+export async function addInvoice(sessionId: string, input: { label: string; company: string }): Promise<Result> {
   if (!(await requireBilling())) return { ok: false, error: ONLY_BILLING };
   const label = String(input.label || '').trim().slice(0, 120);
-  if (!label) return { ok: false, error: 'Indique le nom ou le numéro de la facture.' };
-  const raw = String(input.amount || '').replace(/\s/g, '').replace(',', '.');
-  const amount = raw ? Number(raw) : null;
-  if (amount != null && (!Number.isFinite(amount) || amount < 0)) return { ok: false, error: 'Montant invalide.' };
+  if (!label) return { ok: false, error: 'Indique le nom de la facture.' };
   const supabase = await createClient();
   const { error } = await supabase.from('session_invoices').insert({
     session_id: sessionId,
     label,
     company: String(input.company || '').trim().slice(0, 160) || null,
-    amount,
-    note: String(input.note || '').trim().slice(0, 400) || null,
   });
   if (error) return { ok: false, error: MIGRATION };
   refresh(sessionId);
@@ -69,16 +64,6 @@ export async function setBillingDone(sessionId: string, done: boolean, note?: st
     })
     .eq('id', sessionId);
   if (error) return { ok: false, error: /facturation|Facturation/.test(error.message) ? error.message : MIGRATION };
-  refresh(sessionId);
-  return { ok: true };
-}
-
-/** Note de facturation (ex. « en attente du bon de commande »). */
-export async function setBillingNote(sessionId: string, note: string): Promise<Result> {
-  if (!(await requireBilling())) return { ok: false, error: ONLY_BILLING };
-  const supabase = await createClient();
-  const { error } = await supabase.from('sessions').update({ billing_note: note.trim().slice(0, 400) || null }).eq('id', sessionId);
-  if (error) return { ok: false, error: MIGRATION };
   refresh(sessionId);
   return { ok: true };
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { X, Download, Receipt, AlertTriangle } from 'lucide-react';
 import { BillingBox } from '@/components/billing/session-billing';
-import { euros, type BillingState, type Invoice } from '@/lib/billing';
+import type { BillingState, Invoice } from '@/lib/billing';
 
 export type BillingRow = {
   id: string;
@@ -36,7 +36,7 @@ export function BillingList({ rows, canBill, tab }: { rows: BillingRow[]; canBil
   const exportCsv = () => {
     const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [
-      ['Session', 'Dates', 'Formateur', 'Stagiaires validés', 'Entreprises', 'Factures', 'Montant total', 'Statut', 'Facturée le', 'Note'].map(esc).join(';'),
+      ['Session', 'Dates', 'Formateur', 'Stagiaires validés', 'Entreprises', 'Factures', 'Statut', 'Facturée le'].map(esc).join(';'),
       ...rows.map((r) =>
         [
           r.title,
@@ -44,11 +44,9 @@ export function BillingList({ rows, canBill, tab }: { rows: BillingRow[]; canBil
           r.trainer || '',
           String(r.validated),
           r.companies.map((c) => `${c.company} x${c.count}`).join(', '),
-          r.invoices.map((i) => i.label).join(', '),
-          String(r.invoices.reduce((n, i) => n + (Number(i.amount) || 0), 0)).replace('.', ','),
-          r.state.done ? 'Facturée' : 'À facturer',
+          r.invoices.map((i) => (i.company ? `${i.label} (${i.company})` : i.label)).join(', '),
+          r.state.done ? 'Facturée' : r.invoices.length ? 'En cours' : 'À faire',
           r.state.doneAt ? new Date(r.state.doneAt).toLocaleDateString('fr-FR') : '',
-          r.state.note || '',
         ].map(esc).join(';')
       ),
     ];
@@ -77,7 +75,6 @@ export function BillingList({ rows, canBill, tab }: { rows: BillingRow[]; canBil
               {rows.map((r) => {
                 const age = daysSince(r.endAt);
                 const late = !r.state.done && age > 30;
-                const total = r.invoices.reduce((n, i) => n + (Number(i.amount) || 0), 0);
                 return (
                   <tr key={r.id}>
                     <td>
@@ -92,23 +89,21 @@ export function BillingList({ rows, canBill, tab }: { rows: BillingRow[]; canBil
                     </td>
                     <td>
                       {r.invoices.length ? (
-                        <>
-                          {r.invoices.map((i) => <div key={i.id}><strong>{i.label}</strong>{i.company ? <span className="hint"> · {i.company}</span> : ''}</div>)}
-                          {total > 0 && <div className="hint">{euros(total)}</div>}
-                        </>
+                        r.invoices.map((i) => <div key={i.id}><strong>{i.label}</strong>{i.company ? <span className="hint"> · {i.company}</span> : ''}</div>)
                       ) : (
                         <span className="hint">—</span>
                       )}
-                      {r.state.note && <div className="hint">« {r.state.note} »</div>}
                     </td>
                     <td>
                       {r.state.done ? (
                         <span className="badge validee">Facturée {r.state.doneAt ? `le ${new Date(r.state.doneAt).toLocaleDateString('fr-FR')}` : ''}</span>
                       ) : age < 0 ? (
                         <span className="badge brouillon">À venir</span>
+                      ) : r.invoices.length ? (
+                        <span className="badge planifiee">En cours</span>
                       ) : (
                         <span className={`badge ${late ? 'indisponible' : 'planifiee'}`}>
-                          {late && <AlertTriangle size={12} aria-hidden />} Terminée {age === 0 ? 'aujourd’hui' : `il y a ${age} j`}
+                          {late && <AlertTriangle size={12} aria-hidden />} À faire · terminée {age === 0 ? 'aujourd’hui' : `il y a ${age} j`}
                         </span>
                       )}
                     </td>

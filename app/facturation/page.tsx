@@ -3,13 +3,13 @@ import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { BillingList, type BillingRow } from '@/components/billing/billing-list';
-import { INVOICE_SELECT, companiesSummary, euros, type Invoice } from '@/lib/billing';
+import { INVOICE_SELECT, companiesSummary, type Invoice } from '@/lib/billing';
 import { formatSessionPeriod } from '@/lib/week';
 
 export const metadata = { title: 'Facturation · CF Réseaux' };
 
 const TABS = [
-  { key: 'a-facturer', label: 'À facturer' },
+  { key: 'a-facturer', label: 'À faire' },
   { key: 'a-venir', label: 'En cours / à venir' },
   { key: 'facturees', label: 'Facturées' },
 ] as const;
@@ -49,15 +49,13 @@ export default async function FacturationPage({ searchParams }: { searchParams: 
   const { data: sessions, error } = await query;
 
   const ids = ((sessions as any[]) || []).map((s) => s.id);
-  const [{ data: invoices }, { data: staff }, toBill, lateCount, billedMonth, { data: monthInvoices }] = await Promise.all([
+  const [{ data: invoices }, { data: staff }, toBill, lateCount, billedMonth] = await Promise.all([
     ids.length ? supabase.from('session_invoices').select(INVOICE_SELECT).in('session_id', ids).order('created_at') : Promise.resolve({ data: [] as any[] }),
     supabase.from('profiles').select('id, full_name'),
     supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('billing_done', false).lt('end_at', now).neq('status', 'brouillon'),
     supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('billing_done', false).lt('end_at', late).neq('status', 'brouillon'),
     supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('billing_done', true).gte('billing_done_at', monthStart),
-    supabase.from('session_invoices').select('amount').gte('created_at', monthStart),
   ]);
-  const monthTotal = ((monthInvoices as any[]) || []).reduce((n, i) => n + (Number(i.amount) || 0), 0);
 
   const rows: BillingRow[] = ((sessions as any[]) || []).map((s) => {
     const validated = ((s.session_trainees as any[]) || []).filter((t) => t.status === 'validee');
@@ -85,7 +83,7 @@ export default async function FacturationPage({ searchParams }: { searchParams: 
             <h1>Facturation</h1>
             <p>
               {profile.can_invoice
-                ? 'Nomme les factures de chaque session puis coche « Facturation faite » : le dossier passe alors en « Dossier complet » sur le planning.'
+                ? 'La facture se fait dans Digiforma : note ici son nom et l’entreprise, puis coche « Facturation faite ». Le dossier passe alors en « Dossier complet » sur le planning.'
                 : 'Consultation : seul le compte Facturation renseigne les factures.'}
             </p>
           </div>
@@ -96,10 +94,9 @@ export default async function FacturationPage({ searchParams }: { searchParams: 
         ) : (
           <>
             <div className="stats">
-              <div className="stat"><span>À facturer</span><strong>{toBill.count ?? 0}</strong><small>sessions terminées</small></div>
+              <div className="stat"><span>À faire</span><strong>{toBill.count ?? 0}</strong><small>sessions terminées</small></div>
               <div className="stat"><span>En retard</span><strong style={{ color: (lateCount.count ?? 0) ? 'var(--cf-red-ink)' : undefined }}>{lateCount.count ?? 0}</strong><small>terminées depuis + de 30 jours</small></div>
               <div className="stat"><span>Facturées ce mois</span><strong>{billedMonth.count ?? 0}</strong><small>sessions</small></div>
-              <div className="stat"><span>Montant ce mois</span><strong>{euros(monthTotal) || '0 €'}</strong><small>factures saisies</small></div>
             </div>
 
             <div className="toolbar">

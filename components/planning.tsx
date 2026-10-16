@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, FolderCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck } from 'lucide-react';
+import { DOSSIER_BADGE_LABEL, type DossierBadge } from '@/lib/billing';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -16,6 +17,7 @@ import type { UsefulLink } from '@/lib/links';
 import { trainersOf, trainerOn, type DayTrainerMap } from '@/lib/day-trainers';
 import {
   addDays,
+  mondayOf,
   isoDate,
   weekDayRows,
   weekRangeLabel,
@@ -76,7 +78,7 @@ function SessionCard({
   overrides,
   absence,
   info,
-  dossierDone = false,
+  dossier = null,
   replacement = null,
   reserved = 0,
   poec = null,
@@ -87,7 +89,7 @@ function SessionCard({
   overrides: DayOverride[];
   absence: Absence | null;
   info?: { modules: string[]; present: number };
-  dossierDone?: boolean;
+  dossier?: DossierBadge | null;
   /** Remplaçant ce jour-là (le formateur principal ne vient pas). */
   replacement?: { full_name: string; color: string | null } | null;
   /** Places réservées par entreprise, sans nom. */
@@ -133,8 +135,8 @@ function SessionCard({
         <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
       )}
       {by && <span className="sc-by">Session créée par {by}</span>}
-      {dossierDone && (
-        <span className="sc-dossier"><FolderCheck size={11} aria-hidden /> Dossier complet</span>
+      {dossier && (
+        <span className={`sc-dossier ${dossier}`}><DossierIcon badge={dossier} /> {DOSSIER_BADGE_LABEL[dossier]}</span>
       )}
     </Link>
   );
@@ -159,7 +161,7 @@ export function Planning({
   events = [],
   usefulLinks = [],
   templateLinks = [],
-  dossierComplete = {},
+  dossierBadge = {},
   dayTrainers = {},
   reservedSeats = {},
   poecTitles = {},
@@ -184,8 +186,8 @@ export function Planning({
   events?: PlanningEvent[];
   usefulLinks?: UsefulLink[];
   templateLinks?: TemplateLinks[];
-  /** Sessions dont le dossier (émargement + documents) est complet. */
-  dossierComplete?: Record<string, boolean>;
+  /** Pastille dossier / facturation de chaque session. */
+  dossierBadge?: Record<string, DossierBadge>;
   /** Remplaçants certains jours : session → jour → formateur. */
   dayTrainers?: DayTrainerMap;
   /** Places réservées par entreprise encore sans nom, par session. */
@@ -289,6 +291,20 @@ export function Planning({
     setParams((p) => p.set('view', next));
   }
 
+  // Aller directement à une date (icône calendrier), en gardant la vue choisie.
+  function goToDate(iso: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const d = new Date(iso + 'T00:00:00Z');
+    setParams((p) => {
+      p.set('view', view);
+      if (view === 'day') {
+        const wd = d.getUTCDay();
+        p.set('day', isoDate(wd === 6 ? addDays(d, 2) : wd === 0 ? addDays(d, 1) : d));
+      } else if (view === 'week') p.set('week', isoDate(mondayOf(d)));
+      else p.set('month', iso.slice(0, 7));
+    });
+  }
+
   function goToday() {
     setParams((p) => {
       p.delete('week');
@@ -364,6 +380,20 @@ export function Planning({
           <strong aria-live="polite">{periodLabel}</strong>
           <button className="icon" onClick={() => step(1)} aria-label="Période suivante"><ChevronRight size={18} /></button>
           <button className="small" onClick={goToday}>Aujourd’hui</button>
+          <label className="date-jump" title="Aller à une date">
+            <CalendarDays size={17} aria-hidden />
+            <span className="sr-only">Aller à une date</span>
+            <input
+              type="date"
+              value={view === 'day' ? dayIso : view === 'week' ? isoDate(monday) : `${monthAnchorIso.slice(0, 7)}-01`}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch {}
+              }}
+              onChange={(e) => goToDate(e.target.value)}
+            />
+          </label>
         </div>
         <div className="toggle-group" role="group" aria-label="Vue">
           {(['day', 'week', 'month'] as const).map((v) => (
@@ -483,7 +513,7 @@ export function Planning({
                             overrides={dayOverrides[s.id] || []}
                             absence={absenceFor(absences, trainerOn(dayTrainers, s, d.iso), d.iso, d.iso)}
                             info={dayInfo[s.id]?.[d.iso]}
-                            dossierDone={Boolean(dossierComplete[s.id])}
+                            dossier={dossierBadge[s.id] || null}
                             reserved={reservedSeats[s.id] || 0}
                             poec={poecTitles[s.id] || null}
                             by={createdBy[s.id] || null}
@@ -555,7 +585,11 @@ export function Planning({
                             <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
                             {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
-                            {dossierComplete[s.id] && <FolderCheck size={11} aria-label="Dossier complet" className="chip-dossier" />}
+                            {dossierBadge[s.id] && (
+                              <span className={`chip-dossier ${dossierBadge[s.id]}`} title={DOSSIER_BADGE_LABEL[dossierBadge[s.id]]}>
+                                <DossierIcon badge={dossierBadge[s.id]} label={DOSSIER_BADGE_LABEL[dossierBadge[s.id]]} />
+                              </span>
+                            )}
                           </span>
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
@@ -663,4 +697,12 @@ export function Planning({
       </dialog>
     </section>
   );
+}
+
+function DossierIcon({ badge, label }: { badge: DossierBadge; label?: string }) {
+  const props = { size: 11, 'aria-hidden': label ? undefined : true, 'aria-label': label } as const;
+  if (badge === 'complet') return <FolderCheck {...props} />;
+  if (badge === 'formateur') return <ClipboardCheck {...props} />;
+  if (badge === 'en-attente') return <Hourglass {...props} />;
+  return <Receipt {...props} />;
 }
