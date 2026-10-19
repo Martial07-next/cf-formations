@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
@@ -382,23 +382,34 @@ export function Planning({
     }, dirTo(target));
   }
 
-  // Raccourcis clavier : ← → période, T aujourd'hui, J / S / M vue, N nouvelle session, / recherche.
+  // Raccourcis clavier (liste affichée dans « Raccourcis », chaque ligne est aussi cliquable).
+  const [helpOpen, setHelpOpen] = useState(false);
+  const periodWord = view === 'day' ? 'Jour' : view === 'week' ? 'Semaine' : 'Mois';
+  const shortcutItems: Shortcut[] = [
+    { keys: ['←'], match: (e) => e.key === 'ArrowLeft', label: `${periodWord} précédent${view === 'week' ? 'e' : ''}`, run: () => step(-1) },
+    { keys: ['→'], match: (e) => e.key === 'ArrowRight', label: `${periodWord} suivant${view === 'week' ? 'e' : ''}`, run: () => step(1) },
+    { keys: ['T'], match: (e) => e.key.toLowerCase() === 't', label: 'Revenir à aujourd’hui', run: goToday },
+    { keys: ['J'], match: (e) => e.key.toLowerCase() === 'j', label: 'Vue Jour', run: () => switchView('day') },
+    { keys: ['S'], match: (e) => e.key.toLowerCase() === 's', label: 'Vue Semaine', run: () => switchView('week') },
+    { keys: ['M'], match: (e) => e.key.toLowerCase() === 'm', label: 'Vue Mois', run: () => switchView('month') },
+    ...(canEdit ? [{ keys: ['N'], match: (e: KeyboardEvent) => e.key.toLowerCase() === 'n', label: 'Nouvelle session', run: () => openForm({}) }] : []),
+    { keys: ['/'], match: (e) => e.key === '/', label: 'Rechercher une formation', run: () => document.querySelector<HTMLInputElement>('.toolbar .search input')?.focus() },
+  ];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('dialog[open]')) return;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      const k = e.key.toLowerCase();
-      if (e.key === 'ArrowRight') step(1);
-      else if (e.key === 'ArrowLeft') step(-1);
-      else if (k === 't') goToday();
-      else if (k === 'j') switchView('day');
-      else if (k === 's') switchView('week');
-      else if (k === 'm') switchView('month');
-      else if (k === 'n' && canEdit) openForm({});
-      else if (e.key === '/') document.querySelector<HTMLInputElement>('.toolbar .search input')?.focus();
-      else return;
+      if (e.key === 'Escape' && helpOpen) return setHelpOpen(false);
+      if (e.key === '?') {
+        e.preventDefault();
+        return setHelpOpen((v) => !v);
+      }
+      const hit = shortcutItems.find((s) => s.match(e));
+      if (!hit) return;
       e.preventDefault();
+      setHelpOpen(false);
+      hit.run();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -607,7 +618,14 @@ export function Planning({
         </div>
       )}
 
-      <PlanBrief sessions={shown} todayIso={todayIso} nowKey={nowKey} dayOverrides={dayOverrides} visible={anchorIncludesToday} />
+      <PlanBrief
+        sessions={shown}
+        todayIso={todayIso}
+        nowKey={nowKey}
+        dayOverrides={dayOverrides}
+        visible={anchorIncludesToday}
+        shortcuts={<ShortcutsHelp open={helpOpen} setOpen={setHelpOpen} items={shortcutItems} />}
+      />
       <p className="swipe-hint">Glisse à gauche ou à droite pour changer de {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'}</p>
       <div className={`plan-stage${navPending ? ' plan-pending' : ''}`} aria-busy={navPending} {...swipe}>
       <div key={`${view}-${anchorIso}`} className={`plan-anim dir-${dir}`}>
@@ -913,7 +931,9 @@ function PlanBrief({
   nowKey,
   dayOverrides,
   visible,
+  shortcuts,
 }: {
+  shortcuts?: React.ReactNode;
   sessions: SessionRow[];
   todayIso: string;
   nowKey: string;
@@ -942,7 +962,46 @@ function PlanBrief({
           {done > 0 && <span>{done} terminée{done > 1 ? 's' : ''}</span>}
         </>
       )}
-      <span className="keys"><kbd>←</kbd> <kbd>→</kbd> période · <kbd>T</kbd> aujourd’hui · <kbd>J</kbd> <kbd>S</kbd> <kbd>M</kbd> vue</span>
+      {shortcuts}
     </div>
+  );
+}
+
+type Shortcut = { keys: string[]; label: string; match: (e: KeyboardEvent) => boolean; run: () => void };
+
+/** Bouton « Raccourcis » : liste claire des touches ; un clic sur une ligne fait l'action. */
+function ShortcutsHelp({ open, setOpen, items }: { open: boolean; setOpen: (v: boolean) => void; items: Shortcut[] }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, setOpen]);
+  return (
+    <span className="shortcuts" ref={ref}>
+      <button type="button" className="small ghost shortcuts-btn" aria-expanded={open} onClick={() => setOpen(!open)} title="Raccourcis clavier (touche ?)">
+        <Keyboard size={14} aria-hidden /> Raccourcis
+      </button>
+      {open && (
+        <span className="shortcuts-pop" role="menu" aria-label="Raccourcis clavier">
+          {items.map((s) => (
+            <button
+              type="button"
+              role="menuitem"
+              key={s.label}
+              onClick={() => {
+                setOpen(false);
+                s.run();
+              }}
+            >
+              <span className="shortcut-keys">{s.keys.map((k) => <kbd key={k}>{k}</kbd>)}</span>
+              {s.label}
+            </button>
+          ))}
+          <span className="shortcuts-foot">Touche <kbd>?</kbd> pour afficher cette liste</span>
+        </span>
+      )}
+    </span>
   );
 }

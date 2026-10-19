@@ -1111,7 +1111,7 @@ input,select,textarea{max-width:100%}
 .plan-brief .live{border-color:#1d4f91;color:#1d4f91;font-weight:700}
 .plan-brief .live i{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:live-dot 1.8s infinite}
 .plan-brief .soon{border-color:#f0dc9a;background:#fffaea;color:#7a5600;font-weight:700}
-.plan-brief kbd{font-family:inherit;font-size:11px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:#fff}
+.plan-brief kbd,.shortcuts-pop kbd{font-family:inherit;font-size:11px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:#fff}
 .plan-brief .keys{border:none;background:none;color:var(--muted);padding:0}
 @media (hover:none){.plan-brief .keys{display:none}}
 .swipe-hint{display:none}
@@ -1130,3 +1130,14 @@ input,select,textarea{max-width:100%}
 .agenda-day.past[open] summary{margin-bottom:8px}
 .agenda-day.past .hint{text-transform:none;margin-left:auto}
 @media (max-width:760px){.plan-brief .keys{display:none}.plan-brief{gap:6px}.plan-brief > span{padding:3px 9px;font-size:12.5px}}
+
+.shortcuts{position:relative;margin-left:auto}
+.shortcuts-btn{color:var(--muted)}
+.shortcuts-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;display:flex;flex-direction:column;min-width:250px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(10,20,14,.16);padding:6px;animation:fade-up .16s cubic-bezier(.2,.7,.2,1) both}
+.shortcuts-pop button{justify-content:flex-start;gap:10px;border:none;background:none;border-radius:8px;min-height:34px;padding:6px 10px;font-weight:600;font-size:13px}
+.shortcuts-pop button:hover,.shortcuts-pop button:focus-visible{background:var(--cf-mint-soft)}
+.shortcut-keys{display:inline-flex;gap:3px;min-width:34px}
+.shortcuts-pop kbd{font-family:inherit;font-size:11.5px;font-weight:700;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;padding:0 6px;background:#fff;min-width:20px;text-align:center}
+.shortcuts-foot{font-size:11.5px;color:var(--muted);padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
+@media (hover:none),(max-width:760px){.shortcuts{display:none}}
+.plan-brief > .shortcuts{border:none;background:none;padding:0}
