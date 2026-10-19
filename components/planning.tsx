@@ -525,8 +525,14 @@ export function Planning({
   function cellSessions(dIso: string, roomId: string) {
     return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
   }
-  function isTaken(dIso: string, roomId: string) {
-    return sessions.some((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
+  // Salle occupée ce jour-là : on peut placer une session avant ou après ;
+  // le « + » propose l'heure de fin de la dernière session du jour.
+  function freeFrom(dIso: string, roomId: string): string | null {
+    const ends = sessions
+      .filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at))
+      .map((s) => effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []).end);
+    if (!ends.length) return null;
+    return ends.sort()[ends.length - 1];
   }
 
 
@@ -699,16 +705,21 @@ export function Planning({
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => card(s, d.iso))}
-                        {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
-                          <button
-                            type="button"
-                            className="cell-add"
-                            aria-label={`Ajouter une session : ${r.name}, ${d.full} ${d.dateLabel}`}
-                            onClick={() => openForm({ room_id: r.id, start_date: d.iso, end_date: d.iso })}
-                          >
-                            <Plus size={14} aria-hidden />
-                          </button>
-                        )}
+                        {canEdit && !r.is_holding && (() => {
+                          const after = freeFrom(d.iso, r.id);
+                          return (
+                            <button
+                              type="button"
+                              className={`cell-add${after ? ' after' : ''}`}
+                              aria-label={`Ajouter une session : ${r.name}, ${d.full} ${d.dateLabel}${after ? `, à partir de ${after.replace(':', 'h')}` : ''}`}
+                              title={after ? `Ajouter une session avant ou après (proposée à ${after.replace(':', 'h')})` : 'Ajouter une session'}
+                              onClick={() => openForm({ room_id: r.id, start_date: d.iso, end_date: d.iso, ...(after && after < '20:00' ? { start_time: after } : {}) })}
+                            >
+                              <Plus size={14} aria-hidden />
+                              {after && <span className="cell-add-txt">{after.replace(':', 'h')}</span>}
+                            </button>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>

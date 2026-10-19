@@ -1194,3 +1194,8 @@ input,select,textarea{max-width:100%}
 .density-tight .session-card .sc-title{overflow:hidden}
 .density-tight .session-card .sc-top{flex-wrap:wrap;gap:2px}
 .density-tight .session-card .sc-count svg{display:none}
+.cell-add.after{min-height:24px;opacity:0;font-size:11px;font-weight:700;gap:3px}
+.plan-cell:hover .cell-add.after,.cell-add.after:focus-visible{opacity:.9}
+.cell-add-txt{font-variant-numeric:tabular-nums}
+.density-tight .cell-add-txt{display:none}
+@media (hover:none){.cell-add.after{opacity:.5}}

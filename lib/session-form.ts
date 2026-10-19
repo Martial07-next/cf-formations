@@ -3,7 +3,8 @@ import { isSessionStatus, type SessionStatus } from '@/lib/status';
 import { absenceText, type Absence } from '@/lib/absences';
 import { missionText, outsideMission } from '@/lib/external';
 import { loadDayTrainers, trainerOn } from '@/lib/day-trainers';
-import { weekdaysBetween } from '@/lib/week';
+import { weekdaysBetween, type DayOverride } from '@/lib/week';
+import { sessionDaySlots, slotsOverlap, type DaySlot } from '@/lib/session-slots';
 
 export type SessionInput = {
   title: string;
@@ -74,21 +75,37 @@ export function parseSessionForm(formData: FormData): { ok: true; value: Session
 export async function findSessionConflict(
   supabase: SupabaseClient,
   input: Pick<SessionInput, 'room_id' | 'trainer_id' | 'start_at' | 'end_at'>,
-  excludeId?: string
+  excludeId?: string,
+  /** Horaires propres à certains jours de la session vérifiée (sinon ceux enregistrés). */
+  ownOverrides?: DayOverride[]
 ): Promise<string | null> {
   let query = supabase
     .from('sessions')
     .select('id, title, room_id, trainer_id, start_at, end_at')
-    .lt('start_at', input.end_at)
-    .gt('end_at', input.start_at);
+    // Jours en commun (l'horaire propre à un jour peut dépasser l'heure de fin prévue).
+    .lte('start_at', `${input.end_at.slice(0, 10)}T23:59:59`)
+    .gte('end_at', `${input.start_at.slice(0, 10)}T00:00:00`);
   if (excludeId) query = query.neq('id', excludeId);
   const { data, error } = await query;
   if (error) return error.message;
 
+  // Créneaux réels jour par jour (horaires propres à certains jours compris) :
+  // avant ou après une autre session le même jour, c'est permis ; pendant, non.
+  const ids = [...(data || []).map((s) => s.id), ...(excludeId ? [excludeId] : [])];
+  const { data: dayRows } = ids.length
+    ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', ids)
+    : { data: [] as any[] };
+  const overridesOf = (id: string) => ((dayRows as any[]) || []).filter((r) => r.session_id === id) as DayOverride[];
+  const mine = sessionDaySlots(input.start_at, input.end_at, ownOverrides ?? (excludeId ? overridesOf(excludeId) : []));
+  const candidates = (data || []).map((s) => ({ ...s, slots: sessionDaySlots(s.start_at, s.end_at, overridesOf(s.id)) }));
+  const when = (o: DaySlot) => `le ${o.day.split('-').reverse().join('/')} (${o.start.replace(':', 'h')}–${o.end.replace(':', 'h')})`;
+
   const { data: room } = await supabase.from('rooms').select('is_holding').eq('id', input.room_id).maybeSingle();
   if (!room?.is_holding) {
-    const roomClash = data?.find((s) => s.room_id === input.room_id);
-    if (roomClash) return `Conflit : la salle est déjà réservée pour « ${roomClash.title} » sur ce créneau.`;
+    for (const s of candidates.filter((c) => c.room_id === input.room_id)) {
+      const o = slotsOverlap(mine, s.slots);
+      if (o) return `Conflit : la salle est déjà réservée pour « ${s.title} » ${when(o)}. Une session peut se placer avant ou après, pas pendant.`;
+    }
   }
   if (input.trainer_id) {
     // Jours où ce formateur anime vraiment cette session (hors jours confiés à un remplaçant).
@@ -97,15 +114,13 @@ export async function findSessionConflict(
     const activeDays = (sessionDays.length ? sessionDays : [input.start_at.slice(0, 10)]).filter(
       (d) => !excludeId || !ownMap[excludeId]?.[d] || ownMap[excludeId][d].trainer_id === input.trainer_id
     );
-    // Autres sessions où il est formateur ce jour-là (principal non remplacé, ou remplaçant).
-    const others = data || [];
-    const othersMap = await loadDayTrainers(supabase, others.map((s) => s.id));
-    for (const s of others) {
-      const days = weekdaysBetween(s.start_at, s.end_at);
-      const clashDay = activeDays.find((d) => (days.length ? days : [s.start_at.slice(0, 10)]).includes(d) && trainerOn(othersMap, s, d) === input.trainer_id);
-      if (clashDay) {
-        return `Conflit : ce formateur anime déjà « ${s.title} » le ${clashDay.split('-').reverse().join('/')}.`;
-      }
+    // Autres sessions où il est formateur ce jour-là (principal non remplacé, ou remplaçant), aux mêmes heures.
+    const othersMap = await loadDayTrainers(supabase, candidates.map((s) => s.id));
+    const myActive = mine.filter((x) => activeDays.includes(x.day));
+    for (const s of candidates) {
+      const theirs = s.slots.filter((x) => trainerOn(othersMap, s, x.day) === input.trainer_id);
+      const o = slotsOverlap(myActive, theirs);
+      if (o) return `Conflit : ce formateur anime déjà « ${s.title} » ${when(o)}.`;
     }
 
     // Formateur externe : seulement pendant sa période d'intervention.

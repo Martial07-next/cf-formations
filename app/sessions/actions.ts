@@ -36,7 +36,16 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
     templateModules = (mods || []).map((m: any) => ({ name: m.name, duration_hours: Number(m.duration_hours) }));
   }
 
-  const conflict = await findSessionConflict(supabase, parsed.value);
+  // Dernier jour partiel calculé automatiquement (ex. 17 h 30 → 3e jour 09:00–12:30).
+  const lastDayEnd = String(formData.get('last_day_end') || '');
+  const startDate = parsed.value.start_at.slice(0, 10);
+  const endDate = parsed.value.end_at.slice(0, 10);
+  const startTime = parsed.value.start_at.slice(11, 16);
+  const lastDay = /^\d{2}:\d{2}$/.test(lastDayEnd) && endDate > startDate && lastDayEnd > startTime
+    ? { day: endDate, start_time: startTime, end_time: lastDayEnd }
+    : null;
+
+  const conflict = await findSessionConflict(supabase, parsed.value, undefined, lastDay ? [lastDay] : []);
   if (conflict) return { ok: false, error: conflict };
 
   // Formation ajoutée depuis un parcours POEC (migration 23).
@@ -48,17 +57,8 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
     .single();
   if (error) return { ok: false, error: error.message };
 
-  // Dernier jour partiel calculé automatiquement (ex. 17 h 30 → 3e jour 09:00–12:30).
-  const lastDayEnd = String(formData.get('last_day_end') || '');
-  const startDate = parsed.value.start_at.slice(0, 10);
-  const endDate = parsed.value.end_at.slice(0, 10);
-  if (/^\d{2}:\d{2}$/.test(lastDayEnd) && endDate > startDate) {
-    const startTime = parsed.value.start_at.slice(11, 16);
-    if (lastDayEnd > startTime) {
-      await supabase
-        .from('session_days')
-        .upsert({ session_id: data.id, day: endDate, start_time: startTime, end_time: lastDayEnd }, { onConflict: 'session_id,day' });
-    }
+  if (lastDay) {
+    await supabase.from('session_days').upsert({ session_id: data.id, ...lastDay }, { onConflict: 'session_id,day' });
   }
 
   // Modules (ex. MA1 lundi, MA2 mardi, MA3 mercredi), placés sur les jours de la session.

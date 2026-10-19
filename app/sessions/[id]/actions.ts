@@ -154,6 +154,17 @@ export async function setSessionDayTime(
   if (!startTime || !endTime) return { ok: false, error: 'Heure de début et de fin requises.' };
   if (endTime <= startTime) return { ok: false, error: "L'heure de fin doit être après l'heure de début." };
 
+  // Nouvel horaire du jour : pas de chevauchement avec une autre session de la salle (ou du formateur).
+  const [{ data: cur }, { data: days }] = await Promise.all([
+    supabase.from('sessions').select('room_id, trainer_id, start_at, end_at').eq('id', sessionId).maybeSingle(),
+    supabase.from('session_days').select('day, start_time, end_time').eq('session_id', sessionId),
+  ]);
+  if (cur) {
+    const overrides = [...((days as any[]) || []).filter((d) => d.day !== day), { day, start_time: startTime, end_time: endTime }];
+    const clash = await findSessionConflict(supabase, cur as any, sessionId, overrides);
+    if (clash) return { ok: false, error: clash };
+  }
+
   const { error } = await supabase
     .from('session_days')
     .upsert(
