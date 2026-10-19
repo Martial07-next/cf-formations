@@ -1,3 +1,4 @@
+import { SessionStatus } from '@/components/session-status';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadStaff } from '@/lib/tracking';
 import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/components/tracking/session-tracking';
@@ -393,7 +394,7 @@ export default async function SessionDetailPage({
             <p className="eyebrow">Fiche session</p>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               {session.title}
-              <span className={`status-pill ${session.status}`}>{SESSION_STATUS_LABEL[session.status] ?? session.status}</span>
+              <SessionStatus status={session.status} startAt={session.start_at} endAt={session.end_at} nowKey={parisNowKey()} />
             </h1>
             <p style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span>{room?.is_holding ? 'Salle à affecter' : room?.name || 'Salle non définie'}</span>·

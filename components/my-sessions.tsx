@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PHASE_LABEL, sessionPhase } from '@/lib/session-phase';
 import { CalendarCheck, Clock, MapPin, Users } from 'lucide-react';
 
 export type MySession = {
@@ -29,13 +30,14 @@ export function MySessions({ sessions, nowKey }: { sessions: MySession[]; nowKey
       ) : (
         <ul>
           {sessions.map((s) => {
-            const live = s.start_at.slice(0, 10) <= nowKey.slice(0, 10) && s.end_at.slice(0, 10) >= nowKey.slice(0, 10);
+            const phase = sessionPhase(s.start_at, s.end_at, nowKey);
+            const live = phase === 'en-cours';
             const oneDay = s.start_at.slice(0, 10) === s.end_at.slice(0, 10);
             return (
               <li key={s.id}>
-                <Link href={`/sessions/${s.id}`} className={`my-session${live ? ' live' : ''}`}>
+                <Link href={`/sessions/${s.id}`} className={`my-session${live ? ' live' : ''}${phase === 'terminee' ? ' ended' : ''}`}>
                   <span className="my-session-when">
-                    {live && <span className="my-live">Aujourd’hui</span>}
+                    {phase && <span className={`status-pill ${phase}`}>{PHASE_LABEL[phase]}</span>}
                     {oneDay ? day(s.start_at) : `${day(s.start_at)} → ${day(s.end_at)}`}
                   </span>
                   <strong className="my-session-title">{s.title}</strong>

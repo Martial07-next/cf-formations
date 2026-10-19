@@ -68,6 +68,17 @@ export async function findOrCreateTrainee(
     const { data } = await supabase.from('trainees').select(cols).ilike('full_name', exact(reversed)).limit(1).maybeSingle();
     found = data;
   }
+  if (!found) {
+    // Accents, tirets ou ordre différents (« Hélène » / « Helene ») : candidats
+    // par le mot le plus long (voyelles en joker), puis comparaison exacte.
+    const word = identityKey(fullName).split(' ').sort((a, b) => b.length - a.length)[0] || '';
+    if (word.length >= 3) {
+      const pattern = `%${word.replace(/[aeiouyc]/g, '_')}%`;
+      const { data } = await supabase.from('trainees').select(cols).ilike('full_name', pattern).limit(200);
+      const key = identityKey(fullName);
+      found = ((data as any[]) || []).find((t) => identityKey(t.full_name || '') === key) || null;
+    }
+  }
 
   if (found) {
     // Complète automatiquement chaque case vide de la fiche avec ce que donne
@@ -124,7 +135,7 @@ type Existing = {
 /** Clé d'identité : ordre nom / prénom, accents et majuscules indifférents. */
 function identityKey(text: string) {
   return text
-    .split(/\s+/)
+    .split(/[\s\-'’]+/)
     .map((p) => p.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''))
     .filter(Boolean)
     .sort()

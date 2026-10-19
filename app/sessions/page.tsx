@@ -1,3 +1,4 @@
+import { parisNowKey } from '@/lib/paris-time';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/sidebar';
 import { SessionsTable } from '@/components/sessions-table';
@@ -39,7 +40,7 @@ export default async function SessionsPage() {
             </div>
           )}
         </header>
-        <SessionsTable isAdmin={editable} myTrainerId={profile?.trainer_id || null} rows={rows} />
+        <SessionsTable isAdmin={editable} myTrainerId={profile?.trainer_id || null} rows={rows} nowKey={parisNowKey()} />
       </section>
     </main>
   );

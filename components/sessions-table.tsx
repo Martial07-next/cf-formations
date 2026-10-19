@@ -1,5 +1,7 @@
 'use client';
 
+import { SessionStatus } from '@/components/session-status';
+
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Search, Trash2 } from 'lucide-react';
@@ -40,6 +42,7 @@ export function SessionsTable({
   isAdmin,
   canEditStatus = isAdmin,
   myTrainerId,
+  nowKey = '',
   rows,
 }: {
   /** Gestion complète (suppression) : administrateur et bureau administratif. */
@@ -47,6 +50,8 @@ export function SessionsTable({
   /** Changement de statut : + référent cadre. */
   canEditStatus?: boolean;
   myTrainerId: string | null;
+  /** Heure de Paris (en cours / terminée). */
+  nowKey?: string;
   rows: Row[];
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +161,7 @@ export function SessionsTable({
                           ))}
                         </select>
                       ) : (
-                        <span className={`status-pill ${s.status}`}>{SESSION_STATUS_LABEL[s.status] ?? s.status}</span>
+                        <SessionStatus status={s.status} startAt={s.start_at} endAt={s.end_at} nowKey={nowKey} />
                       )}
                     </td>
                     <td><Link href={`/sessions/${s.id}`}>{s.title}</Link></td>

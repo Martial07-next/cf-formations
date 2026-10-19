@@ -19,7 +19,7 @@ type Field = {
   list?: string; // id d'une <datalist> de suggestions
 };
 type Column = { key: string; label: string; render?: (row: any) => React.ReactNode };
-type ActionResult = { ok: boolean; error?: string };
+type ActionResult = { ok: boolean; error?: string; message?: string };
 
 export function CrudTable({
   isAdmin,
@@ -68,7 +68,7 @@ export function CrudTable({
       if (!result.ok) setError(result.error || 'Une erreur est survenue.');
       else {
         setAddOpen(false);
-        setNotice('Ajouté.');
+        setNotice(result.message || 'Ajouté.');
       }
     });
   }

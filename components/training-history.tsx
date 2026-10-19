@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatSessionPeriod, formatHours, isMultiDay } from '@/lib/week';
-import { SESSION_STATUS_LABEL } from '@/lib/status';
+import { SessionStatus } from '@/components/session-status';
+import { parisNowKey } from '@/lib/paris-time';
 
 export type HistoryEntry = {
   id: string;
@@ -37,7 +38,7 @@ function HistoryCard({ entry }: { entry: HistoryEntry }) {
         {entry.enrollmentStatus ? (
           <span className={`badge ${entry.enrollmentStatus}`}>{entry.enrollmentStatus === 'validee' ? 'Validé' : 'En attente'}</span>
         ) : (
-          <span className={`status-pill ${entry.status}`}>{SESSION_STATUS_LABEL[entry.status] ?? entry.status}</span>
+          <SessionStatus status={entry.status} startAt={entry.start_at} endAt={entry.end_at} nowKey={parisNowKey()} />
         )}
         <span className="history-hours">{formatHours(entry.hours)}</span>
       </div>

@@ -439,6 +439,7 @@ export default async function Page({
         poecTitles={poecTitles}
         createdBy={createdBy}
         renderedAt={Date.now()}
+        nowKey={parisNowKey()}
         mine={await mineQuery.then((list) => (list ? <MySessions sessions={list} nowKey={parisNowKey()} /> : null))}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
       />

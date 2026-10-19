@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
+import { PHASE_LABEL, sessionPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -68,7 +69,8 @@ function colorOf(s: SessionRow): string {
   return one(s.trainers)?.color || DEFAULT_TRAINER_COLOR;
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, phase = null }: { status: string; phase?: SessionPhase }) {
+  if (phase) return <span className={`status-pill ${phase}`}>{PHASE_LABEL[phase]}</span>;
   return <span className={`status-pill ${status}`}>{SESSION_STATUS_LABEL[status] ?? status}</span>;
 }
 
@@ -84,7 +86,10 @@ function SessionCard({
   poec = null,
   by = null,
   mine = false,
+  phase = null,
 }: {
+  /** En cours / terminée (selon la date). */
+  phase?: SessionPhase;
   /** Session du formateur connecté. */
   mine?: boolean;
   s: SessionRow;
@@ -111,12 +116,12 @@ function SessionCard({
   return (
     <Link
       href={`/sessions/${s.id}`}
-      className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}`}
+      className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}${phase === 'terminee' ? ' ended' : ''}`}
       style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
       title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
     >
       <span className="sc-top">
-        <StatusPill status={s.status} />
+        <StatusPill status={s.status} phase={phase} />
         <span className="sc-count" title={`Stagiaires validés${reserved ? ` + ${reserved} place${reserved > 1 ? 's' : ''} réservée${reserved > 1 ? 's' : ''} sans nom` : ''} / places`}>
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
@@ -171,6 +176,7 @@ export function Planning({
   createdBy = {},
   alerts = null,
   mine = null,
+  nowKey = '',
   renderedAt = 0,
 }: {
   view: 'day' | 'week' | 'month';
@@ -202,6 +208,8 @@ export function Planning({
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
   alerts?: React.ReactNode;
+  /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
+  nowKey?: string;
   /** Formateur : ses formations, affichées en premier. */
   mine?: React.ReactNode;
   /** Heure du rendu serveur : une page restaurée (retour arrière) trop ancienne est rechargée. */
@@ -370,6 +378,9 @@ export function Planning({
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
+  // En cours (dès le premier jour) / terminée (heure de fin passée), heure de Paris.
+  const phaseOf = (s: SessionRow): SessionPhase => (s.status === 'brouillon' || !nowKey ? null : sessionPhase(s.start_at, s.end_at, nowKey));
+
   // Ses propres sessions (ou remplacement ce jour-là) : mises en avant.
   const isMine = (s: SessionRow, dIso: string) =>
     Boolean(myTrainerId) && (dayTrainers[s.id]?.[dIso] ? dayTrainers[s.id][dIso].trainer_id === myTrainerId : s.trainer_id === myTrainerId);
@@ -379,6 +390,7 @@ export function Planning({
       <SessionCard
         key={s.id}
         mine={isMine(s, dIso)}
+        phase={phaseOf(s)}
         s={s}
         dIso={dIso}
         overrides={dayOverrides[s.id] || []}
@@ -653,13 +665,14 @@ export function Planning({
                         <Link
                           key={s.id}
                           href={`/sessions/${s.id}`}
-                          className="month-chip"
+                          className={`month-chip${phaseOf(s) === 'terminee' ? ' ended' : ''}`}
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
                           title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
-                            <span className={`dot ${s.status}`} aria-label={SESSION_STATUS_LABEL[s.status]} />
+                            <span className={`dot ${phaseOf(s) || s.status}`} aria-label={phaseOf(s) ? PHASE_LABEL[phaseOf(s)!] : SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
+                            {phaseOf(s) && <span className={`chip-phase ${phaseOf(s)}`}>{PHASE_LABEL[phaseOf(s)!]}</span>}
                             {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
                             {dossierBadge[s.id] && (
                               <span className={`chip-dossier ${dossierBadge[s.id].kind}`} title={dossierBadgeLabel(dossierBadge[s.id])}>
@@ -687,6 +700,8 @@ export function Planning({
         {SESSION_STATUSES.map((s) => (
           <span className="legend-item" key={s.value}><StatusPill status={s.value} /></span>
         ))}
+        <span className="legend-item"><StatusPill status="" phase="en-cours" /></span>
+        <span className="legend-item"><StatusPill status="" phase="terminee" /></span>
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 

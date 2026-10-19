@@ -1,3 +1,5 @@
+import { SessionStatus } from '@/components/session-status';
+import { parisNowKey } from '@/lib/paris-time';
 import Link from 'next/link';
 import { CalendarClock, CalendarOff, ArrowRight } from 'lucide-react';
 import { absenceText, type Absence } from '@/lib/absences';
@@ -210,7 +212,7 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
                           <span>
                             <strong>{st.next.title}</strong> · {st.next.start_at.slice(0, 10).split('-').reverse().join('/')}{' '}
                             {formatSessionPeriod(st.next.start_at, st.next.end_at)}{' '}
-                            <span className={`status-pill ${st.next.status}`}>{SESSION_STATUS_LABEL[st.next.status]}</span>
+                            <SessionStatus status={st.next.status} startAt={st.next.start_at} endAt={st.next.end_at} nowKey={parisNowKey()} />
                           </span>
                         </span>
                       ) : (

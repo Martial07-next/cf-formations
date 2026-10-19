@@ -16,12 +16,25 @@ export async function createTrainee(formData: FormData) {
   const email = String(formData.get('email') || '').trim() || null;
   const company = String(formData.get('company') || '').trim() || null;
   if (!name.last_name) return { ok: false, error: 'Le nom est requis.' };
-  const full_name = buildFullName(name);
-  const { error } = await supabase.from('trainees').insert({ ...name, full_name, email, company });
-  if (isDuplicateError(error)) return { ok: false, error: duplicateMessage(full_name) };
-  if (error) return { ok: false, error: error.message };
+  // Même personne déjà dans l'annuaire (nom / prénom dans n'importe quel ordre,
+  // accents, majuscules, tirets indifférents, ou même e-mail) : pas de doublon,
+  // on complète seulement les informations manquantes de sa fiche.
+  let res;
+  try {
+    [res] = await resolveTraineesBulk(supabase, [{ name, email, company }]);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Enregistrement impossible.' };
+  }
+  if (!res) return { ok: false, error: 'Enregistrement impossible.' };
   revalidatePath('/stagiaires');
-  return { ok: true };
+  if (res.created) return { ok: true, message: 'Stagiaire ajouté.' };
+  revalidatePath(`/stagiaires/${res.id}`);
+  return {
+    ok: true,
+    message: res.completed
+      ? `${buildFullName(name)} existait déjà : sa fiche a été complétée avec les nouvelles informations.`
+      : `${buildFullName(name)} existait déjà : sa fiche contenait déjà ces informations.`,
+  };
 }
 
 export async function deleteTrainee(id: string) {
