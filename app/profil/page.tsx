@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { FileSignature } from 'lucide-react';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { NameForm, PasswordForm } from '@/components/profile-forms';
 
 export default async function ProfilPage() {
@@ -15,7 +14,6 @@ export default async function ProfilPage() {
 
   return (
     <main>
-      <Sidebar active="/profil" profile={profile} />
       <section className="content">
         <header>
           <div>

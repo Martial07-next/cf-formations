@@ -87,7 +87,10 @@ function SessionCard({
   by = null,
   mine = false,
   phase = null,
+  index = 0,
 }: {
+  /** Ordre d'apparition (animation en cascade). */
+  index?: number;
   /** En cours / terminée (selon la date). */
   phase?: SessionPhase;
   /** Session du formateur connecté. */
@@ -116,8 +119,8 @@ function SessionCard({
   return (
     <Link
       href={`/sessions/${s.id}`}
-      className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}${phase === 'terminee' ? ' ended' : ''}`}
-      style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
+      className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}${phase === 'terminee' ? ' ended' : ''}${phase === 'en-cours' ? ' live-now' : ''}`}
+      style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s), ['--i' as any]: Math.min(index, 18) }}
       title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
     >
       <span className="sc-top">
@@ -285,17 +288,45 @@ export function Planning({
   const holdingWithSessions = holding.filter((r) => shown.some((s) => s.room_id === r.id));
   const gridRooms = [...holdingWithSessions, ...rooms.filter((r) => !r.is_holding)];
 
-  function setParams(mut: (p: URLSearchParams) => void) {
+  // Navigation dans le planning : l'affichage actuel reste visible (atténué)
+  // pendant le chargement, puis la nouvelle période glisse dans le bon sens.
+  const [navPending, startNav] = useTransition();
+  const [dir, setDir] = useState<'next' | 'prev' | 'none'>('none');
+  const anchorIso = view === 'day' ? dayIso : view === 'week' ? mondayIso : monthAnchorIso;
+  function setParams(mut: (p: URLSearchParams) => void, direction: 'next' | 'prev' | 'none' = 'none') {
     const params = new URLSearchParams(searchParams);
     mut(params);
-    router.push(`/?${params.toString()}`);
+    setDir(direction);
+    startNav(() => router.push(`/?${params.toString()}`, { scroll: false }));
   }
+  const anchorIncludesToday =
+    view === 'day' ? dayIso === todayIso : view === 'week' ? isoDate(mondayOf(new Date(todayIso + 'T00:00:00Z'))) === mondayIso : todayIso.slice(0, 7) === monthAnchorIso.slice(0, 7);
+  const dirTo = (iso: string) => (iso > anchorIso ? 'next' : iso < anchorIso ? 'prev' : 'none');
+
+  // Périodes voisines préchargées : précédente / suivante quasi instantanées.
+  useEffect(() => {
+    const url = (key: string, value: string) => {
+      const p = new URLSearchParams(searchParams);
+      p.set('view', view);
+      p.set(key, value);
+      return `/?${p.toString()}`;
+    };
+    const urls =
+      view === 'week'
+        ? [url('week', isoDate(addDays(monday, 7))), url('week', isoDate(addDays(monday, -7)))]
+        : view === 'month'
+          ? [1, -1].map((n) => url('month', isoDate(new Date(Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth() + n, 1))).slice(0, 7)))
+          : [url('day', isoDate(addDays(dayAnchor, 1))), url('day', isoDate(addDays(dayAnchor, -1)))];
+    const t = window.setTimeout(() => urls.forEach((u) => router.prefetch(u)), 600);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, anchorIso]);
 
   function goToWeek(offsetDays: number) {
     setParams((p) => {
       p.set('view', 'week');
       p.set('week', isoDate(addDays(monday, offsetDays)));
-    });
+    }, offsetDays > 0 ? 'next' : 'prev');
   }
 
   function goToDay(offsetDays: number) {
@@ -306,7 +337,7 @@ export function Planning({
     setParams((p) => {
       p.set('view', 'day');
       p.set('day', isoDate(d));
-    });
+    }, offsetDays > 0 ? 'next' : 'prev');
   }
 
   function goToMonth(offsetMonths: number) {
@@ -314,7 +345,7 @@ export function Planning({
     setParams((p) => {
       p.set('view', 'month');
       p.set('month', isoDate(d).slice(0, 7));
-    });
+    }, offsetMonths > 0 ? 'next' : 'prev');
   }
 
   function step(dir: 1 | -1) {
@@ -324,6 +355,7 @@ export function Planning({
   }
 
   function switchView(next: 'day' | 'week' | 'month') {
+    if (next === view) return;
     setParams((p) => p.set('view', next));
   }
 
@@ -338,16 +370,57 @@ export function Planning({
         p.set('day', isoDate(wd === 6 ? addDays(d, 2) : wd === 0 ? addDays(d, 1) : d));
       } else if (view === 'week') p.set('week', isoDate(mondayOf(d)));
       else p.set('month', iso.slice(0, 7));
-    });
+    }, dirTo(view === 'week' ? isoDate(mondayOf(d)) : view === 'month' ? `${iso.slice(0, 7)}-01` : iso));
   }
 
   function goToday() {
+    const target = view === 'day' ? todayIso : view === 'week' ? isoDate(mondayOf(new Date(todayIso + 'T00:00:00Z'))) : `${todayIso.slice(0, 7)}-01`;
     setParams((p) => {
       p.delete('week');
       p.delete('month');
       p.delete('day');
-    });
+    }, dirTo(target));
   }
+
+  // Raccourcis clavier : ← → période, T aujourd'hui, J / S / M vue, N nouvelle session, / recherche.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('dialog[open]')) return;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const k = e.key.toLowerCase();
+      if (e.key === 'ArrowRight') step(1);
+      else if (e.key === 'ArrowLeft') step(-1);
+      else if (k === 't') goToday();
+      else if (k === 'j') switchView('day');
+      else if (k === 's') switchView('week');
+      else if (k === 'm') switchView('month');
+      else if (k === 'n' && canEdit) openForm({});
+      else if (e.key === '/') document.querySelector<HTMLInputElement>('.toolbar .search input')?.focus();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Téléphone : glisser à gauche / droite sur le planning change de période.
+  const touch = useRef<{ x: number; y: number; t: number } | null>(null);
+  const swipe = {
+    onTouchStart: (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      touch.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const s = touch.current;
+      touch.current = null;
+      if (!s || window.innerWidth > 760) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (Math.abs(dx) > 70 && Math.abs(dy) < 45 && Date.now() - s.t < 600) step(dx < 0 ? 1 : -1);
+    },
+  };
 
   function openForm(defaults: SessionFormDefaults = {}) {
     setFormError(null);
@@ -378,6 +451,9 @@ export function Planning({
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
+  // Ordre d'apparition des cartes (léger décalage, animation en cascade).
+  const animIndex = { current: 0 };
+
   // En cours (dès le premier jour) / terminée (heure de fin passée), heure de Paris.
   // Planning : statut du cours de CE jour (jour 1 terminé = « Terminée » même si la formation continue).
   const phaseOf = (s: SessionRow, dIso: string): SessionPhase => {
@@ -394,6 +470,7 @@ export function Planning({
     return (
       <SessionCard
         key={s.id}
+        index={animIndex.current++}
         mine={isMine(s, dIso)}
         phase={phaseOf(s, dIso)}
         s={s}
@@ -530,6 +607,10 @@ export function Planning({
         </div>
       )}
 
+      <PlanBrief sessions={shown} todayIso={todayIso} nowKey={nowKey} dayOverrides={dayOverrides} visible={anchorIncludesToday} />
+      <p className="swipe-hint">Glisse à gauche ou à droite pour changer de {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'}</p>
+      <div className={`plan-stage${navPending ? ' plan-pending' : ''}`} aria-busy={navPending} {...swipe}>
+      <div key={`${view}-${anchorIso}`} className={`plan-anim dir-${dir}`}>
       {(view === 'day' || view === 'week') && (
         <>
           <div className="grid-scroll">
@@ -608,6 +689,23 @@ export function Planning({
               const items = gridRooms
                 .flatMap((r) => cellSessions(d.iso, r.id).map((s) => ({ s, r })))
                 .sort((a, b) => Number(isMine(b.s, d.iso)) - Number(isMine(a.s, d.iso)));
+              // Semaine en cours : les jours passés sont repliés (on arrive sur aujourd'hui).
+              if (view === 'week' && d.iso < todayIso) {
+                return (
+                  <details key={d.iso} className="agenda-day past">
+                    <summary>
+                      <strong>{`${d.full} ${d.dateLabel}`}</strong>
+                      <span className="hint">{items.length ? `${items.length} session${items.length > 1 ? 's' : ''} · passé` : 'Aucune session'}</span>
+                    </summary>
+                    {items.map(({ s, r }) => (
+                      <div key={s.id} className="agenda-item">
+                        <span className="agenda-room">{r.is_holding ? 'À affecter' : r.name}</span>
+                        {card(s, d.iso)}
+                      </div>
+                    ))}
+                  </details>
+                );
+              }
               return (
                 <section key={d.iso} className={`agenda-day${isToday ? ' today' : ''}`}>
                   <header>
@@ -671,7 +769,7 @@ export function Planning({
                           key={s.id}
                           href={`/sessions/${s.id}`}
                           className={`month-chip${phaseOf(s, dIso) === 'terminee' ? ' ended' : ''}`}
-                          style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
+                          style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s), ['--i' as any]: Math.min(animIndex.current++, 24) }}
                           title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
@@ -700,6 +798,8 @@ export function Planning({
           ))}
         </>
       )}
+      </div>
+      </div>
 
       <p className="legend">
         {SESSION_STATUSES.map((s) => (
@@ -804,4 +904,45 @@ function DossierIcon({ badge, label }: { badge: DossierBadge; label?: string }) 
   if (k === 'a-remplir' || k === 'attente-formateur' || k === 'bureau') return <FileClock {...props} />;
   if (k === 'en-attente') return <Hourglass {...props} />;
   return <Receipt {...props} />;
+}
+
+/** Résumé du jour : formations en cours, prochaine qui commence, terminées. */
+function PlanBrief({
+  sessions,
+  todayIso,
+  nowKey,
+  dayOverrides,
+  visible,
+}: {
+  sessions: SessionRow[];
+  todayIso: string;
+  nowKey: string;
+  dayOverrides: Record<string, DayOverride[]>;
+  visible: boolean;
+}) {
+  if (!nowKey) return null;
+  const now = nowKey.slice(11, 16);
+  const today = visible
+    ? sessions
+        .filter((s) => s.status !== 'brouillon' && dayIsInRange(todayIso, s.start_at, s.end_at))
+        .map((s) => ({ s, ...effectiveDayTime(todayIso, s.start_at, s.end_at, dayOverrides[s.id] || []) }))
+    : [];
+  const live = today.filter((x) => x.start <= now && now < x.end);
+  const next = today.filter((x) => x.start > now).sort((a, b) => a.start.localeCompare(b.start))[0];
+  const done = today.filter((x) => x.end <= now).length;
+  const mins = next ? (Number(next.start.slice(0, 2)) * 60 + Number(next.start.slice(3, 5))) - (Number(now.slice(0, 2)) * 60 + Number(now.slice(3, 5))) : 0;
+  const inTxt = mins < 60 ? `dans ${mins} min` : `à ${next?.start.replace(':', 'h')}`;
+  return (
+    <div className="plan-brief" aria-live="polite">
+      {visible && (
+        <>
+          <span>Aujourd’hui : <strong>{today.length}</strong> formation{today.length > 1 ? 's' : ''}</span>
+          {live.length > 0 && <span className="live"><i aria-hidden /> {live.length} en cours</span>}
+          {next && <span className={mins <= 60 ? 'soon' : ''}>Prochaine : {next.s.title} {inTxt}</span>}
+          {done > 0 && <span>{done} terminée{done > 1 ? 's' : ''}</span>}
+        </>
+      )}
+      <span className="keys"><kbd>←</kbd> <kbd>→</kbd> période · <kbd>T</kbd> aujourd’hui · <kbd>J</kbd> <kbd>S</kbd> <kbd>M</kbd> vue</span>
+    </div>
+  );
 }

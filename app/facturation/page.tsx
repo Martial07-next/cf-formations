@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { BillingList, type BillingRow } from '@/components/billing/billing-list';
 import { INVOICE_SELECT, companiesSummary, type Invoice } from '@/lib/billing';
 import { formatSessionPeriod } from '@/lib/week';
@@ -75,7 +74,6 @@ export default async function FacturationPage({ searchParams }: { searchParams: 
 
   return (
     <main>
-      <Sidebar active="/facturation" profile={profile} />
       <section className="content">
         <header>
           <div>

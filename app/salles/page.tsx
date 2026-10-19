@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { BUILDINGS, compareRooms } from '@/lib/buildings';
 import { RoomWorkshops } from '@/components/room-workshops';
@@ -25,7 +24,6 @@ export default async function SallesPage() {
 
   return (
     <main>
-      <Sidebar active="/salles" profile={profile} />
       <section className="content">
         <header>
           <div>

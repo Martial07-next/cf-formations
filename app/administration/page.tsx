@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { AdminUsersTable } from '@/components/admin-users-table';
 import { CreateAccessPanel } from '@/components/create-access-panel';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -13,7 +12,6 @@ export default async function AdministrationPage() {
   if (profile?.role !== 'admin') {
     return (
       <main>
-        <Sidebar active="/administration" profile={profile} />
         <section className="content">
           <header>
             <div>
@@ -54,7 +52,6 @@ export default async function AdministrationPage() {
 
   return (
     <main>
-      <Sidebar active="/administration" profile={profile} />
       <section className="content">
         <header>
           <div>

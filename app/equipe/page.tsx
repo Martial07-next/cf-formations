@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { CalendarClock, CalendarOff, ArrowRight } from 'lucide-react';
 import { absenceText, type Absence } from '@/lib/absences';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { loadDayOverrides, hoursByMonth, sessionsWithReplacements } from '@/lib/history';
 import { trainerOn, trainersOf } from '@/lib/day-trainers';
 import { MonthlyTable } from '@/components/monthly-table';
@@ -33,7 +32,6 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
   if (!profile || (profile.role !== 'referent' && !isAdmin)) {
     return (
       <main>
-        <Sidebar active="/equipe" profile={profile} />
         <section className="content">
           <p className="empty">Cette page est réservée aux référents cadres et au bureau administratif.</p>
         </section>
@@ -129,7 +127,6 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
 
   return (
     <main>
-      <Sidebar active="/equipe" profile={profile} />
       <section className="content">
         <header>
           <div>

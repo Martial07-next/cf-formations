@@ -1070,3 +1070,63 @@ input,select,textarea{max-width:100%}
 .session-card.mine{box-shadow:0 0 0 2px var(--c)}
 @media (max-width:760px){.my-sessions{padding:14px 12px 8px}.my-sessions ul{grid-template-columns:1fr}}
 .my-session.ended{opacity:.7}
+
+/* ================================================================
+   Navigation fluide : menu permanent, barre de progression, transitions
+   ================================================================ */
+.app-shell{display:flex;min-height:100vh}
+.app-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.app-main > main{flex:1}
+@media (max-width:960px){.app-shell{flex-direction:column}}
+
+.nav-progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:1000;pointer-events:none;background:linear-gradient(90deg,#fff200,#08fa64);box-shadow:0 0 8px rgba(8,250,100,.6);opacity:0}
+.nav-progress.loading{opacity:1;width:82%;transition:width 8s cubic-bezier(.08,.7,.2,1),opacity .1s}
+.nav-progress.done{opacity:0;width:100%;transition:width .2s ease-out,opacity .3s .15s}
+
+/* Apparition douce de chaque page. */
+@keyframes page-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.app-main .content{animation:page-in .22s cubic-bezier(.2,.7,.2,1) both}
+
+/* ---------- Planning animé ---------- */
+@keyframes slide-from-right{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes slide-from-left{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes fade-up{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.plan-anim.dir-next{animation:slide-from-right .32s cubic-bezier(.2,.7,.2,1) both}
+.plan-anim.dir-prev{animation:slide-from-left .32s cubic-bezier(.2,.7,.2,1) both}
+.plan-anim.dir-none{animation:fade-up .28s cubic-bezier(.2,.7,.2,1) both}
+.plan-anim .session-card,.plan-anim .month-chip,.plan-anim .agenda-item{animation:fade-up .34s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i, 0) * 28ms + 60ms)}
+.plan-pending{position:relative}
+.plan-pending .plan-anim{opacity:.55;filter:saturate(.7);transition:opacity .15s,filter .15s}
+.plan-pending::after{content:"";position:absolute;inset:0 0 auto 0;height:3px;border-radius:3px;background:linear-gradient(90deg,transparent,var(--cf-mint,#3ee08a),transparent);background-size:40% 100%;background-repeat:no-repeat;animation:plan-scan 1s linear infinite}
+@keyframes plan-scan{from{background-position:-40% 0}to{background-position:140% 0}}
+.session-card{transition:box-shadow .18s var(--ease),transform .18s var(--ease)}
+.session-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(10,20,14,.12)}
+.session-card:active{transform:translateY(0) scale(.99)}
+.session-card.live-now{box-shadow:0 0 0 2px #1d4f91,0 6px 18px rgba(29,79,145,.18)}
+.toggle-group button{transition:background .2s var(--ease),color .2s var(--ease)}
+
+/* Résumé intelligent du jour */
+.plan-brief{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;color:var(--ink-2)}
+.plan-brief > span{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 11px}
+.plan-brief .live{border-color:#1d4f91;color:#1d4f91;font-weight:700}
+.plan-brief .live i{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:live-dot 1.8s infinite}
+.plan-brief .soon{border-color:#f0dc9a;background:#fffaea;color:#7a5600;font-weight:700}
+.plan-brief kbd{font-family:inherit;font-size:11px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:#fff}
+.plan-brief .keys{border:none;background:none;color:var(--muted);padding:0}
+@media (hover:none){.plan-brief .keys{display:none}}
+.swipe-hint{display:none}
+@media (max-width:760px){.swipe-hint{display:block;text-align:center;font-size:11.5px;color:var(--muted);margin:-4px 0 8px}}
+
+@media (prefers-reduced-motion:reduce){
+  .app-main .content,.plan-anim,.plan-anim .session-card,.plan-anim .month-chip,.plan-anim .agenda-item{animation:none !important}
+  .nav-progress.loading{transition:none}
+}
+
+.agenda-day.past{padding:8px 12px;background:var(--surface-2);box-shadow:none}
+.agenda-day.past summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;text-transform:capitalize;font-size:13.5px}
+.agenda-day.past summary::-webkit-details-marker{display:none}
+.agenda-day.past summary::after{content:"▾";color:var(--muted);transition:transform .2s}
+.agenda-day.past[open] summary::after{transform:rotate(180deg)}
+.agenda-day.past[open] summary{margin-bottom:8px}
+.agenda-day.past .hint{text-transform:none;margin-left:auto}
+@media (max-width:760px){.plan-brief .keys{display:none}.plan-brief{gap:6px}.plan-brief > span{padding:3px 9px;font-size:12.5px}}

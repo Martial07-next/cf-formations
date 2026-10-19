@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { AdminTabs } from '@/components/admin-tabs';
 import { DocumentsAdmin } from '@/components/documents/documents-admin';
 import { DOC_SELECT, type SignableDoc } from '@/lib/documents';
@@ -22,7 +21,6 @@ export default async function DocumentsPage() {
   }
   return (
     <main>
-      <Sidebar active="/administration" profile={profile} />
       <section className="content">
         <header>
           <div>

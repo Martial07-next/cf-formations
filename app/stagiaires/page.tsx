@@ -5,7 +5,6 @@ import { Pagination } from '@/components/pagination';
 import { nameFields } from '@/lib/trainee-name';
 import { searchTrainees } from '@/lib/trainee-search';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
@@ -105,7 +104,6 @@ export default async function StagiairesPage({
 
   return (
     <main>
-      <Sidebar active="/stagiaires" profile={profile} />
       <section className="content">
         <header>
           <div>

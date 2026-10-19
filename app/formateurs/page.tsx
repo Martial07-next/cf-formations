@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { CrudTable } from '@/components/crud-table';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { ROLE_LABELS, type Role } from '@/lib/roles';
@@ -54,7 +53,6 @@ export default async function FormateursPage() {
 
   return (
     <main>
-      <Sidebar active="/formateurs" profile={profile} />
       <section className="content">
         <header>
           <div>

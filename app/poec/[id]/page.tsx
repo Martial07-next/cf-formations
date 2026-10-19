@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft, CalendarRange, CheckCircle2 } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { loadProgramData } from '@/lib/poec-data';
 import { conventionStatus, frShort } from '@/lib/poec';
 import { compareRooms } from '@/lib/buildings';
@@ -64,7 +63,6 @@ export default async function PoecProgramPage({
 
   return (
     <main>
-      <Sidebar active="/poec" profile={profile} />
       <section className="content">
         <header>
           <div>

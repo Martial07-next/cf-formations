@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { loadStaff, internalStaff } from '@/lib/tracking';
 import { FollowupCell } from '@/components/tracking/session-tracking';
 import { formatSessionPeriod } from '@/lib/week';
@@ -54,7 +53,6 @@ export default async function SuiviPage({ searchParams }: { searchParams: Promis
 
   return (
     <main>
-      <Sidebar active="/suivi" profile={profile} />
       <section className="content">
         <header>
           <div>

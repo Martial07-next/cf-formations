@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { AdminTabs } from '@/components/admin-tabs';
 import { DigiformaTestButton } from '@/components/digiforma-test-button';
 import { DigiformaSyncPanel } from '@/components/digiforma-sync-panel';
@@ -11,7 +10,6 @@ export default async function IntegrationsPage() {
   if (profile?.role !== 'admin') {
     return (
       <main>
-        <Sidebar active="/administration" profile={profile} />
         <section className="content">
           <p className="empty">Accès réservé aux administrateurs.</p>
         </section>
@@ -27,7 +25,6 @@ export default async function IntegrationsPage() {
 
   return (
     <main>
-      <Sidebar active="/administration" profile={profile} />
       <section className="content">
         <header>
           <div>

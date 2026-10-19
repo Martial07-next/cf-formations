@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
@@ -406,7 +405,6 @@ export default async function Page({
 
   return (
     <main>
-      <Sidebar active="/" profile={profile} />
       <Planning
         view={currentView}
         canEdit={canManage(profile?.role)}

@@ -1,6 +1,5 @@
 import { parisNowKey } from '@/lib/paris-time';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { SessionsTable } from '@/components/sessions-table';
 import { Download } from 'lucide-react';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
@@ -26,7 +25,6 @@ export default async function SessionsPage() {
 
   return (
     <main>
-      <Sidebar active="/sessions" profile={profile} />
       <section className="content">
         <header>
           <div>

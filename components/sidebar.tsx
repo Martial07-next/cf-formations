@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   CalendarDays,
@@ -131,7 +135,29 @@ function Brand() {
   );
 }
 
-export function Sidebar({ active, profile }: { active: string; profile: Profile }) {
+/** Lien actif : le plus long qui correspond à l'adresse (ex. /sessions/… → Sessions). */
+function activeHref(pathname: string, profile: Profile) {
+  const hrefs = [...groupsFor(profile).flatMap((g) => g.links.map((l) => l.href)), '/profil'];
+  let best = '';
+  for (const h of hrefs) {
+    const match = h === '/' ? pathname === '/' : pathname === h || pathname.startsWith(h + '/');
+    if (match && h.length > best.length) best = h;
+  }
+  return best;
+}
+
+/**
+ * Menu de l'application, affiché une seule fois (mise en page commune) :
+ * il reste en place d'une page à l'autre, sans clignoter.
+ */
+export function Sidebar({ profile }: { profile: Profile }) {
+  const pathname = usePathname();
+  const active = activeHref(pathname, profile);
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  // Téléphone : le menu se referme après avoir choisi une page.
+  useEffect(() => {
+    if (menuRef.current) menuRef.current.open = false;
+  }, [pathname]);
   return (
     <>
       <aside className="sidebar">
@@ -141,7 +167,7 @@ export function Sidebar({ active, profile }: { active: string; profile: Profile 
 
       <div className="mobile-bar">
         <Brand />
-        <details>
+        <details ref={menuRef}>
           <summary aria-label="Ouvrir le menu">
             <Menu size={22} />
           </summary>

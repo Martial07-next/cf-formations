@@ -3,6 +3,7 @@ import './globals.css';
 import { getCurrentProfile } from '@/lib/supabase/server';
 import { logout } from '@/app/login/actions';
 import { MobileTables } from '@/components/mobile-tables';
+import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
   title: 'CF Réseaux · Formations',
@@ -31,10 +32,13 @@ export default async function RootLayout({ children }: Readonly<{children: React
       </html>
     );
   }
+  const shellProfile = profile
+    ? { full_name: profile.full_name, role: profile.role, trainer_id: profile.trainer_id, can_invoice: profile.can_invoice }
+    : null;
   return (
     <html lang="fr">
       <body>
-        {children}
+        <AppShell profile={shellProfile}>{children}</AppShell>
         <MobileTables />
       </body>
     </html>

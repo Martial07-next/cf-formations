@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { EmployeesManager } from '@/components/salaries/employees-manager';
 import { builtinActive, customDocs } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
@@ -26,7 +25,6 @@ export default async function SalariesPage() {
   const docSigs = extraDocs.length ? await loadDocSignatures(supabase as any, 'employee_id', ((employees as any[]) || []).map((e) => e.id)) : [];
   return (
     <main>
-      <Sidebar active="/salaries" profile={profile} />
       <section className="content">
         <header>
           <div>

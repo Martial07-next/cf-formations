@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { TraineeInfoForm } from '@/components/trainee-info-form';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursOf, one } from '@/lib/history';
@@ -90,7 +89,6 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
 
   return (
     <main>
-      <Sidebar active="/stagiaires" profile={profile} />
       <section className="content">
         <header>
           <div>

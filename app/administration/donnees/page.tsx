@@ -1,5 +1,4 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { AdminTabs } from '@/components/admin-tabs';
 import { PurgePanel } from '@/components/purge-panel';
 import { PURGE_CONFIRM_PHRASE as CONFIRM_PHRASE } from '@/lib/purge';
@@ -11,7 +10,6 @@ export default async function DonneesPage() {
   if (profile?.role !== 'admin') {
     return (
       <main>
-        <Sidebar active="/administration" profile={profile} />
         <section className="content">
           <p className="empty">Accès réservé aux administrateurs.</p>
         </section>
@@ -35,7 +33,6 @@ export default async function DonneesPage() {
 
   return (
     <main>
-      <Sidebar active="/administration" profile={profile} />
       <section className="content">
         <header>
           <div>

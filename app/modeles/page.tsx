@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { TemplateCatalog } from '@/components/template-catalog';
 
 export default async function ModelesPage() {
@@ -60,7 +59,6 @@ export default async function ModelesPage() {
 
   return (
     <main>
-      <Sidebar active="/modeles" profile={profile} />
       <section className="content">
         <header>
           <div>

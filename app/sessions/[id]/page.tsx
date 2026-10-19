@@ -13,7 +13,6 @@ import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { SessionLoans } from '@/components/vetements/loans-panel';
 import { LOAN_SELECT, loanStatus, type ClothingLoan } from '@/lib/vetements';
 import { canEditStartTimes } from '@/lib/roles';
-import { Sidebar } from '@/components/sidebar';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
@@ -386,7 +385,6 @@ export default async function SessionDetailPage({
 
   return (
     <main>
-      <Sidebar active="/sessions" profile={profile} />
       <section className="content">
         <header>
           <div>

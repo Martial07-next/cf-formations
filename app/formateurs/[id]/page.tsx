@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/sidebar';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursFor, one, hoursByMonth, sessionsWithReplacements } from '@/lib/history';
 import { trainerOn } from '@/lib/day-trainers';
@@ -89,7 +88,6 @@ export default async function TrainerDetailPage({
 
   return (
     <main>
-      <Sidebar active={profile?.trainer_id === id ? `/formateurs/${id}` : '/formateurs'} profile={profile} />
       <section className="content">
         <header>
           <div>
