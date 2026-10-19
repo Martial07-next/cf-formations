@@ -1208,3 +1208,5 @@ input,select,textarea{max-width:100%}
 .room-avail small{display:block;color:var(--muted);font-weight:500;margin-top:1px}
 .ra-day{font-weight:800;text-transform:capitalize;color:var(--ink)}
 @media (max-width:760px){.room-avail li{grid-template-columns:1fr}}
+.brief-when{font-weight:800;color:var(--ink);text-transform:capitalize}
+@media (pointer:coarse),(max-width:1024px){.shortcuts{display:none !important}}

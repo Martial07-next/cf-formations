@@ -407,6 +407,15 @@ export function Planning({
 
   // Raccourcis clavier (liste affichée dans « Raccourcis », chaque ligne est aussi cliquable).
   const [helpOpen, setHelpOpen] = useState(false);
+  // Raccourcis : seulement avec une souris / un clavier (rien sur téléphone ou tablette tactile).
+  const [finePointer, setFinePointer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: fine) and (min-width: 1025px)');
+    const update = () => setFinePointer(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const periodWord = view === 'day' ? 'Jour' : view === 'week' ? 'Semaine' : 'Mois';
   const shortcutItems: Shortcut[] = [
     { keys: ['←'], match: (e) => e.key === 'ArrowLeft', label: `${periodWord} précédent${view === 'week' ? 'e' : ''}`, run: () => step(-1) },
@@ -421,6 +430,7 @@ export function Planning({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
+      if (!finePointer) return;
       if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('dialog[open]')) return;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
       if (e.key === 'Escape' && helpOpen) return setHelpOpen(false);
@@ -652,8 +662,16 @@ export function Planning({
         todayIso={todayIso}
         nowKey={nowKey}
         dayOverrides={dayOverrides}
-        visible={anchorIncludesToday}
-        shortcuts={<ShortcutsHelp open={helpOpen} setOpen={setHelpOpen} items={shortcutItems} />}
+        focusDay={view === 'day' ? dayIso : anchorIncludesToday ? todayIso : null}
+        periodLabel={
+          view === 'week'
+            ? (() => {
+                const w = Math.round((monday.getTime() - mondayOf(new Date(todayIso + 'T00:00:00Z')).getTime()) / (7 * 86400000));
+                return w === 1 ? 'Semaine prochaine' : w === -1 ? 'Semaine dernière' : `Semaine ${weekRangeLabel(monday)}`;
+              })()
+            : monthLabel(monthAnchor)
+        }
+        shortcuts={finePointer ? <ShortcutsHelp open={helpOpen} setOpen={setHelpOpen} items={shortcutItems} /> : null}
       />
       <p className="swipe-hint">Glisse à gauche ou à droite pour changer de {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'}</p>
       <div ref={stageRef} className={`plan-stage${navPending ? ' plan-pending' : ''}${density === 'agenda' ? ' agenda-mode' : ''}`} aria-busy={navPending} {...swipe}>
@@ -958,13 +976,18 @@ function DossierIcon({ badge, label }: { badge: DossierBadge; label?: string }) 
   return <Receipt {...props} />;
 }
 
-/** Résumé du jour : formations en cours, prochaine qui commence, terminées. */
+/**
+ * Suivi constant au-dessus du planning : le jour affiché (vue Jour) ou
+ * aujourd'hui, avec « Aujourd'hui / Demain / Hier / jeudi 23 oct. » ;
+ * sinon le total de la semaine ou du mois affiché.
+ */
 function PlanBrief({
   sessions,
   todayIso,
   nowKey,
   dayOverrides,
-  visible,
+  focusDay,
+  periodLabel,
   shortcuts,
 }: {
   shortcuts?: React.ReactNode;
@@ -972,30 +995,62 @@ function PlanBrief({
   todayIso: string;
   nowKey: string;
   dayOverrides: Record<string, DayOverride[]>;
-  visible: boolean;
+  /** Jour suivi (null : résumé de la période). */
+  focusDay: string | null;
+  periodLabel: string;
 }) {
   if (!nowKey) return null;
   const now = nowKey.slice(11, 16);
-  const today = visible
-    ? sessions
-        .filter((s) => s.status !== 'brouillon' && dayIsInRange(todayIso, s.start_at, s.end_at))
-        .map((s) => ({ s, ...effectiveDayTime(todayIso, s.start_at, s.end_at, dayOverrides[s.id] || []) }))
-    : [];
-  const live = today.filter((x) => x.start <= now && now < x.end);
-  const next = today.filter((x) => x.start > now).sort((a, b) => a.start.localeCompare(b.start))[0];
-  const done = today.filter((x) => x.end <= now).length;
-  const mins = next ? (Number(next.start.slice(0, 2)) * 60 + Number(next.start.slice(3, 5))) - (Number(now.slice(0, 2)) * 60 + Number(now.slice(3, 5))) : 0;
-  const inTxt = mins < 60 ? `dans ${mins} min` : `à ${next?.start.replace(':', 'h')}`;
+  const active = sessions.filter((s) => s.status !== 'brouillon');
+  const plural = (n: number) => `${n} formation${n > 1 ? 's' : ''}`;
+
+  if (!focusDay) {
+    return (
+      <div className="plan-brief" aria-live="polite">
+        <span><span className="brief-when">{periodLabel}</span> : <strong>{plural(active.length)}</strong></span>
+        {shortcuts}
+      </div>
+    );
+  }
+
+  const diff = Math.round((new Date(focusDay + 'T00:00:00Z').getTime() - new Date(todayIso + 'T00:00:00Z').getTime()) / 86400000);
+  const when =
+    diff === 0
+      ? 'Aujourd’hui'
+      : diff === 1
+        ? 'Demain'
+        : diff === -1
+          ? 'Hier'
+          : new Date(focusDay + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const items = active
+    .filter((s) => dayIsInRange(focusDay, s.start_at, s.end_at))
+    .map((s) => ({ s, ...effectiveDayTime(focusDay, s.start_at, s.end_at, dayOverrides[s.id] || []) }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+
+  let extra: React.ReactNode = null;
+  if (diff === 0) {
+    const live = items.filter((x) => x.start <= now && now < x.end);
+    const next = items.find((x) => x.start > now);
+    const done = items.filter((x) => x.end <= now).length;
+    const mins = next ? toMin(next.start) - toMin(now) : 0;
+    extra = (
+      <>
+        {live.length > 0 && <span className="live"><i aria-hidden /> {live.length} en cours</span>}
+        {next && <span className={mins <= 60 ? 'soon' : ''}>Prochaine : {next.s.title} {mins < 60 ? `dans ${mins} min` : `à ${next.start.replace(':', 'h')}`}</span>}
+        {done > 0 && <span>{done} terminée{done > 1 ? 's' : ''}</span>}
+      </>
+    );
+  } else if (diff > 0 && items.length) {
+    extra = <span>Première à {items[0].start.replace(':', 'h')} : {items[0].s.title}</span>;
+  } else if (diff < 0 && items.length) {
+    extra = <span>Terminée{items.length > 1 ? 's' : ''}</span>;
+  }
+
   return (
     <div className="plan-brief" aria-live="polite">
-      {visible && (
-        <>
-          <span>Aujourd’hui : <strong>{today.length}</strong> formation{today.length > 1 ? 's' : ''}</span>
-          {live.length > 0 && <span className="live"><i aria-hidden /> {live.length} en cours</span>}
-          {next && <span className={mins <= 60 ? 'soon' : ''}>Prochaine : {next.s.title} {inTxt}</span>}
-          {done > 0 && <span>{done} terminée{done > 1 ? 's' : ''}</span>}
-        </>
-      )}
+      <span><span className="brief-when">{when}</span> : <strong>{plural(items.length)}</strong></span>
+      {extra}
       {shortcuts}
     </div>
   );
