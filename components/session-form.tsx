@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
-import { formatHours } from '@/lib/week';
+import { formatHours, weekdaysBetween } from '@/lib/week';
+import { freeWindows, hm, type Busy } from '@/lib/session-slots';
+import { roomAvailability } from '@/app/sessions/actions';
 import { TemplatePicker } from '@/components/template-picker';
 import { placeModules, frDay } from '@/lib/modules';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
@@ -82,6 +84,7 @@ export function groupByFolder<T extends { category: string | null; title: string
  * nombre de places, puis la salle, le formateur, les dates et les horaires.
  */
 export function SessionForm({
+  sessionId,
   rooms,
   trainers,
   templates,
@@ -97,6 +100,8 @@ export function SessionForm({
   templates: FormTemplate[];
   defaults?: SessionFormDefaults;
   disabled?: boolean;
+  /** Session modifiée (exclue du contrôle de disponibilité). */
+  sessionId?: string;
   showTemplate?: boolean;
   formId?: string;
   absences?: Absence[];
@@ -114,6 +119,8 @@ export function SessionForm({
   const [durM, setDurM] = useState('0');
   const [auto, setAuto] = useState(showTemplate);
   const [trainerId, setTrainerId] = useState(defaults.trainer_id || '');
+  const roomRef = useRef<HTMLSelectElement>(null);
+  const [roomId, setRoomId] = useState(defaults.room_id || '');
 
   const template = templates.find((t) => t.id === templateId) || null;
   const trainer = trainers.find((t) => t.id === trainerId);
@@ -126,6 +133,41 @@ export function SessionForm({
   const endTime = plan.length ? plan[0].end : manualEndTime;
   const trainerAbsence = trainerId && startDate ? absenceFor(absences, trainerId, startDate, endDate || startDate) : null;
   const lastDayEnd = plan.length > 1 && plan[plan.length - 1].end !== fullDayEnd ? plan[plan.length - 1].end : '';
+
+  // Disponibilité de la salle jour par jour : la session est acceptée si la
+  // salle est libre aux heures prévues CE jour-là (avant / après d'autres sessions).
+  useEffect(() => {
+    if (roomRef.current) setRoomId(roomRef.current.value);
+  }, [templateId]);
+  const wanted = useMemo(() => {
+    if (plan.length) return plan.map((d) => ({ day: d.day, start: d.start, end: d.end }));
+    if (!startDate) return [];
+    const list = weekdaysBetween(`${startDate}T00:00:00`, `${endDate || startDate}T00:00:00`);
+    return (list.length ? list : [startDate]).slice(0, 60).map((day) => ({ day, start: startTime, end: endTime }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(plan), startDate, endDate, startTime, endTime]);
+  const [busy, setBusy] = useState<Record<string, Busy[]>>({});
+  const holdingRoom = rooms.find((r) => r.id === roomId)?.is_holding;
+  useEffect(() => {
+    if (disabled || !roomId || holdingRoom || !wanted.length) return setBusy({});
+    let alive = true;
+    const t = setTimeout(async () => {
+      const res = await roomAvailability(roomId, wanted.map((w) => w.day), sessionId);
+      if (alive) setBusy(res);
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, JSON.stringify(wanted.map((w) => w.day)), sessionId, disabled, holdingRoom]);
+  const availability = wanted
+    .filter((w) => busy[w.day]?.length)
+    .map((w) => {
+      const b = busy[w.day];
+      const clash = b.find((x) => w.start < x.end && w.end > x.start);
+      return { ...w, busy: b, clash, free: freeWindows(b) };
+    });
 
   const days = countWeekdays(startDate, endDate);
   const dailyMinutes = trainingMinutes(startTime, endTime);
@@ -215,6 +257,8 @@ export function SessionForm({
             Salle
             <select
               key={templateId || 'libre'}
+              ref={roomRef}
+              onChange={(e) => setRoomId(e.target.value)}
               name="room_id"
               required
               defaultValue={defaults.room_id || suitedRooms[0]?.id || physicalRooms[0]?.id || ''}
@@ -340,6 +384,29 @@ export function SessionForm({
           </label>
         </div>
         {lastDayEnd && <input type="hidden" name="last_day_end" value={lastDayEnd} />}
+
+        {availability.length > 0 && (
+          <div className={`room-avail${availability.some((a) => a.clash) ? ' has-clash' : ''}`} role="status">
+            <strong>Salle déjà utilisée certains jours</strong>
+            <ul>
+              {availability.map((a) => (
+                <li key={a.day} className={a.clash ? 'clash' : 'ok'}>
+                  <span className="ra-day">
+                    {new Date(a.day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                  </span>
+                  <span>
+                    {a.clash ? '✕' : '✓'} Ta session {hm(a.start)}–{hm(a.end)}
+                    {a.clash ? ` chevauche « ${a.clash.title} » (${hm(a.clash.start)}–${hm(a.clash.end)})` : ' : la salle est libre à ces heures'}
+                    <small>Occupée : {a.busy.map((b) => `${hm(b.start)}–${hm(b.end)} ${b.title}`).join(' · ')} — libre : {a.free.length ? a.free.map((f) => `${hm(f.start)}–${hm(f.end)}`).join(', ') : 'aucun créneau'}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {availability.some((a) => a.clash) && (
+              <p className="hint" style={{ margin: '6px 0 0' }}>Change les heures (ou la salle), ou enregistre puis donne un horaire propre au jour concerné dans « Horaires par jour ».</p>
+            )}
+          </div>
+        )}
 
         <div className="plan-summary">
           {plan.length > 0 ? (

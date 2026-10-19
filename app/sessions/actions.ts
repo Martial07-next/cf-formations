@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
+import { parseSessionForm, findSessionConflict, roomBusyDays } from '@/lib/session-form';
+import type { Busy } from '@/lib/session-slots';
 import { isSessionStatus } from '@/lib/status';
 import { placeModules } from '@/lib/modules';
 
@@ -108,4 +109,13 @@ export async function deleteSession(sessionId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message };
   refresh();
   return { ok: true };
+}
+
+/** Disponibilité d'une salle sur les jours choisis (formulaire de session). */
+export async function roomAvailability(roomId: string, days: string[], excludeId?: string): Promise<Record<string, Busy[]>> {
+  if (!(await requireManager())) return {};
+  const valid = (days || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 60);
+  if (!/^[0-9a-f-]{36}$/.test(roomId) || !valid.length) return {};
+  const supabase = await createClient();
+  return roomBusyDays(supabase, roomId, valid, excludeId && /^[0-9a-f-]{36}$/.test(excludeId) ? excludeId : undefined);
 }

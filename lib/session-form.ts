@@ -4,7 +4,7 @@ import { absenceText, type Absence } from '@/lib/absences';
 import { missionText, outsideMission } from '@/lib/external';
 import { loadDayTrainers, trainerOn } from '@/lib/day-trainers';
 import { weekdaysBetween, type DayOverride } from '@/lib/week';
-import { sessionDaySlots, slotsOverlap, type DaySlot } from '@/lib/session-slots';
+import { freeWindows, sessionDaySlots, slotsOverlap, windowsText, type Busy, type DaySlot } from '@/lib/session-slots';
 
 export type SessionInput = {
   title: string;
@@ -102,9 +102,13 @@ export async function findSessionConflict(
 
   const { data: room } = await supabase.from('rooms').select('is_holding').eq('id', input.room_id).maybeSingle();
   if (!room?.is_holding) {
-    for (const s of candidates.filter((c) => c.room_id === input.room_id)) {
+    const inRoom = candidates.filter((c) => c.room_id === input.room_id);
+    for (const s of inRoom) {
       const o = slotsOverlap(mine, s.slots);
-      if (o) return `Conflit : la salle est déjà réservée pour « ${s.title} » ${when(o)}. Une session peut se placer avant ou après, pas pendant.`;
+      if (o) {
+        const busy = inRoom.flatMap((c) => c.slots.filter((x) => x.day === o.day));
+        return `Conflit : la salle est déjà réservée pour « ${s.title} » ${when(o)}. Ce jour-là, la salle est libre : ${windowsText(freeWindows(busy))}. Choisis ces heures (ou un horaire propre à ce jour).`;
+      }
     }
   }
   if (input.trainer_id) {
@@ -147,3 +151,28 @@ export async function findSessionConflict(
   return null;
 }
 
+
+/** Occupation d'une salle, jour par jour (pour aider à choisir les horaires). */
+export async function roomBusyDays(supabase: SupabaseClient, roomId: string, days: string[], excludeId?: string): Promise<Record<string, Busy[]>> {
+  if (!roomId || !days.length) return {};
+  const first = [...days].sort()[0];
+  const last = [...days].sort()[days.length - 1];
+  let q = supabase
+    .from('sessions')
+    .select('id, title, start_at, end_at')
+    .eq('room_id', roomId)
+    .lte('start_at', `${last}T23:59:59`)
+    .gte('end_at', `${first}T00:00:00`);
+  if (excludeId) q = q.neq('id', excludeId);
+  const { data } = await q;
+  const ids = ((data as any[]) || []).map((s) => s.id);
+  const { data: dayRows } = ids.length
+    ? await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', ids)
+    : { data: [] as any[] };
+  const out: Record<string, Busy[]> = {};
+  for (const s of (data as any[]) || []) {
+    const slots = sessionDaySlots(s.start_at, s.end_at, ((dayRows as any[]) || []).filter((r) => r.session_id === s.id));
+    for (const x of slots) if (days.includes(x.day)) (out[x.day] ||= []).push({ start: x.start, end: x.end, title: s.title });
+  }
+  return out;
+}

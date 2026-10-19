@@ -508,6 +508,7 @@ export function SessionDetailView({
         </div>
         <SessionForm
           formId="session-edit-form"
+          sessionId={session.id}
           showTemplate={false}
           disabled={!canEditSession}
           rooms={rooms}
@@ -575,6 +576,7 @@ export function SessionDetailView({
         </div>
         <SessionForm
           formId="session-edit-form"
+          sessionId={session.id}
           showTemplate={false}
           disabled={!canEditSession}
           rooms={rooms}
