@@ -716,8 +716,8 @@ export function Planning({
                 return (
                   <div key={d.iso} style={{ display: 'contents' }}>
                     <div className={`plan-day-label${isToday ? ' today' : ''}`}>
-                      {view === 'day' ? (isToday ? 'Aujourd’hui' : 'Jour') : d.full}
-                      <small>{view === 'day' ? d.iso.split('-').reverse().join('/') : d.dateLabel}</small>
+                      {view === 'day' ? weekdayName(d.iso) : d.full}
+                      <small>{view === 'day' ? `${d.iso.split('-').reverse().join('/')}${isToday ? ' · aujourd’hui' : ''}` : d.dateLabel}</small>
                       <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                     </div>
                     {gridRooms.map((r) => (
@@ -1093,4 +1093,10 @@ function ShortcutsHelp({ open, setOpen, items }: { open: boolean; setOpen: (v: b
       )}
     </span>
   );
+}
+
+/** « Mercredi » à partir de « 2026-10-21 ». */
+function weekdayName(iso: string) {
+  const n = new Date(iso + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', timeZone: 'UTC' });
+  return n.charAt(0).toUpperCase() + n.slice(1);
 }
