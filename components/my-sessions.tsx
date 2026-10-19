@@ -37,7 +37,11 @@ export function MySessions({ sessions, nowKey }: { sessions: MySession[]; nowKey
               <li key={s.id}>
                 <Link href={`/sessions/${s.id}`} className={`my-session${live ? ' live' : ''}${phase === 'terminee' ? ' ended' : ''}`}>
                   <span className="my-session-when">
-                    {phase && <span className={`status-pill ${phase}`}>{PHASE_LABEL[phase]}</span>}
+                    {phase ? (
+                      <span className={`status-pill ${phase}`}>{PHASE_LABEL[phase]}</span>
+                    ) : s.start_at.slice(0, 10) === nowKey.slice(0, 10) ? (
+                      <span className="my-live">Aujourd’hui à {s.start_at.slice(11, 16).replace(':', 'h')}</span>
+                    ) : null}
                     {oneDay ? day(s.start_at) : `${day(s.start_at)} → ${day(s.end_at)}`}
                   </span>
                   <strong className="my-session-title">{s.title}</strong>
