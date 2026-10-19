@@ -147,7 +147,11 @@ function SessionCard({
       )}
       {by && <span className="sc-by">Session créée par {by}</span>}
       {dossier && (
-        <span className={`sc-dossier ${dossier.kind}`}><DossierIcon badge={dossier} /> {dossierBadgeLabel(dossier)}</span>
+        <span className={`sc-dossier ${dossier.kind}`} title={dossierBadgeLabel(dossier)}>
+          <DossierIcon badge={dossier} />
+          {dossier.n ? <b className="sc-dossier-n">{dossier.n}</b> : null}
+          <span className="sc-dossier-label">{dossierBadgeLabel(dossier)}</span>
+        </span>
       )}
     </Link>
   );
@@ -287,6 +291,25 @@ export function Planning({
   const holding = rooms.filter((r) => r.is_holding);
   const holdingWithSessions = holding.filter((r) => shown.some((s) => s.room_id === r.id));
   const gridRooms = [...holdingWithSessions, ...rooms.filter((r) => !r.is_holding)];
+
+  // La grille tient toujours dans la largeur de l'écran (pas de défilement) :
+  // les cartes se compactent selon la place disponible par salle.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [density, setDensity] = useState<'comfort' | 'dense' | 'tight' | 'agenda'>('comfort');
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => {
+      const per = (el.clientWidth - 90) / Math.max(1, gridRooms.length);
+      // Trop de salles pour la largeur : agenda jour par jour (lisible, sans défilement).
+      setDensity(per >= 175 ? 'comfort' : per >= 128 ? 'dense' : per >= 96 ? 'tight' : 'agenda');
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gridRooms.length, view]);
 
   // Navigation dans le planning : l'affichage actuel reste visible (atténué)
   // pendant le chargement, puis la nouvelle période glisse dans le bon sens.
@@ -627,12 +650,12 @@ export function Planning({
         shortcuts={<ShortcutsHelp open={helpOpen} setOpen={setHelpOpen} items={shortcutItems} />}
       />
       <p className="swipe-hint">Glisse à gauche ou à droite pour changer de {view === 'day' ? 'jour' : view === 'week' ? 'semaine' : 'mois'}</p>
-      <div className={`plan-stage${navPending ? ' plan-pending' : ''}`} aria-busy={navPending} {...swipe}>
+      <div ref={stageRef} className={`plan-stage${navPending ? ' plan-pending' : ''}${density === 'agenda' ? ' agenda-mode' : ''}`} aria-busy={navPending} {...swipe}>
       <div key={`${view}-${anchorIso}`} className={`plan-anim dir-${dir}`}>
       {(view === 'day' || view === 'week') && (
         <>
-          <div className="grid-scroll">
-            <div className="plan-grid" style={{ gridTemplateColumns: `minmax(96px, 130px) repeat(${gridRooms.length || 1}, minmax(170px, 1fr))` }}>
+          <div className={`grid-scroll density-${density}`} ref={gridRef}>
+            <div className="plan-grid" style={{ gridTemplateColumns: `${density === 'tight' ? '70px' : density === 'dense' ? '86px' : 'minmax(96px, 120px)'} repeat(${gridRooms.length || 1}, minmax(0, 1fr))` }}>
               <div className="plan-head corner">{view === 'day' ? 'Jour' : 'Jours'}</div>
               {gridRooms.map((r) => (
                 <div className={`plan-head${r.is_holding ? ' holding' : ''}`} key={r.id}>

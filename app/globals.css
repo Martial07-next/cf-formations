@@ -1141,3 +1141,56 @@ input,select,textarea{max-width:100%}
 .shortcuts-foot{font-size:11.5px;color:var(--muted);padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
 @media (hover:none),(max-width:760px){.shortcuts{display:none}}
 .plan-brief > .shortcuts{border:none;background:none;padding:0}
+
+/* ---------- Grille du planning ajustée à l'écran (sans défilement interne) ---------- */
+.grid-scroll{overflow:clip;max-height:none}
+.plan-grid{min-width:0}
+.plan-head{top:0}
+.plan-grid > *{min-width:0}
+@media (max-width:960px) and (min-width:761px){.plan-head{position:sticky;top:calc(62px + env(safe-area-inset-top))}}
+.plan-head{overflow:hidden;text-overflow:ellipsis}
+.session-card{min-width:0;overflow:hidden}
+.session-card .sc-title{overflow-wrap:anywhere}
+/* Dense : salles plus étroites */
+.density-dense .plan-head{padding:8px 4px;font-size:11.5px}
+.density-dense .plan-head .workshop-btn{padding:2px 6px;min-height:22px}
+.density-dense .plan-day-label{padding:8px;font-size:12px}
+.density-dense .plan-cell{padding:4px}
+.density-dense .session-card{padding:6px 7px;font-size:11.5px}
+.density-dense .session-card .sc-title{font-size:11.5px}
+.density-dense .sc-by{display:none}
+.density-dense .sc-dossier,.density-dense .sc-absence,.density-dense .sc-replaced{font-size:10px;padding:1px 5px}
+/* Serré : beaucoup de salles ou petit écran */
+.density-tight .plan-head{padding:6px 2px;font-size:10.5px}
+.density-tight .plan-head small,.density-tight .plan-head .workshop-btn{display:none}
+.density-tight .plan-day-label{padding:6px 4px;font-size:11px}
+.density-tight .plan-day-label small{font-size:10px}
+.density-tight .plan-cell{padding:3px;min-height:60px}
+.density-tight .session-card{padding:5px 6px;gap:2px;font-size:10.5px;border-left-width:3px}
+.density-tight .session-card .sc-title{font-size:10.5px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.density-tight .session-card .sc-top .status-pill{font-size:9px;padding:1px 5px}
+.density-tight .session-card .sc-meta{font-size:10px}
+.density-tight .sc-by,.density-tight .sc-poec,.density-tight .sc-module{display:none}
+.density-tight .sc-dossier{font-size:9.5px;padding:1px 4px}
+.density-tight .cell-add{min-height:24px}
+
+/* Agenda jour par jour aussi sur grand écran quand les salles sont trop nombreuses. */
+.agenda-mode .grid-scroll{display:none}
+.agenda-mode .plan-agenda{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.agenda-day{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 10px 6px;box-shadow:var(--shadow-sm)}
+.agenda-day.today{border-color:var(--cf-mint-strong);box-shadow:0 0 0 2px var(--cf-mint-soft)}
+.agenda-day > header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 2px 8px;text-transform:capitalize}
+.agenda-today{margin-left:8px;font-size:11px;font-weight:800;text-transform:none;background:var(--cf-mint-soft);color:var(--ok-ink);border-radius:999px;padding:2px 8px}
+.agenda-item{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.agenda-room{font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-left:2px}
+.agenda-empty{margin:2px 2px 8px;color:var(--muted);font-size:13px}
+.agenda-add{width:100%;justify-content:center;margin-bottom:4px}
+
+/* Pastille dossier compacte */
+.sc-dossier-n{display:none}
+.density-tight .sc-dossier-label{display:none}
+.density-tight .sc-dossier-n{display:inline}
+.density-tight .sc-dossier{align-self:flex-start}
+.density-tight .session-card .sc-title{overflow:hidden}
+.density-tight .session-card .sc-top{flex-wrap:wrap;gap:2px}
+.density-tight .session-card .sc-count svg{display:none}
