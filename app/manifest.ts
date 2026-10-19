@@ -3,8 +3,8 @@ import type { MetadataRoute } from 'next';
 /** Application sur l'écran d'accueil (Android, iPhone, tablettes). */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'CF Réseaux · Formations',
-    short_name: 'CF Formations',
+    name: 'CF PLANNING',
+    short_name: 'CF PLANNING',
     description: 'Planning des formations CF Réseaux',
     start_url: '/',
     display: 'standalone',

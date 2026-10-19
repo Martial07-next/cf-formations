@@ -6,9 +6,10 @@ import { MobileTables } from '@/components/mobile-tables';
 import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
-  title: 'CF Réseaux · Formations',
+  title: 'CF PLANNING',
+  applicationName: 'CF PLANNING',
   description: 'Gestion des plannings de formation',
-  appleWebApp: { capable: true, title: 'CF Formations', statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: 'CF PLANNING', statusBarStyle: 'black-translucent' },
 };
 // Téléphones et tablettes : largeur de l'appareil, zones sûres (encoche), barre de couleur.
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#17241B' };
