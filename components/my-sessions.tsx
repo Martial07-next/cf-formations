@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PHASE_LABEL, sessionPhase } from '@/lib/session-phase';
+import { PHASE_LABEL, dayPhase, sessionPhase } from '@/lib/session-phase';
 import { CalendarCheck, Clock, MapPin, Users } from 'lucide-react';
 
 export type MySession = {
@@ -30,16 +30,21 @@ export function MySessions({ sessions, nowKey }: { sessions: MySession[]; nowKey
       ) : (
         <ul>
           {sessions.map((s) => {
-            const phase = sessionPhase(s.start_at, s.end_at, nowKey);
+            // Formation sur plusieurs jours : statut du cours d'aujourd'hui.
+            const today = nowKey.slice(0, 10);
+            const multi = s.start_at.slice(0, 10) !== s.end_at.slice(0, 10);
+            const inRange = s.start_at.slice(0, 10) <= today && today <= s.end_at.slice(0, 10);
+            const phase = multi && inRange ? dayPhase(today, s.start_at.slice(11, 16), s.end_at.slice(11, 16), nowKey) : sessionPhase(s.start_at, s.end_at, nowKey);
+            const dayDone = multi && phase === 'terminee' && today < s.end_at.slice(0, 10);
             const live = phase === 'en-cours';
             const oneDay = s.start_at.slice(0, 10) === s.end_at.slice(0, 10);
             return (
               <li key={s.id}>
-                <Link href={`/sessions/${s.id}`} className={`my-session${live ? ' live' : ''}${phase === 'terminee' ? ' ended' : ''}`}>
+                <Link href={`/sessions/${s.id}`} className={`my-session${live ? ' live' : ''}${phase === 'terminee' && !dayDone ? ' ended' : ''}`}>
                   <span className="my-session-when">
                     {phase ? (
-                      <span className={`status-pill ${phase}`}>{PHASE_LABEL[phase]}</span>
-                    ) : s.start_at.slice(0, 10) === nowKey.slice(0, 10) ? (
+                      <span className={`status-pill ${phase}`}>{dayDone ? 'Cours du jour terminé' : PHASE_LABEL[phase]}</span>
+                    ) : inRange ? (
                       <span className="my-live">Aujourd’hui à {s.start_at.slice(11, 16).replace(':', 'h')}</span>
                     ) : null}
                     {oneDay ? day(s.start_at) : `${day(s.start_at)} → ${day(s.end_at)}`}

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
-import { PHASE_LABEL, sessionPhase, type SessionPhase } from '@/lib/session-phase';
+import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -379,7 +379,12 @@ export function Planning({
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
   // En cours (dès le premier jour) / terminée (heure de fin passée), heure de Paris.
-  const phaseOf = (s: SessionRow): SessionPhase => (s.status === 'brouillon' || !nowKey ? null : sessionPhase(s.start_at, s.end_at, nowKey));
+  // Planning : statut du cours de CE jour (jour 1 terminé = « Terminée » même si la formation continue).
+  const phaseOf = (s: SessionRow, dIso: string): SessionPhase => {
+    if (s.status === 'brouillon' || !nowKey) return null;
+    const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []);
+    return dayPhase(dIso, start, end, nowKey);
+  };
 
   // Ses propres sessions (ou remplacement ce jour-là) : mises en avant.
   const isMine = (s: SessionRow, dIso: string) =>
@@ -390,7 +395,7 @@ export function Planning({
       <SessionCard
         key={s.id}
         mine={isMine(s, dIso)}
-        phase={phaseOf(s)}
+        phase={phaseOf(s, dIso)}
         s={s}
         dIso={dIso}
         overrides={dayOverrides[s.id] || []}
@@ -665,14 +670,14 @@ export function Planning({
                         <Link
                           key={s.id}
                           href={`/sessions/${s.id}`}
-                          className={`month-chip${phaseOf(s) === 'terminee' ? ' ended' : ''}`}
+                          className={`month-chip${phaseOf(s, dIso) === 'terminee' ? ' ended' : ''}`}
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
                           title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
-                            <span className={`dot ${phaseOf(s) || s.status}`} aria-label={phaseOf(s) ? PHASE_LABEL[phaseOf(s)!] : SESSION_STATUS_LABEL[s.status]} />
+                            <span className={`dot ${phaseOf(s, dIso) || s.status}`} aria-label={phaseOf(s, dIso) ? PHASE_LABEL[phaseOf(s, dIso)!] : SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
-                            {phaseOf(s) && <span className={`chip-phase ${phaseOf(s)}`}>{PHASE_LABEL[phaseOf(s)!]}</span>}
+                            {phaseOf(s, dIso) && <span className={`chip-phase ${phaseOf(s, dIso)}`}>{PHASE_LABEL[phaseOf(s, dIso)!]}</span>}
                             {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
                             {dossierBadge[s.id] && (
                               <span className={`chip-dossier ${dossierBadge[s.id].kind}`} title={dossierBadgeLabel(dossierBadge[s.id])}>
