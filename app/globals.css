@@ -919,3 +919,118 @@ span.cursus-pill{cursor:default}
 .digiforma-docs .hint{flex:1;min-width:200px}
 .digiforma-docs form{display:flex;gap:6px;flex:1;min-width:260px}
 .digiforma-docs form input{flex:1}
+
+/* ================================================================
+   Téléphones et tablettes (mobile-first)
+   ================================================================ */
+.plan-agenda{display:none}
+img,svg,video,canvas{max-width:100%}
+.content{overflow-wrap:break-word}
+input,select,textarea{max-width:100%}
+
+/* Tablettes (portrait / petits portables) */
+@media (max-width:1100px){
+  .content{padding:24px 22px 40px}
+  .content > header{align-items:flex-start}
+}
+
+/* Tablettes portrait et téléphones */
+@media (max-width:960px){
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  .mobile-bar{padding:calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left))}
+  .mobile-bar summary{width:46px;height:46px}
+  .mobile-bar details[open] summary{background:var(--cf-dark-2)}
+  .mobile-menu{position:fixed;left:0;right:0;top:calc(62px + env(safe-area-inset-top));width:auto;border-radius:0 0 16px 16px;max-height:calc(100dvh - 62px - env(safe-area-inset-top));padding:8px 12px calc(14px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+  .mobile-menu nav{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 8px}
+  .mobile-menu nav a,.mobile-menu .sidebar-footer a{min-height:48px;font-size:15px}
+  .content > header{margin-bottom:16px}
+  .header-actions{width:100%}
+  .panel{padding:18px 16px;border-radius:14px}
+  .panel-head{align-items:flex-start}
+  /* Tableaux : défilement horizontal au doigt plutôt que page coupée. */
+  table.data{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .table-wrap table.data{display:table}
+  table.data th,table.data td{padding:10px 12px}
+  /* Fenêtres : plein écran façon « feuille » sur téléphone / tablette. */
+  dialog.modal{width:min(820px,100vw);max-width:100vw;max-height:100dvh;margin:auto auto 0;border-radius:18px 18px 0 0}
+  dialog.modal .modal-body{max-height:calc(100dvh - 140px)}
+  dialog.modal .modal-foot{padding-bottom:calc(14px + env(safe-area-inset-bottom));flex-wrap:wrap}
+  .modal-foot button{flex:1 1 auto}
+}
+
+/* Téléphones */
+@media (max-width:760px){
+  body{font-size:15px}
+  /* 16 px minimum : évite le zoom automatique d'iOS dans les champs. */
+  input,select,textarea,.input,.form-row input,.form-row select,.form-row textarea,.field input,.field select,.field textarea,.search input,.toolbar select,.list-filters select{font-size:16px}
+  .content{padding:16px max(12px, env(safe-area-inset-left)) 32px}
+  h1{font-size:21px;line-height:1.25}
+  .content > header p{font-size:13.5px}
+  .header-actions > *{flex:1 1 auto}
+  button,.btn{min-height:42px}
+  button.small,.btn.small{min-height:36px;padding:7px 12px}
+  button.icon{width:42px;min-height:42px}
+  .form-row{grid-template-columns:1fr;gap:12px}
+  .form-actions > button,.form-actions > .btn{flex:1 1 auto}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .toolbar{padding:10px;gap:8px}
+  .toolbar .period{width:100%;justify-content:space-between}
+  .toolbar .period strong{min-width:0;flex:1;font-size:13.5px}
+  .toggle-group{width:100%}
+  .toggle-group button{flex:1;min-height:38px}
+  .toolbar select,.list-filters select{max-width:none;flex:1 1 140px}
+  .list-filters{padding:10px}
+  .list-filters > *{flex:1 1 140px}
+  .session-alerts li{flex-direction:column;align-items:flex-start}
+  .alert-reasons{margin-left:0}
+  .trainee-add-bar{align-items:stretch}
+  .trainee-result{flex-wrap:wrap}
+  .digiforma-docs .btn{width:100%}
+  /* Planning : agenda par jour au lieu de la grille par salle. */
+  .grid-scroll{display:none}
+  .plan-agenda{display:flex;flex-direction:column;gap:12px}
+  .agenda-day{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 10px 6px;box-shadow:var(--shadow-sm)}
+  .agenda-day.today{border-color:var(--cf-mint-strong);box-shadow:0 0 0 2px var(--cf-mint-soft)}
+  .agenda-day > header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 2px 8px;text-transform:capitalize}
+  .agenda-today{margin-left:8px;font-size:11px;font-weight:800;text-transform:none;background:var(--cf-mint-soft);color:var(--ok-ink);border-radius:999px;padding:2px 8px}
+  .agenda-item{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .agenda-room{font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-left:2px}
+  .agenda-empty{margin:2px 2px 8px;color:var(--muted);font-size:13px}
+  .agenda-add{width:100%;justify-content:center;margin-bottom:4px}
+  .session-card{padding:10px 12px}
+  .month-chip{padding:8px 10px}
+}
+
+/* Très petits téléphones (320–340 px) */
+@media (max-width:340px){
+  .content{padding:14px 10px 28px}
+  .stats{grid-template-columns:1fr}
+  .panel{padding:14px 12px}
+  .mobile-bar .brand-logo{width:120px}
+}
+
+/* Écrans tactiles : actions visibles sans survol. */
+@media (hover:none){
+  .cell-add{opacity:.7}
+}
+
+/* Téléphones : tableaux en cartes (sauf grilles : émargement, mensuel, droits). */
+@media (max-width:640px){
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table){display:block;border:none;background:none;box-shadow:none;border-radius:0;overflow:visible}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) thead{display:none}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) tbody{display:flex;flex-direction:column;gap:10px}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) tr{display:block;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 12px;box-shadow:var(--shadow-sm)}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td{display:grid;grid-template-columns:minmax(84px,34%) minmax(0,1fr);column-gap:10px;row-gap:0;align-items:start;padding:8px 0;border-bottom:1px dashed var(--line);white-space:normal;min-width:0}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td::before{content:attr(data-label);grid-column:1;grid-row:1 / span 8;padding-top:3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td[data-label]:not([data-label=""]) > *{grid-column:2}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td:not([data-label]),
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td[data-label=""]{display:block}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td:not([data-label])::before,
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td[data-label=""]::before{content:none}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) tr td:last-child{border-bottom:none}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) tbody tr:hover td{background:none}
+  table.data:not(.emarg-table):not(.monthly):not(.rights-table) td.row-actions{display:flex;justify-content:flex-end;flex-wrap:wrap}
+  .table-wrap:has(> table.data:not(.emarg-table):not(.monthly):not(.rights-table)){border:none;background:none;box-shadow:none;overflow:visible}
+  /* Grilles : défilement horizontal. */
+  table.data.emarg-table,table.data.monthly,table.data.rights-table{display:block;overflow-x:auto}
+}

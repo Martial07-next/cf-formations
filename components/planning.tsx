@@ -364,6 +364,24 @@ export function Planning({
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
+  function card(s: SessionRow, dIso: string) {
+    return (
+      <SessionCard
+        key={s.id}
+        s={s}
+        dIso={dIso}
+        overrides={dayOverrides[s.id] || []}
+        absence={absenceFor(absences, trainerOn(dayTrainers, s, dIso), dIso, dIso)}
+        info={dayInfo[s.id]?.[dIso]}
+        dossier={dossierBadge[s.id] || null}
+        reserved={reservedSeats[s.id] || 0}
+        poec={poecTitles[s.id] || null}
+        by={createdBy[s.id] || null}
+        replacement={dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
+      />
+    );
+  }
+
   // Toutes les sessions de la case (même filtrées) : sert à savoir si le créneau est déjà pris.
   function cellSessions(dIso: string, roomId: string) {
     return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
@@ -529,21 +547,7 @@ export function Planning({
                     </div>
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
-                        {cellSessions(d.iso, r.id).map((s) => (
-                          <SessionCard
-                            key={s.id}
-                            s={s}
-                            dIso={d.iso}
-                            overrides={dayOverrides[s.id] || []}
-                            absence={absenceFor(absences, trainerOn(dayTrainers, s, d.iso), d.iso, d.iso)}
-                            info={dayInfo[s.id]?.[d.iso]}
-                            dossier={dossierBadge[s.id] || null}
-                            reserved={reservedSeats[s.id] || 0}
-                            poec={poecTitles[s.id] || null}
-                            by={createdBy[s.id] || null}
-                            replacement={dayTrainers[s.id]?.[d.iso] ? trainers.find((t) => t.id === dayTrainers[s.id][d.iso].trainer_id) || null : null}
-                          />
-                        ))}
+                        {cellSessions(d.iso, r.id).map((s) => card(s, d.iso))}
                         {canEdit && !r.is_holding && !isTaken(d.iso, r.id) && (
                           <button
                             type="button"
@@ -566,6 +570,40 @@ export function Planning({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Téléphone : agenda jour par jour (la grille par salle est trop large). */}
+          <div className="plan-agenda">
+            {dayRows.map((d) => {
+              const isToday = d.iso === todayIso;
+              const items = gridRooms.flatMap((r) => cellSessions(d.iso, r.id).map((s) => ({ s, r })));
+              return (
+                <section key={d.iso} className={`agenda-day${isToday ? ' today' : ''}`}>
+                  <header>
+                    <span>
+                      <strong>{view === 'day' ? fullDateLabel(dayAnchor) : `${d.full} ${d.dateLabel}`}</strong>
+                      {isToday && <span className="agenda-today">Aujourd’hui</span>}
+                    </span>
+                    <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
+                  </header>
+                  {items.length ? (
+                    items.map(({ s, r }) => (
+                      <div key={s.id} className="agenda-item">
+                        <span className="agenda-room">{r.is_holding ? 'À affecter' : r.name}</span>
+                        {card(s, d.iso)}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="agenda-empty">Aucune session</p>
+                  )}
+                  {canEdit && (
+                    <button type="button" className="small ghost agenda-add" onClick={() => openForm({ start_date: d.iso, end_date: d.iso })}>
+                      <Plus size={14} aria-hidden /> Session ce jour
+                    </button>
+                  )}
+                </section>
+              );
+            })}
           </div>
         </>
       )}
