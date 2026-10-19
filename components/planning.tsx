@@ -492,7 +492,19 @@ export function Planning({
     view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
   const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
+  // Libellé court en vue Jour (« Vendredi 30 oct. ») : la barre tient sur une ligne.
+  const periodLabel =
+    view === 'day'
+      ? dayAnchor.toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'short',
+          ...(dayIso.slice(0, 4) !== todayIso.slice(0, 4) ? { year: 'numeric' } : {}),
+          timeZone: 'UTC',
+        })
+      : view === 'week'
+        ? weekRangeLabel(monday)
+        : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
   // Ordre d'apparition des cartes (léger décalage, animation en cascade).
@@ -607,7 +619,7 @@ export function Planning({
           <input placeholder="Rechercher une formation…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         <select aria-label="Filtrer par formateur" value={trainerFilter} onChange={(e) => setTrainerFilter(e.target.value)}>
-          <option value="">Tous les formateurs</option>
+          <option value="">Formateurs (tous)</option>
           {myTrainerId && <option value={myTrainerId}>Mes sessions</option>}
           <option value="none">Sans formateur</option>
           {trainers.map((t) => (
@@ -615,7 +627,7 @@ export function Planning({
           ))}
         </select>
         <select aria-label="Filtrer par statut" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Tous les statuts</option>
+          <option value="">Statuts (tous)</option>
           {SESSION_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}

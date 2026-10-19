@@ -2,7 +2,7 @@ import { login } from './actions';
 
 export const metadata = { title: 'Connexion · CF PLANNING' };
 
-/** Fond animé : bulles vertes et jaunes granuleuses qui dérivent et fusionnent. */
+/** Fond animé : une bulle jaune et une bulle verte, granuleuses, qui tournent et fusionnent. */
 function Backdrop() {
   return (
     <div className="auth-bg" aria-hidden>
@@ -24,10 +24,6 @@ function Backdrop() {
       <div className="auth-blobs">
         <span className="blob b1" />
         <span className="blob b2" />
-        <span className="blob b3" />
-        <span className="blob b4" />
-        <span className="blob b5" />
-        <span className="blob b6" />
       </div>
       <svg className="auth-grain" width="100%" height="100%" preserveAspectRatio="none">
         <rect width="100%" height="100%" filter="url(#auth-grain)" />
