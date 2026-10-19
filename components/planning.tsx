@@ -83,7 +83,10 @@ function SessionCard({
   reserved = 0,
   poec = null,
   by = null,
+  mine = false,
 }: {
+  /** Session du formateur connecté. */
+  mine?: boolean;
   s: SessionRow;
   dIso: string;
   overrides: DayOverride[];
@@ -108,7 +111,7 @@ function SessionCard({
   return (
     <Link
       href={`/sessions/${s.id}`}
-      className={`session-card ${s.status}${isStart ? '' : ' continuation'}`}
+      className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}`}
       style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s) }}
       title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
     >
@@ -167,6 +170,7 @@ export function Planning({
   poecTitles = {},
   createdBy = {},
   alerts = null,
+  mine = null,
   renderedAt = 0,
 }: {
   view: 'day' | 'week' | 'month';
@@ -198,6 +202,8 @@ export function Planning({
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
   alerts?: React.ReactNode;
+  /** Formateur : ses formations, affichées en premier. */
+  mine?: React.ReactNode;
   /** Heure du rendu serveur : une page restaurée (retour arrière) trop ancienne est rechargée. */
   renderedAt?: number;
 }) {
@@ -364,10 +370,15 @@ export function Planning({
   const periodLabel = view === 'day' ? fullDateLabel(dayAnchor) : view === 'week' ? weekRangeLabel(monday) : monthLabel(monthAnchor);
   const filtersActive = Boolean(query || trainerFilter || statusFilter);
 
+  // Ses propres sessions (ou remplacement ce jour-là) : mises en avant.
+  const isMine = (s: SessionRow, dIso: string) =>
+    Boolean(myTrainerId) && (dayTrainers[s.id]?.[dIso] ? dayTrainers[s.id][dIso].trainer_id === myTrainerId : s.trainer_id === myTrainerId);
+
   function card(s: SessionRow, dIso: string) {
     return (
       <SessionCard
         key={s.id}
+        mine={isMine(s, dIso)}
         s={s}
         dIso={dIso}
         overrides={dayOverrides[s.id] || []}
@@ -414,6 +425,7 @@ export function Planning({
         </div>
       </header>
 
+      {mine}
       {alerts}
 
       <div className="toolbar" role="toolbar" aria-label="Navigation du planning">
@@ -576,7 +588,9 @@ export function Planning({
           <div className="plan-agenda">
             {dayRows.map((d) => {
               const isToday = d.iso === todayIso;
-              const items = gridRooms.flatMap((r) => cellSessions(d.iso, r.id).map((s) => ({ s, r })));
+              const items = gridRooms
+                .flatMap((r) => cellSessions(d.iso, r.id).map((s) => ({ s, r })))
+                .sort((a, b) => Number(isMine(b.s, d.iso)) - Number(isMine(a.s, d.iso)));
               return (
                 <section key={d.iso} className={`agenda-day${isToday ? ' today' : ''}`}>
                   <header>

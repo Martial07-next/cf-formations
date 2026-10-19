@@ -11,6 +11,7 @@ import { billingStep, type DossierBadge } from '@/lib/billing';
 import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { ALERT_DAYS, sessionAlerts, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
+import { MySessions, type MySession } from '@/components/my-sessions';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
@@ -131,6 +132,37 @@ export default async function Page({
         return sessionAlerts((data as any[]) || [], today);
       })()
     : Promise.resolve([] as SessionAlert[]);
+  // Formateur : ses formations (en cours et à venir) en tête du planning.
+  const myTrainerId = profile?.trainer_id || null;
+  const mineQuery: Promise<MySession[] | null> = myTrainerId
+    ? (async () => {
+        const SEL = 'id, title, start_at, end_at, status, rooms(name, location, is_holding), session_trainees(status)';
+        const [{ data: own }, { data: repl }] = await Promise.all([
+          supabase.from('sessions').select(SEL).eq('trainer_id', myTrainerId).gte('end_at', today).neq('status', 'brouillon').order('start_at').limit(6),
+          supabase.from('session_day_trainers').select('session_id, day').eq('trainer_id', myTrainerId).gte('day', today),
+        ]);
+        const replDays: Record<string, string[]> = {};
+        for (const r of (repl as any[]) || []) (replDays[r.session_id] ||= []).push(r.day);
+        const extraIds = Object.keys(replDays).filter((id) => !((own as any[]) || []).some((s) => s.id === id));
+        const { data: extra } = extraIds.length ? await supabase.from('sessions').select(SEL).in('id', extraIds) : { data: [] as any[] };
+        return [...((own as any[]) || []), ...((extra as any[]) || [])]
+          .sort((a, b) => a.start_at.localeCompare(b.start_at))
+          .slice(0, 6)
+          .map((s) => {
+            const room = Array.isArray(s.rooms) ? s.rooms[0] : s.rooms;
+            return {
+              id: s.id,
+              title: s.title,
+              start_at: s.start_at,
+              end_at: s.end_at,
+              room: room?.is_holding ? null : room?.name || null,
+              location: room?.location || null,
+              trainees: ((s.session_trainees as any[]) || []).filter((t) => t.status === 'validee').length,
+              replacementDays: (replDays[s.id] || []).sort(),
+            };
+          });
+      })()
+    : Promise.resolve(null);
   const { data: sessions } = await period.sessions;
   const sessionIdsEarly = ((sessions as any[]) || []).map((s) => s.id as string);
   // Données des sessions affichées, en parallèle elles aussi.
@@ -407,6 +439,7 @@ export default async function Page({
         poecTitles={poecTitles}
         createdBy={createdBy}
         renderedAt={Date.now()}
+        mine={await mineQuery.then((list) => (list ? <MySessions sessions={list} nowKey={parisNowKey()} /> : null))}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
       />
     </main>

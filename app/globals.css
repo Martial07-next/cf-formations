@@ -1039,3 +1039,22 @@ input,select,textarea{max-width:100%}
   /* Grilles : défilement horizontal. */
   table.data.emarg-table,table.data.monthly,table.data.rights-table{display:block;overflow-x:auto}
 }
+
+/* ---------- Formateur : mes formations en premier ---------- */
+.my-sessions{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--cf-mint-strong, #22a35a);border-radius:var(--radius);padding:16px 18px 10px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.my-sessions h2{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:17px;font-weight:800}
+.my-sessions ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.my-session{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);text-decoration:none;height:100%;box-sizing:border-box}
+.my-session:hover{border-color:var(--cf-mint-strong, #22a35a)}
+.my-session.live{background:var(--cf-mint-soft);border-color:var(--cf-mint-strong, #22a35a)}
+.my-session-when{font-size:12px;font-weight:800;color:var(--muted);text-transform:capitalize;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.my-live{text-transform:none;background:var(--cf-dark);color:#fff;border-radius:999px;padding:1px 8px;font-size:11px}
+.my-session-title{font-size:15px;line-height:1.3}
+.my-session-room{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:800;color:var(--ok-ink)}
+.my-session-room small{font-weight:600;color:var(--muted);font-size:12.5px}
+.my-session-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--ink-2)}
+.my-session-meta span{display:inline-flex;align-items:center;gap:4px}
+.my-repl{color:#8a4b00;font-weight:700}
+.my-sessions-next{margin:10px 0 2px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.session-card.mine{box-shadow:0 0 0 2px var(--c)}
+@media (max-width:760px){.my-sessions{padding:14px 12px 8px}.my-sessions ul{grid-template-columns:1fr}}
