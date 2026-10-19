@@ -924,6 +924,11 @@ span.cursus-pill{cursor:default}
    Téléphones et tablettes (mobile-first)
    ================================================================ */
 .plan-agenda{display:none}
+/* Écran bloqué en largeur : un glissement à gauche / droite ne décale plus la page
+   (les tableaux et grilles gardent leur propre défilement horizontal). */
+html,body{overflow-x:hidden;max-width:100%;overscroll-behavior-x:none}
+@supports (overflow:clip){html,body{overflow-x:clip}}
+main{max-width:100vw}
 img,svg,video,canvas{max-width:100%}
 .content{overflow-wrap:break-word}
 input,select,textarea{max-width:100%}
