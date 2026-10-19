@@ -1,36 +1,7 @@
 import { login } from './actions';
+import { AuthBackdrop } from '@/components/auth-backdrop';
 
 export const metadata = { title: 'Connexion · CF PLANNING' };
-
-/** Fond animé : une bulle jaune et une bulle verte, granuleuses, qui tournent et fusionnent. */
-function Backdrop() {
-  return (
-    <div className="auth-bg" aria-hidden>
-      <svg className="auth-defs" width="0" height="0">
-        <defs>
-          {/* Fusion des bulles (effet « goo ») */}
-          <filter id="auth-goo">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="28" result="blur" />
-            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 26 -11" result="goo" />
-            <feBlend in="SourceGraphic" in2="goo" />
-          </filter>
-          {/* Grain */}
-          <filter id="auth-grain">
-            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
-            <feColorMatrix type="saturate" values="0" />
-          </filter>
-        </defs>
-      </svg>
-      <div className="auth-blobs">
-        <span className="blob b1" />
-        <span className="blob b2" />
-      </div>
-      <svg className="auth-grain" width="100%" height="100%" preserveAspectRatio="none">
-        <rect width="100%" height="100%" filter="url(#auth-grain)" />
-      </svg>
-    </div>
-  );
-}
 
 export default async function LoginPage({
   searchParams,
@@ -41,7 +12,7 @@ export default async function LoginPage({
 
   return (
     <main className="auth">
-      <Backdrop />
+      <AuthBackdrop />
       <div className="auth-card">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-cf-reseaux.svg" alt="CF Réseaux" className="auth-logo" width={200} height={32} />
