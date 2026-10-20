@@ -83,7 +83,7 @@ export function ProtectedBy({ active }: { active: boolean }) {
   if (!active) return null;
   return (
     <p className="auth-protected">
-      <ShieldCheck size={14} aria-hidden /> Protégé par <a href="https://www.cloudflare.com/fr-fr/products/turnstile/" target="_blank" rel="noreferrer">Cloudflare Turnstile</a>
+      <ShieldCheck size={14} aria-hidden /> Protégé par <a href="https://developers.cloudflare.com/turnstile/" target="_blank" rel="noreferrer">Cloudflare Turnstile</a>
     </p>
   );
 }
