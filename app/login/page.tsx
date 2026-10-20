@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { login } from './actions';
 import { forgotPassword, requestAccess } from '@/app/acces/actions';
 import { AuthBackdrop } from '@/components/auth-backdrop';
+import { ChoiceField, EmailField, ProtectedBy, TurnstileBox } from '@/components/auth-fields';
+import { turnstileEnabled } from '@/lib/turnstile';
 
 export const metadata = { title: 'Connexion · CF PLANNING' };
 
@@ -12,6 +14,9 @@ export default async function LoginPage({
 }) {
   const { error, message, vue } = await searchParams;
   const view = vue === 'oubli' || vue === 'demande' ? vue : 'connexion';
+  // Cloudflare Turnstile (anti-robot), actif quand les clés sont configurées.
+  const protectedOn = turnstileEnabled();
+  const siteKey = protectedOn ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY! : null;
 
   return (
     <main className="auth">
@@ -27,10 +32,7 @@ export default async function LoginPage({
 
         {view === 'connexion' && (
           <form className="auth-form">
-            <label>
-              Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
-            </label>
+            <EmailField autoFocus />
             <label>
               <span className="auth-label-row">
                 Mot de passe
@@ -38,6 +40,7 @@ export default async function LoginPage({
               </span>
               <input name="password" type="password" required minLength={6} autoComplete="current-password" placeholder="••••••••" />
             </label>
+            <TurnstileBox siteKey={siteKey} />
             <div className="auth-actions">
               <button formAction={login} className="primary">Se connecter</button>
             </div>
@@ -49,11 +52,9 @@ export default async function LoginPage({
 
         {view === 'oubli' && (
           <form className="auth-form" action={forgotPassword}>
-            <p className="auth-intro">Indique l’e-mail de ton compte : tu recevras un lien pour choisir un nouveau mot de passe. L’administrateur est aussi prévenu et peut t’en donner un.</p>
-            <label>
-              Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
-            </label>
+            <p className="auth-intro">Indique ton identifiant (ex. pnom) : tu recevras un lien pour choisir un nouveau mot de passe. L’administrateur est aussi prévenu et peut t’en donner un.</p>
+            <EmailField autoFocus />
+            <TurnstileBox siteKey={siteKey} />
             <div className="auth-actions">
               <button type="submit" className="primary">Recevoir le lien</button>
             </div>
@@ -68,31 +69,32 @@ export default async function LoginPage({
               Nom et prénom
               <input name="full_name" required maxLength={120} autoComplete="name" placeholder="DUPONT Jean" />
             </label>
-            <label>
-              Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
-            </label>
-            <label>
-              Je suis
-              <select name="role_wanted" defaultValue="formateur">
-                <option value="formateur">Formateur</option>
-                <option value="referent">Référent cadre</option>
-                <option value="bureau">Bureau administratif</option>
-                <option value="consultation">Autre (consultation)</option>
-              </select>
-            </label>
+            <EmailField label="Adresse e-mail" />
+            <ChoiceField
+              name="role_wanted"
+              label="Je suis"
+              defaultValue="formateur"
+              options={[
+                { value: 'formateur', label: 'Formateur' },
+                { value: 'referent', label: 'Référent cadre' },
+                { value: 'bureau', label: 'Bureau administratif' },
+                { value: 'consultation', label: 'Autre' },
+              ]}
+            />
             <label>
               Message <small>(facultatif)</small>
               <textarea name="message" rows={3} maxLength={600} placeholder="Ex. formateur habilitation électrique depuis septembre" />
             </label>
             {/* Piège à robots : champ invisible. */}
             <input name="website" tabIndex={-1} autoComplete="off" className="auth-trap" aria-hidden />
+            <TurnstileBox siteKey={siteKey} />
             <div className="auth-actions">
               <button type="submit" className="primary">Envoyer la demande</button>
             </div>
             <p className="auth-hint"><Link href="/login" className="auth-link">← Retour à la connexion</Link></p>
           </form>
         )}
+        <ProtectedBy active={protectedOn} />
       </div>
     </main>
   );

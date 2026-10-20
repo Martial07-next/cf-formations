@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 import { createAccount, generatePassword } from '@/lib/accounts';
 import { ROLE_OPTIONS, type Role } from '@/lib/roles';
+import { normalizeEmail, verifyTurnstile } from '@/lib/turnstile';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -17,6 +18,10 @@ const back = (vue: string, params: Record<string, string>) => {
   const q = new URLSearchParams({ ...(vue ? { vue } : {}), ...params });
   redirect(`/login?${q.toString()}`);
 };
+
+async function clientIp() {
+  return (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+}
 
 function service() {
   try {
@@ -36,8 +41,9 @@ async function flooded(admin: ReturnType<typeof createAdminClient>) {
 /** Page de connexion : demande d'accès envoyée à l'administrateur. */
 export async function requestAccess(formData: FormData) {
   if (clean(formData.get('website'), 100)) back('', { message: 'Demande envoyée.' }); // piège à robots
+  if (!(await verifyTurnstile(formData, await clientIp()))) back('demande', { error: 'Vérification anti-robot non validée : réessaie.' });
   const fullName = clean(formData.get('full_name'), 120);
-  const email = clean(formData.get('email'), 200).toLowerCase();
+  const email = normalizeEmail(clean(formData.get('email'), 200));
   const role = clean(formData.get('role_wanted'), 30);
   const message = clean(formData.get('message'), 600);
   if (!fullName) back('demande', { error: 'Indique ton nom et ton prénom.' });
@@ -61,7 +67,8 @@ export async function requestAccess(formData: FormData) {
  * mot de passe si l'e-mail n'arrive pas). Réponse identique dans tous les cas.
  */
 export async function forgotPassword(formData: FormData) {
-  const email = clean(formData.get('email'), 200).toLowerCase();
+  if (!(await verifyTurnstile(formData, await clientIp()))) back('oubli', { error: 'Vérification anti-robot non validée : réessaie.' });
+  const email = normalizeEmail(clean(formData.get('email'), 200));
   if (!EMAIL.test(email)) back('oubli', { error: 'Adresse e-mail invalide.' });
   const h = await headers();
   const origin = h.get('origin') || `${h.get('x-forwarded-proto') || 'https'}://${h.get('host')}`;
