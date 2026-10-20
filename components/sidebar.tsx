@@ -24,7 +24,7 @@ import {
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
 
-type Profile = { full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean } | null;
+type Profile = { full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; pending_requests?: number } | null;
 type NavLink = { href: string; label: string; icon: typeof CalendarDays };
 
 function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
@@ -96,6 +96,9 @@ function NavContent({ active, profile }: { active: string; profile: Profile }) {
                 <Link key={l.href} href={l.href} className={isActive ? 'active' : ''} aria-current={isActive ? 'page' : undefined}>
                   <Icon size={17} aria-hidden />
                   {l.label}
+                  {l.href === '/administration' && (profile?.pending_requests || 0) > 0 && (
+                    <span className="nav-badge" title="Demandes en attente">{profile!.pending_requests}</span>
+                  )}
                 </Link>
               );
             })}

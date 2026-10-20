@@ -34,7 +34,8 @@ export async function updateSession(request: NextRequest) {
     isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') ||
     path.startsWith('/france-travail/') ||
     path.startsWith('/autorisations/') ||
-    path.startsWith('/salarie/');
+    path.startsWith('/salarie/') ||
+    path.startsWith('/auth/');
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

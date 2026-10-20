@@ -4,6 +4,7 @@ import { CreateAccessPanel } from '@/components/create-access-panel';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminTabs, AdminResourceLinks } from '@/components/admin-tabs';
 import { RightsTable } from '@/components/rights-table';
+import { AccessRequests, type AccessRequest } from '@/components/access-requests';
 
 export default async function AdministrationPage() {
   const supabase = await createClient();
@@ -42,6 +43,13 @@ export default async function AdministrationPage() {
   } catch {
     serviceReady = false;
   }
+  // Demandes depuis la page de connexion (migration 38).
+  const [{ data: pendingRows, error: reqError }, { data: recentRows }] = await Promise.all([
+    supabase.from('access_requests').select('*').eq('status', 'en_attente').order('created_at', { ascending: false }),
+    supabase.from('access_requests').select('*').neq('status', 'en_attente').order('decided_at', { ascending: false }).limit(20),
+  ]);
+  const pendingReqs = (pendingRows as AccessRequest[]) || [];
+  const recentReqs = (recentRows as AccessRequest[]) || [];
   // Accès Facturation (migration 30) : null si la colonne n'existe pas encore.
   const { data: billingRows, error: billingError } = await supabase.from('profiles').select('id, can_invoice');
   const rows = (profiles || []).map((p: any) => ({
@@ -62,6 +70,8 @@ export default async function AdministrationPage() {
         </header>
 
         <AdminTabs active="/administration" />
+
+        {!reqError && <AccessRequests pending={pendingReqs} recent={recentReqs} />}
 
         <CreateAccessPanel serviceReady={serviceReady} />
 

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { getCurrentProfile } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { logout } from '@/app/login/actions';
 import { MobileTables } from '@/components/mobile-tables';
 import { AppShell } from '@/components/app-shell';
@@ -33,8 +33,15 @@ export default async function RootLayout({ children }: Readonly<{children: React
       </html>
     );
   }
+  // Administrateur : nombre de demandes en attente (accès, mots de passe), affiché dans le menu.
+  let pendingRequests = 0;
+  if (profile?.role === 'admin') {
+    const supabase = await createClient();
+    const { count } = await supabase.from('access_requests').select('id', { count: 'exact', head: true }).eq('status', 'en_attente');
+    pendingRequests = count ?? 0;
+  }
   const shellProfile = profile
-    ? { full_name: profile.full_name, role: profile.role, trainer_id: profile.trainer_id, can_invoice: profile.can_invoice }
+    ? { full_name: profile.full_name, role: profile.role, trainer_id: profile.trainer_id, can_invoice: profile.can_invoice, pending_requests: pendingRequests }
     : null;
   return (
     <html lang="fr">
