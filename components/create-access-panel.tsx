@@ -81,7 +81,7 @@ export function CreateAccessPanel({ serviceReady }: { serviceReady: boolean }) {
             </label>
             <label>
               Adresse e-mail (identifiant)
-              <input name="email" type="email" required placeholder="prenom.nom@cf-reseau.fr" autoComplete="off" />
+              <input name="email" type="email" required placeholder="prenom.nom@cf-reseaux.fr" autoComplete="off" />
             </label>
             <label>
               Mot de passe provisoire

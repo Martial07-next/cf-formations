@@ -29,7 +29,7 @@ export default async function LoginPage({
           <form className="auth-form">
             <label>
               Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseau.fr" />
+              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
             </label>
             <label>
               <span className="auth-label-row">
@@ -52,7 +52,7 @@ export default async function LoginPage({
             <p className="auth-intro">Indique l’e-mail de ton compte : tu recevras un lien pour choisir un nouveau mot de passe. L’administrateur est aussi prévenu et peut t’en donner un.</p>
             <label>
               Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseau.fr" />
+              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
             </label>
             <div className="auth-actions">
               <button type="submit" className="primary">Recevoir le lien</button>
@@ -70,7 +70,7 @@ export default async function LoginPage({
             </label>
             <label>
               Adresse e-mail
-              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseau.fr" />
+              <input name="email" type="email" required autoComplete="email" placeholder="prenom.nom@cf-reseaux.fr" />
             </label>
             <label>
               Je suis
