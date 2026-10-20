@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'CF PLANNING', statusBarStyle: 'black-translucent' },
 };
 // Téléphones et tablettes : largeur de l'appareil, zones sûres (encoche), barre de couleur.
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#17241B' };
+// minimumScale : impossible de dézoomer en dessous de la taille normale (le zoom avant reste possible).
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, minimumScale: 1, viewportFit: 'cover', themeColor: '#17241B' };
 export default async function RootLayout({ children }: Readonly<{children: React.ReactNode}>) {
   // Compte sans accès (créé hors de l'administration, ou suspendu) : aucune page de l'application.
   const profile = await getCurrentProfile().catch(() => null);

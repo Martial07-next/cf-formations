@@ -62,7 +62,9 @@ export function TurnstileBox({ siteKey }: { siteKey: string | null }) {
       const ts = (window as any).turnstile;
       if (stop || !ref.current) return;
       if (!ts) return void setTimeout(mount, 150);
-      id = ts.render(ref.current, { sitekey: siteKey, theme: 'dark', language: 'fr', size: 'flexible' });
+      // Petit écran : version compacte (la normale fait 300 px de large minimum).
+      const size = ref.current.clientWidth < 300 ? 'compact' : 'flexible';
+      id = ts.render(ref.current, { sitekey: siteKey, theme: 'dark', language: 'fr', size });
     };
     mount();
     return () => {
