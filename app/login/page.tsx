@@ -1,9 +1,13 @@
+import type { Viewport } from 'next';
 import Link from 'next/link';
 import { login } from './actions';
 import { forgotPassword, requestAccess } from '@/app/acces/actions';
 import { AuthBackdrop } from '@/components/auth-backdrop';
 import { ChoiceField, EmailField, ProtectedBy, TurnstileBox } from '@/components/auth-fields';
 import { turnstileEnabled } from '@/lib/turnstile';
+
+// Page de connexion : zoom désactivé (ni dézoom, ni pincement, ni double-tap).
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, minimumScale: 1, maximumScale: 1, userScalable: false, viewportFit: 'cover', themeColor: '#0b120d' };
 
 export const metadata = { title: 'Connexion · CF PLANNING' };
 

@@ -11,6 +11,22 @@ export function AuthBackdrop() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const grainRef = useRef<HTMLDivElement>(null);
 
+  // Pas de zoom sur la page de connexion (Safari ignore le réglage de la page).
+  useEffect(() => {
+    const block = (e: Event) => e.preventDefault();
+    const multi = (e: TouchEvent) => e.touches.length > 1 && e.preventDefault();
+    document.documentElement.classList.add('no-zoom');
+    document.addEventListener('gesturestart', block, { passive: false } as AddEventListenerOptions);
+    document.addEventListener('gesturechange', block, { passive: false } as AddEventListenerOptions);
+    document.addEventListener('touchmove', multi, { passive: false });
+    return () => {
+      document.documentElement.classList.remove('no-zoom');
+      document.removeEventListener('gesturestart', block);
+      document.removeEventListener('gesturechange', block);
+      document.removeEventListener('touchmove', multi);
+    };
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d', { alpha: false });
