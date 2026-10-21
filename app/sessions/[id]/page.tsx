@@ -143,9 +143,14 @@ export default async function SessionDetailPage({
     const { data: same } = await supabase.from('templates').select('id').eq('title', session.title).limit(1);
     templateId = same?.[0]?.id ?? null;
   }
-  const { data: formationLinks } = templateId
-    ? await supabase.from('template_links').select('id, label, url').eq('template_id', templateId).order('position')
-    : { data: [] as any[] };
+  const [{ data: formationLinks }, { data: qualifiedRows }] = templateId
+    ? await Promise.all([
+        supabase.from('template_links').select('id, label, url').eq('template_id', templateId).order('position'),
+        // Formateurs habilités pour cette formation (seuls proposés).
+        supabase.from('template_trainers').select('trainer_id').eq('template_id', templateId),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const qualifiedTrainerIds = ((qualifiedRows as any[]) || []).map((r) => r.trainer_id as string);
 
   const traineeModules: Record<string, string[]> = {};
   for (const l of moduleLinks || []) (traineeModules[l.trainee_id] ||= []).push(l.module_id);
@@ -455,6 +460,7 @@ export default async function SessionDetailPage({
         )}
 
         <SessionDetailView
+          qualifiedTrainerIds={qualifiedTrainerIds}
           dayTrainerIds={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, x.trainer_id]))}
           focusDay={focusDay}
           reservations={reservations}

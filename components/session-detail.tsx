@@ -68,6 +68,7 @@ type SessionDetail = {
 };
 
 export function SessionDetailView({
+  qualifiedTrainerIds = [],
   dayTrainerIds = {},
   focusDay = null,
   isAdmin,
@@ -95,6 +96,8 @@ export function SessionDetailView({
   isAdminUser = false,
   workPanels = null,
 }: {
+  /** Formateurs habilités pour la formation (seuls proposés ; vide = tous). */
+  qualifiedTrainerIds?: string[];
   /** Remplaçants par jour : jour → formateur. */
   dayTrainerIds?: Record<string, string>;
   /** Jour ouvert depuis le planning (changement de formateur ce jour-là). */
@@ -539,6 +542,7 @@ export function SessionDetailView({
           trainers={trainers}
           templates={[]}
           trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
+          qualifiedTrainerIds={qualifiedTrainerIds}
           defaults={{
             title: session.title,
             room_id: session.room_id,
@@ -608,6 +612,7 @@ export function SessionDetailView({
           trainers={trainers}
           templates={[]}
           trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
+          qualifiedTrainerIds={qualifiedTrainerIds}
           defaults={{
             title: session.title,
             room_id: session.room_id,

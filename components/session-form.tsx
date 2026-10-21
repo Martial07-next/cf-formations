@@ -86,6 +86,7 @@ export function groupByFolder<T extends { category: string | null; title: string
 export function SessionForm({
   sessionId,
   trainerDays,
+  qualifiedTrainerIds,
   rooms,
   trainers,
   templates,
@@ -108,6 +109,8 @@ export function SessionForm({
    * seul jour (autre que le premier) ; le premier jour = toute la formation.
    */
   trainerDays?: { principalId: string | null; dayTrainers: Record<string, string>; initialDay?: string | null };
+  /** Session modifiée : formateurs habilités pour sa formation. */
+  qualifiedTrainerIds?: string[];
   showTemplate?: boolean;
   formId?: string;
   absences?: Absence[];
@@ -227,15 +230,24 @@ export function SessionForm({
   const roomLabel = (r: FormRoom) => `${r.location ? `${r.location} · ` : ''}${r.name} (${r.capacity} places)`;
   // « À affecter » n'est proposée que pour une session importée qui s'y trouve encore.
   const holdingRooms = rooms.filter((r) => r.is_holding && r.id === defaults.room_id);
-  const qualified = template?.trainer_ids?.length ? template.trainer_ids : null;
+  // Formateurs habilités : ceux de la formation choisie, sinon ceux de la session modifiée.
+  const qualified = template?.trainer_ids?.length ? template.trainer_ids : qualifiedTrainerIds?.length ? qualifiedTrainerIds : null;
   // Seuls les formateurs actifs : et, si la formation en définit, habilités : sont proposés.
+  // Déjà en place (principal ou remplaçant d'un jour) : gardé dans la liste même s'il n'est plus habilité.
+  const inPlace = new Set([defaults.trainer_id, ...Object.values(trainerDays?.dayTrainers || {})].filter(Boolean) as string[]);
   const activeTrainers = trainers.filter(
-    (t) => (t.status !== 'inactif' && (!qualified || qualified.includes(t.id))) || t.id === defaults.trainer_id
+    (t) => (t.status !== 'inactif' && (!qualified || qualified.includes(t.id))) || inPlace.has(t.id)
   );
   const trainerOption = (t: FormTrainer) => {
     const off = startDate ? absenceFor(absences, t.id, startDate, endDate || startDate) : null;
     const outside = startDate ? outsideMission(t, startDate, endDate || startDate) : false;
-    const note = off ? ` (${absenceText(off)})` : outside ? ` (intervient ${missionText(t)})` : '';
+    const note = off
+      ? ` (${absenceText(off)})`
+      : outside
+        ? ` (intervient ${missionText(t)})`
+        : qualified && !qualified.includes(t.id)
+          ? ' (non habilité)'
+          : '';
     return (
       <option key={t.id} value={t.id} disabled={(Boolean(off) || outside) && t.id !== defaults.trainer_id}>
         {t.full_name}{note}

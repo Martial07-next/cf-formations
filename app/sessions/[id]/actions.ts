@@ -11,6 +11,24 @@ import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTrai
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+/**
+ * Formateur habilité pour la formation de la session (fiche du catalogue,
+ * retrouvée aussi par le titre) ; sans liste d'habilitation, tout formateur convient.
+ */
+async function notQualified(supabase: Awaited<ReturnType<typeof createClient>>, sessionId: string, trainerId: string): Promise<string | null> {
+  const { data: s } = await supabase.from('sessions').select('template_id, title').eq('id', sessionId).maybeSingle();
+  if (!s) return null;
+  let templateId = (s as any).template_id as string | null;
+  if (!templateId) {
+    const { data: same } = await supabase.from('templates').select('id').eq('title', (s as any).title).limit(1);
+    templateId = same?.[0]?.id ?? null;
+  }
+  if (!templateId) return null;
+  const { data: rows } = await supabase.from('template_trainers').select('trainer_id').eq('template_id', templateId);
+  const ids = (rows || []).map((r: any) => r.trainer_id);
+  return ids.length && !ids.includes(trainerId) ? "Ce formateur n'est pas habilité pour cette formation." : null;
+}
+
 export async function updateSessionDetails(sessionId: string, formData: FormData): Promise<ActionResult> {
   // Seuls le bureau administratif et l'administrateur modifient une session.
   if (!(await requireManager())) return FORBIDDEN;
@@ -18,6 +36,14 @@ export async function updateSessionDetails(sessionId: string, formData: FormData
   if (!parsed.ok) return parsed;
 
   const supabase = await createClient();
+  // Nouveau formateur : il doit être habilité pour la formation.
+  if (parsed.value.trainer_id) {
+    const { data: cur } = await supabase.from('sessions').select('trainer_id').eq('id', sessionId).maybeSingle();
+    if (cur?.trainer_id !== parsed.value.trainer_id) {
+      const nq = await notQualified(supabase, sessionId, parsed.value.trainer_id);
+      if (nq) return { ok: false, error: nq };
+    }
+  }
   const conflict = await findSessionConflict(supabase, parsed.value, sessionId);
   if (conflict) return { ok: false, error: conflict };
 
@@ -482,6 +508,8 @@ export async function setDayTrainers(sessionId: string, days: string[], trainerI
 
   const { data: tr } = await supabase.from('trainers').select('*').eq('id', trainerId).maybeSingle();
   if (!tr) return { ok: false, error: 'Formateur introuvable.' };
+  const nq = await notQualified(supabase, sessionId, trainerId);
+  if (nq) return { ok: false, error: `${tr.full_name} n'est pas habilité pour cette formation.` };
   const { outsideMission, missionText } = await import('@/lib/external');
   const outside = list.filter((d) => outsideMission(tr as any, d, d));
   if (outside.length) return { ok: false, error: `${tr.full_name} (externe) intervient ${missionText(tr as any)} : pas le ${outside.map(fr).join(', ')}.` };
