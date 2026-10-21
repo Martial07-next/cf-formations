@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import {
   updateSessionDetails,
   addTraineeToSession,
+  setDayTrainers,
   removeTraineeFromSession,
   setTraineeStatus,
   setSessionDayTime,
@@ -67,6 +68,8 @@ type SessionDetail = {
 };
 
 export function SessionDetailView({
+  dayTrainerIds = {},
+  focusDay = null,
   isAdmin,
   isNew = false,
   formationLinks = [],
@@ -92,6 +95,10 @@ export function SessionDetailView({
   isAdminUser = false,
   workPanels = null,
 }: {
+  /** Remplaçants par jour : jour → formateur. */
+  dayTrainerIds?: Record<string, string>;
+  /** Jour ouvert depuis le planning (changement de formateur ce jour-là). */
+  focusDay?: string | null;
   /** La session a commencé : liste des stagiaires figée. */
   started?: boolean;
   sessionEnded?: boolean;
@@ -397,13 +404,30 @@ export function SessionDetailView({
   function handleUpdate(formData: FormData) {
     setError(null);
     setNotice(null);
+    // Formateur changé pour un seul jour (pas le premier) : la session garde
+    // son formateur, ce jour-là seulement est confié au formateur choisi.
+    const day = String(formData.get('trainer_day') || '');
+    const dayTrainer = String(formData.get('day_trainer_id') || '');
+    const newPrincipal = String(formData.get('trainer_id') || '');
     startTransition(async () => {
       const result = await updateSessionDetails(session.id, formData);
-      if (result.ok) {
+      if (!result.ok) return setError(result.error);
+      if (day) {
+        const back = !dayTrainer || dayTrainer === newPrincipal;
+        const r = await setDayTrainers(session.id, [day], back ? null : dayTrainer);
+        if (!r.ok) return setError(r.error);
+        const label = new Date(day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+        setNotice(back ? `Session mise à jour · le ${label} revient au formateur principal.` : `Session mise à jour · formateur changé pour le ${label} uniquement.`);
+      } else {
+        // Premier jour / toute la formation : nouveau formateur sur tous les jours.
+        const replaced = Object.keys(dayTrainerIds);
+        if ((newPrincipal || null) !== (session.trainer_id || null) && replaced.length) {
+          const r = await setDayTrainers(session.id, replaced, null);
+          if (!r.ok) return setError(r.error);
+        }
         setNotice('Session mise à jour.');
-        router.refresh();
       }
-      else setError(result.error);
+      router.refresh();
     });
   }
 
@@ -514,6 +538,7 @@ export function SessionDetailView({
           rooms={rooms}
           trainers={trainers}
           templates={[]}
+          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
           defaults={{
             title: session.title,
             room_id: session.room_id,
@@ -582,6 +607,7 @@ export function SessionDetailView({
           rooms={rooms}
           trainers={trainers}
           templates={[]}
+          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
           defaults={{
             title: session.title,
             room_id: session.room_id,

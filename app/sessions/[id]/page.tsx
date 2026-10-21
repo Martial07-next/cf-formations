@@ -24,7 +24,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
-import { DayTrainersPanel } from '@/components/day-trainers-panel';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations } from '@/lib/reservations';
 import { sessionSlots, expectedOn, slotKey } from '@/lib/dossier';
@@ -456,6 +455,8 @@ export default async function SessionDetailPage({
         )}
 
         <SessionDetailView
+          dayTrainerIds={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, x.trainer_id]))}
+          focusDay={focusDay}
           reservations={reservations}
           isNew={isNew && editable}
           formationLinks={(formationLinks as any) || []}
@@ -480,17 +481,6 @@ export default async function SessionDetailPage({
           sessionEnded={ended}
           isAdminUser={profile?.role === 'admin'}
           workPanels={workPanels}
-        />
-
-        <DayTrainersPanel
-          sessionId={session.id}
-          days={weekdaysBetween(session.start_at, session.end_at)}
-          principalId={(session as any).trainer_id}
-          trainers={(trainers as any) || []}
-          dayTrainers={dayTrainers}
-          absences={(periodAbsences as any) || []}
-          canEdit={editable}
-          focusDay={focusDay}
         />
 
         {billing && (editable || profile?.can_invoice) && (

@@ -85,6 +85,7 @@ export function groupByFolder<T extends { category: string | null; title: string
  */
 export function SessionForm({
   sessionId,
+  trainerDays,
   rooms,
   trainers,
   templates,
@@ -102,6 +103,11 @@ export function SessionForm({
   disabled?: boolean;
   /** Session modifiée (exclue du contrôle de disponibilité). */
   sessionId?: string;
+  /**
+   * Formation sur plusieurs jours : le formateur peut être changé pour un
+   * seul jour (autre que le premier) ; le premier jour = toute la formation.
+   */
+  trainerDays?: { principalId: string | null; dayTrainers: Record<string, string>; initialDay?: string | null };
   showTemplate?: boolean;
   formId?: string;
   absences?: Absence[];
@@ -120,6 +126,13 @@ export function SessionForm({
   const [auto, setAuto] = useState(showTemplate);
   const [trainerId, setTrainerId] = useState(defaults.trainer_id || '');
   const roomRef = useRef<HTMLSelectElement>(null);
+  // Jour concerné par le changement de formateur ('' = toute la formation).
+  const [trainerDay, setTrainerDay] = useState(() => {
+    const d = trainerDays?.initialDay;
+    const first = defaults.start_date || '';
+    return d && d !== first ? d : '';
+  });
+  const [dayTrainerId, setDayTrainerId] = useState('');
   const [roomId, setRoomId] = useState(defaults.room_id || '');
 
   const template = templates.find((t) => t.id === templateId) || null;
@@ -168,6 +181,14 @@ export function SessionForm({
       const clash = b.find((x) => w.start < x.end && w.end > x.start);
       return { ...w, busy: b, clash, free: freeWindows(b) };
     });
+
+  // Jours ouvrés de la session (choix « Pour » du formateur).
+  const sessionDays = startDate ? (() => {
+    const l = weekdaysBetween(`${startDate}T00:00:00`, `${endDate || startDate}T00:00:00`);
+    return l.length ? l : [startDate];
+  })() : [];
+  const dayLabel = (d: string) =>
+    new Date(d + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
   const days = countWeekdays(startDate, endDate);
   const dailyMinutes = trainingMinutes(startTime, endTime);
@@ -285,8 +306,14 @@ export function SessionForm({
               Formateur
               {trainer && <span className="swatch" style={{ background: trainer.color || undefined }} aria-hidden />}
             </span>
-            <select name="trainer_id" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
-              <option value="">Non attribué</option>
+            {trainerDay && <input type="hidden" name="trainer_id" value={trainerId} />}
+            {trainerDay && <input type="hidden" name="trainer_day" value={trainerDay} />}
+            <select
+              name={trainerDay ? 'day_trainer_id' : 'trainer_id'}
+              value={trainerDay ? dayTrainerId || trainerDays?.dayTrainers[trainerDay] || trainerId : trainerId}
+              onChange={(e) => (trainerDay ? setDayTrainerId(e.target.value) : setTrainerId(e.target.value))}
+            >
+              <option value="">{trainerDay ? 'Formateur principal' : 'Non attribué'}</option>
               {activeTrainers.filter((t) => !t.is_external).map(trainerOption)}
               {activeTrainers.some((t) => t.is_external) && (
                 <optgroup label="Formateurs externes">
@@ -294,6 +321,27 @@ export function SessionForm({
                 </optgroup>
               )}
             </select>
+            {sessionDays.length > 1 && trainerDays && !disabled && (
+              <span className="trainer-day-pick">
+                <span className="hint">Pour</span>
+                <select
+                  aria-label="Jour concerné par le formateur"
+                  value={trainerDay}
+                  onChange={(e) => {
+                    setTrainerDay(e.target.value);
+                    setDayTrainerId('');
+                  }}
+                >
+                  <option value="">toute la formation (1er jour : {dayLabel(sessionDays[0])})</option>
+                  {sessionDays.slice(1).map((d) => (
+                    <option key={d} value={d}>
+                      le {dayLabel(d)} uniquement{trainerDays.dayTrainers[d] ? ' · remplaçant' : ''}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            )}
+            {trainerDay && <span className="hint">Seul le {dayLabel(trainerDay)} change ; les autres jours gardent leur formateur.</span>}
             {qualified && (
               <span className="hint">{activeTrainers.length} formateur{activeTrainers.length > 1 ? 's' : ''} habilité{activeTrainers.length > 1 ? 's' : ''} pour cette formation</span>
             )}
