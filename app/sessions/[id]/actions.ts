@@ -597,3 +597,31 @@ export async function setDigiformaDocsUrl(sessionId: string, raw: string): Promi
   revalidatePath(`/sessions/${sessionId}`);
   return { ok: true };
 }
+
+/**
+ * Formateur de toute la formation (changement fait sur le premier jour) :
+ * remplace le formateur principal et retire les remplacements par jour.
+ */
+export async function setSessionTrainer(sessionId: string, trainerId: string | null): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: s } = await supabase.from('sessions').select('id, room_id, trainer_id, template_id, start_at, end_at').eq('id', sessionId).maybeSingle();
+  if (!s) return { ok: false, error: 'Session introuvable.' };
+  const next = trainerId || null;
+  if (next && s.template_id) {
+    const { data: qualified } = await supabase.from('template_trainers').select('trainer_id').eq('template_id', s.template_id);
+    const ids = (qualified || []).map((q: any) => q.trainer_id);
+    if (ids.length && !ids.includes(next)) return { ok: false, error: "Ce formateur n'est pas habilité pour cette formation." };
+  }
+  if (next) {
+    const conflict = await findSessionConflict(supabase, { room_id: s.room_id, trainer_id: next, start_at: s.start_at, end_at: s.end_at }, sessionId);
+    if (conflict) return { ok: false, error: conflict };
+  }
+  const { error } = await supabase.from('sessions').update({ trainer_id: next }).eq('id', sessionId);
+  if (error) return { ok: false, error: error.message };
+  // Remplacements retirés : le nouveau formateur assure tous les jours.
+  await supabase.from('session_day_trainers').delete().eq('session_id', sessionId);
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}

@@ -53,10 +53,13 @@ export default async function SessionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ nouvelle?: string }>;
+  searchParams: Promise<{ nouvelle?: string; jour?: string }>;
 }) {
   const { id } = await params;
-  const isNew = (await searchParams).nouvelle === '1';
+  const sp = await searchParams;
+  const isNew = sp.nouvelle === '1';
+  // Ouvert depuis un jour du planning : ce jour est mis en évidence (formateur par jour).
+  const focusDay = sp.jour && /^\d{4}-\d{2}-\d{2}$/.test(sp.jour) ? sp.jour : null;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   const editable = canManage(profile?.role);
@@ -487,6 +490,7 @@ export default async function SessionDetailPage({
           dayTrainers={dayTrainers}
           absences={(periodAbsences as any) || []}
           canEdit={editable}
+          focusDay={focusDay}
         />
 
         {billing && (editable || profile?.can_invoice) && (

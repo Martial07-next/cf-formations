@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { ArrowLeftRight, RotateCcw, UserRound } from 'lucide-react';
-import { setDayTrainers } from '@/app/sessions/[id]/actions';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { ArrowLeftRight, RotateCcw } from 'lucide-react';
+import { setDayTrainers, setSessionTrainer } from '@/app/sessions/[id]/actions';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
 import { fullDateLabel } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -10,8 +10,9 @@ import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 type T = { id: string; full_name: string; color: string | null; status?: string | null };
 
 /**
- * Formateur jour par jour : permet de confier certains jours à un remplaçant
- * (ex. jours 3 et 4) sans changer le formateur principal de la session.
+ * Formateur jour par jour : on change le formateur directement sur la ligne
+ * du jour. Un autre jour que le premier : seulement ce jour-là (remplaçant).
+ * Le premier jour : le formateur de toute la formation.
  */
 export function DayTrainersPanel({
   sessionId,
@@ -21,6 +22,7 @@ export function DayTrainersPanel({
   dayTrainers,
   absences,
   canEdit,
+  focusDay = null,
 }: {
   sessionId: string;
   days: string[];
@@ -29,50 +31,63 @@ export function DayTrainersPanel({
   dayTrainers: Record<string, { trainer_id: string; note?: string | null }>;
   absences: Absence[];
   canEdit: boolean;
+  /** Jour ouvert depuis le planning (mis en évidence). */
+  focusDay?: string | null;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
-  const [replacement, setReplacement] = useState('');
-  const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busyDay, setBusyDay] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Arrivée depuis un jour du planning : on descend jusqu'au tableau.
+  useEffect(() => {
+    if (focusDay && days.includes(focusDay)) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusDay]);
 
   if (days.length < 2 && !Object.keys(dayTrainers).length) return null;
   const byId = new Map(trainers.map((t) => [t.id, t]));
   const principal = principalId ? byId.get(principalId) : null;
+  const first = days[0];
   const replacedCount = Object.keys(dayTrainers).length;
+  const active = trainers.filter((t) => t.status !== 'inactif');
 
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>, done: string) {
+  function run(day: string, fn: () => Promise<{ ok: boolean; error?: string }>, done: string) {
     setError(null);
     setNotice(null);
+    setBusyDay(day);
     startTransition(async () => {
       const res = await fn();
+      setBusyDay(null);
       if (!res.ok) setError(res.error || 'Erreur.');
-      else {
-        setNotice(done);
-        setSelected([]);
-        setNote('');
-      }
+      else setNotice(done);
     });
   }
 
-  const tag = (t: T | null | undefined, label?: string) =>
-    t ? (
-      <span className="trainer-tag">
-        <span className="swatch" style={{ background: t.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
-        {t.full_name}
-        {label && <span className="hint"> {label}</span>}
-      </span>
-    ) : (
-      <span className="hint">Non attribué</span>
+  function change(day: string, trainerId: string) {
+    const label = fullDateLabel(new Date(day + 'T00:00:00Z'));
+    const t = byId.get(trainerId);
+    if (day === first) {
+      if ((trainerId || null) === (principalId || null)) return;
+      const msg = `Premier jour : changer le formateur change toute la formation (tous les jours${replacedCount ? ', remplacements retirés' : ''}).\n\nNouveau formateur : ${t?.full_name || 'non attribué'}. Continuer ?`;
+      if (!confirm(msg)) return;
+      run(day, () => setSessionTrainer(sessionId, trainerId || null), `Toute la formation est maintenant assurée par ${t?.full_name || 'personne (à définir)'}.`);
+      return;
+    }
+    const back = !trainerId || trainerId === principalId;
+    run(
+      day,
+      () => setDayTrainers(sessionId, [day], back ? null : trainerId),
+      back ? `${label} : rendu à ${principal?.full_name || 'au formateur principal'}.` : `${label} : ${t?.full_name} remplace ${principal?.full_name || 'le formateur'} ce jour-là uniquement.`
     );
+  }
 
   return (
-    <div className="panel">
+    <div className="panel" id="formateur-jour" ref={panelRef}>
       <h2><ArrowLeftRight size={18} aria-hidden /> Formateur par jour</h2>
       <p className="panel-intro">
-        Le formateur principal ne peut pas assurer certains jours ? Confie-les à un remplaçant : il apparaît ces jours-là sur
-        le planning, signe l’émargement et ses heures sont comptées dans son suivi.
+        Change le formateur directement sur le jour voulu : <strong>seulement ce jour-là</strong> change. Sur le <strong>premier jour</strong>, c’est le formateur de <strong>toute la formation</strong> qui change.
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
@@ -81,7 +96,6 @@ export function DayTrainersPanel({
         <table className="data">
           <thead>
             <tr>
-              {canEdit && <th style={{ width: 36 }}><span className="sr-only">Choisir</span></th>}
               <th>Jour</th>
               <th>Formateur</th>
               <th>Motif</th>
@@ -91,34 +105,55 @@ export function DayTrainersPanel({
           <tbody>
             {days.map((d) => {
               const r = dayTrainers[d];
-              const who = r ? byId.get(r.trainer_id) : principal;
+              const whoId = r ? r.trainer_id : principalId || '';
+              const who = whoId ? byId.get(whoId) : null;
               const off = !r && principalId ? absenceFor(absences, principalId, d, d) : null;
+              const isFirst = d === first;
               return (
-                <tr key={d} className={r ? 'replaced-day' : ''}>
-                  {canEdit && (
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Choisir le ${fullDateLabel(new Date(d + 'T00:00:00Z'))}`}
-                        checked={selected.includes(d)}
-                        onChange={(e) => setSelected((l) => (e.target.checked ? [...l, d] : l.filter((x) => x !== d)))}
-                      />
-                    </td>
-                  )}
-                  <td>{fullDateLabel(new Date(d + 'T00:00:00Z'))}</td>
+                <tr key={d} className={`${r ? 'replaced-day' : ''}${focusDay === d ? ' focus-day' : ''}`}>
                   <td>
-                    {tag(who, r ? '(remplaçant)' : '')}
+                    {fullDateLabel(new Date(d + 'T00:00:00Z'))}
+                    {isFirst && <span className="day-first">1er jour · toute la formation</span>}
+                  </td>
+                  <td>
+                    {canEdit ? (
+                      <span className="day-trainer-pick" style={{ ['--c' as any]: who?.color || DEFAULT_TRAINER_COLOR }}>
+                        <span className="swatch" aria-hidden />
+                        <select
+                          value={whoId}
+                          disabled={isPending}
+                          aria-label={`Formateur du ${fullDateLabel(new Date(d + 'T00:00:00Z'))}`}
+                          onChange={(e) => change(d, e.target.value)}
+                        >
+                          {isFirst && <option value="">Non attribué</option>}
+                          {active.map((t) => {
+                            const busy = absenceFor(absences, t.id, d, d);
+                            return (
+                              <option key={t.id} value={t.id} disabled={Boolean(busy) && t.id !== whoId}>
+                                {t.full_name}
+                                {!isFirst && t.id === principalId ? ' (principal)' : ''}
+                                {busy ? ` (${absenceText(busy)})` : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {busyDay === d && <span className="hint">…</span>}
+                      </span>
+                    ) : (
+                      <span className="trainer-tag">
+                        <span className="swatch" style={{ background: who?.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
+                        {who?.full_name || 'Non attribué'}
+                        {r && <span className="hint"> (remplaçant)</span>}
+                      </span>
+                    )}
+                    {r && canEdit && <span className="hint" style={{ display: 'block', marginTop: 2 }}>Remplaçant ce jour-là</span>}
                     {off && <span className="sc-absence" style={{ marginTop: 4, display: 'inline-flex' }}>{principal?.full_name} {absenceText(off)}</span>}
                   </td>
                   <td>{r?.note || <span className="hint">-</span>}</td>
                   {canEdit && (
                     <td style={{ textAlign: 'right' }}>
                       {r && (
-                        <button
-                          className="small"
-                          disabled={isPending}
-                          onClick={() => run(() => setDayTrainers(sessionId, [d], null), 'Jour rendu au formateur principal.')}
-                        >
+                        <button className="small" disabled={isPending} onClick={() => change(d, principalId || '')}>
                           <RotateCcw size={13} aria-hidden /> Rétablir {principal?.full_name?.split(' ')[0] || ''}
                         </button>
                       )}
@@ -130,42 +165,7 @@ export function DayTrainersPanel({
           </tbody>
         </table>
       </div>
-
-      {canEdit && (
-        <div className="day-trainer-form">
-          <div className="form-row" style={{ alignItems: 'end' }}>
-            <label>
-              Remplaçant pour {selected.length ? `${selected.length} jour${selected.length > 1 ? 's' : ''} coché${selected.length > 1 ? 's' : ''}` : 'les jours cochés'}
-              <select value={replacement} onChange={(e) => setReplacement(e.target.value)}>
-                <option value="">Choisir un formateur…</option>
-                {trainers
-                  .filter((t) => t.id !== principalId && t.status !== 'inactif')
-                  .map((t) => {
-                    const busy = selected.map((d) => absenceFor(absences, t.id, d, d)).find(Boolean);
-                    return (
-                      <option key={t.id} value={t.id} disabled={Boolean(busy)}>
-                        {t.full_name}{busy ? ` (${absenceText(busy)})` : ''}
-                      </option>
-                    );
-                  })}
-              </select>
-            </label>
-            <label>
-              Motif (facultatif)
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex. déplacement, formation externe…" />
-            </label>
-            <button
-              type="button"
-              className="primary"
-              disabled={isPending || !selected.length || !replacement}
-              onClick={() => run(() => setDayTrainers(sessionId, selected, replacement, note), 'Remplaçant affecté.')}
-            >
-              <UserRound size={15} aria-hidden /> {isPending ? 'Enregistrement…' : 'Affecter le remplaçant'}
-            </button>
-          </div>
-          {replacedCount > 0 && <p className="hint" style={{ margin: 0 }}>{replacedCount} jour{replacedCount > 1 ? 's' : ''} assuré{replacedCount > 1 ? 's' : ''} par un remplaçant.</p>}
-        </div>
-      )}
+      {replacedCount > 0 && <p className="hint" style={{ margin: '8px 0 0' }}>{replacedCount} jour{replacedCount > 1 ? 's' : ''} assuré{replacedCount > 1 ? 's' : ''} par un remplaçant.</p>}
     </div>
   );
 }

@@ -118,7 +118,7 @@ function SessionCard({
   const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
   return (
     <Link
-      href={`/sessions/${s.id}`}
+      href={s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? `/sessions/${s.id}?jour=${dIso}` : `/sessions/${s.id}`}
       className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}${phase === 'terminee' ? ' ended' : ''}${phase === 'en-cours' ? ' live-now' : ''}`}
       style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s), ['--i' as any]: Math.min(index, 18) }}
       title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
