@@ -567,7 +567,7 @@ export function SessionDetailView({
       {/* Supports de cours : toujours avec les polices à installer. */}
       <div className="panel">
         <h2><Link2 size={18} aria-hidden /> Supports et documents de la formation</h2>
-        <FontsKit compact />
+        <FontsKit compact hideWhenDone />
         {formationLinks.length > 0 ? (
           <div className="link-grid">
             {formationLinks.map((l) => <LinkRow key={l.id} link={l} />)}
