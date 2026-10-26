@@ -240,9 +240,50 @@ export function DevLayer({ me }: { me: { id: string; role: string; can_dev: bool
   );
   const openCount = items.filter((i) => isOpen(i.status)).length;
   const canWrite = isAdmin || me.can_dev;
+  const byKind = (k: FeedbackKind) => items.filter((i) => i.kind === k && isOpen(i.status)).length;
+
+  // Mode dev visible sur tout le site : cadre vert, bandeau en haut, page décalée.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dev-mode', mode);
+    return () => root.classList.remove('dev-mode');
+  }, [mode]);
 
   return (
     <div data-dev-layer className="dev-layer">
+      {mode && (
+        <>
+          <div className="dev-frame" aria-hidden />
+          <div className="dev-banner" role="status">
+            <span className="dev-banner-tag">
+              <span className="dev-dot" aria-hidden /> MODE DEV
+            </span>
+            <span className="dev-banner-text">
+              {openCount === 0 ? (
+                'Aucune remarque à traiter sur cette page'
+              ) : (
+                <>
+                  <strong>{openCount}</strong> remarque{openCount > 1 ? 's' : ''} à traiter sur cette page
+                  <span className="dev-banner-kinds">
+                    {byKind('bug') > 0 && <span className="dev-chip k-bug"><Bug size={11} aria-hidden /> {byKind('bug')}</span>}
+                    {byKind('amelioration') > 0 && <span className="dev-chip k-amelioration"><Sparkles size={11} aria-hidden /> {byKind('amelioration')}</span>}
+                    {byKind('suggestion') > 0 && <span className="dev-chip k-suggestion"><Lightbulb size={11} aria-hidden /> {byKind('suggestion')}</span>}
+                  </span>
+                </>
+              )}
+            </span>
+            <span className="dev-banner-actions">
+              {canWrite && (
+                <button type="button" className="dev-banner-btn primary" onClick={() => { setDraft(null); setOpenId(null); setPlacing((p) => !p); }}>
+                  <MessageSquarePlus size={14} aria-hidden /> {placing ? 'Annuler' : 'Ajouter une remarque'}
+                </button>
+              )}
+              <Link href="/ameliorations" className="dev-banner-btn"><ListChecks size={14} aria-hidden /> Toutes les remarques</Link>
+              <button type="button" className="dev-banner-btn" onClick={toggleMode}><EyeOff size={14} aria-hidden /> Quitter<span className="dev-hide-m"> le mode dev</span></button>
+            </span>
+          </div>
+        </>
+      )}
       {/* Bulles (coordonnées du document) */}
       {mode && (
         <div className="dev-pins" aria-label="Remarques de la page">

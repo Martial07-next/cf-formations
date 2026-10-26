@@ -1527,3 +1527,30 @@ html.dev-placing [data-dev-layer],html.dev-placing [data-dev-layer] *{cursor:aut
 .fb-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .fb-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}
 .fb-status{padding:5px 10px;border-radius:999px;border:1px solid var(--line-strong);font:inherit;font-size:12.5px;font-weight:700}
+/* Mode dev bien visible : bandeau en haut, cadre vert autour de l'écran. */
+html.dev-mode body{padding-top:44px}
+html.dev-mode aside.sidebar{top:44px;height:calc(100vh - 44px)}
+.dev-banner{position:fixed;top:0;left:0;right:0;height:44px;z-index:68;display:flex;align-items:center;gap:14px;padding:0 14px;color:#fff;font-size:13px;
+  background:repeating-linear-gradient(135deg,#17241b 0 18px,#1d2f23 18px 36px);border-bottom:2px solid #08fa64;box-shadow:0 4px 16px rgba(10,20,14,.25)}
+.dev-banner-tag{display:inline-flex;align-items:center;gap:6px;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;font-size:12px;letter-spacing:.1em;color:#17241b;background:#08fa64;border-radius:999px;padding:4px 12px;flex:none;animation:devTag 2.4s ease-in-out infinite}
+@keyframes devTag{0%,100%{box-shadow:0 0 0 0 rgba(8,250,100,.55)}50%{box-shadow:0 0 0 6px rgba(8,250,100,0)}}
+.dev-banner-text{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d7f5e3}
+.dev-banner-text strong{color:#08fa64}
+.dev-banner-kinds{display:inline-flex;gap:4px}
+.dev-banner-actions{margin-left:auto;display:flex;gap:6px;flex:none}
+.dev-banner-btn{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:4px 12px;border-radius:999px;border:1px solid #2f4a39;background:transparent;color:#d7f5e3;font-size:12.5px;font-weight:700;text-decoration:none;cursor:pointer}
+.dev-banner-btn:hover{background:#243a2c;color:#fff;border-color:#3d5c48}
+.dev-banner-btn.primary{background:#08fa64;border-color:#08fa64;color:#17241b}
+.dev-banner-btn.primary:hover{background:#3effa0;color:#17241b}
+.dev-frame{position:fixed;inset:44px 0 0 0;z-index:67;pointer-events:none;box-shadow:inset 0 0 0 3px #08fa64,inset 0 0 40px rgba(8,250,100,.18)}
+html.dev-mode .dev-bar{box-shadow:0 0 0 2px #08fa64,0 12px 34px rgba(10,20,14,.35)}
+@media (max-width:760px){
+  .dev-banner{gap:8px;padding:0 8px}
+  .dev-banner-text{font-size:12px}
+  .dev-banner-kinds,.dev-banner-actions .dev-banner-btn:not(:last-child){display:none}
+  .dev-banner-btn{padding:4px 9px;font-size:11.5px}
+}
+html.dev-mode .mobile-bar{top:44px}
+.dev-dot{width:8px;height:8px;border-radius:50%;background:#17241b;animation:devDot 1.2s ease-in-out infinite}
+@keyframes devDot{50%{opacity:.25}}
+@media (max-width:760px){.dev-hide-m{display:none}}
