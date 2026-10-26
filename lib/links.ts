@@ -26,8 +26,29 @@ export function safeUrl(raw: string): string | null {
   }
 }
 
-/** Nom de domaine affiché sous un lien. */
+/**
+ * Fichier déposé dans les supports de cours (bucket privé « supports »,
+ * migration 41), servi par la route /supports/… réservée aux comptes de l'équipe.
+ */
+export const SUPPORT_BUCKET = 'supports';
+export const SUPPORT_PREFIX = '/supports/';
+export const isSupportFile = (url: string) => url.startsWith(SUPPORT_PREFIX);
+/** Adresse d'un fichier déposé, sinon null (contrôle strict du chemin). */
+export function supportFileUrl(raw: string): string | null {
+  const v = raw.trim();
+  return /^\/supports\/[0-9a-f-]{36}\/[^/\\]{1,180}$/i.test(v) && !v.includes('..') ? v : null;
+}
+/** Chemin dans le bucket « supports » d'un fichier déposé. */
+export const supportStoragePath = (url: string) => decodeURIComponent(url.slice(SUPPORT_PREFIX.length));
+/** Nom du fichier (sans le dossier). */
+export const supportFileName = (url: string) => decodeURIComponent(url.split('/').pop() || '');
+
+/** Nom de domaine affiché sous un lien (ou « Fichier PDF » pour un fichier déposé). */
 export function linkHost(url: string) {
+  if (isSupportFile(url)) {
+    const ext = supportFileName(url).split('.').pop();
+    return ext ? `Fichier ${ext.toUpperCase()}` : 'Fichier';
+  }
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {

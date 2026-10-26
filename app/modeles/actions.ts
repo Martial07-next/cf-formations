@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
-import { safeUrl, missingTable } from '@/lib/links';
+import { safeUrl, missingTable, supportFileUrl, isSupportFile, supportStoragePath, supportFileName, SUPPORT_BUCKET } from '@/lib/links';
 import { REUSSITE_MODELS } from '@/lib/reussite';
 
 function readTemplate(formData: FormData) {
@@ -115,11 +115,16 @@ async function saveLinks(supabase: Client, templateId: string, formData: FormDat
   const links: { label: string; url: string }[] = [];
   for (const l of raw.slice(0, 40)) {
     const label = String(l?.label || '').trim().slice(0, 120);
-    const url = safeUrl(String(l?.url || ''));
-    if (!label && !String(l?.url || '').trim()) continue;
+    const rawUrl = String(l?.url || '');
+    // Fichier déposé (supports de cours) ou lien web.
+    const file = supportFileUrl(rawUrl);
+    const url = file || safeUrl(rawUrl);
+    if (!label && !rawUrl.trim()) continue;
     if (!url) return `Lien « ${label || l?.url} » : adresse invalide (elle doit commencer par https://).`;
-    links.push({ label: label || new URL(url).hostname, url });
+    links.push({ label: label || (file ? supportFileName(file) : new URL(url).hostname), url });
   }
+  // Fichiers retirés de la liste : supprimés du stockage après l'enregistrement.
+  const { data: before } = await supabase.from('template_links').select('url').eq('template_id', templateId);
   const del = await supabase.from('template_links').delete().eq('template_id', templateId);
   if (del.error) return links.length ? missingTable(del.error.message) : null;
   if (links.length) {
@@ -128,6 +133,11 @@ async function saveLinks(supabase: Client, templateId: string, formData: FormDat
       .insert(links.map((l, position) => ({ ...l, position, template_id: templateId })));
     if (error) return missingTable(error.message);
   }
+  const gone = ((before as { url: string }[]) || [])
+    .map((r) => r.url)
+    .filter((u) => isSupportFile(u) && !links.some((l) => l.url === u))
+    .map(supportStoragePath);
+  if (gone.length) await supabase.storage.from(SUPPORT_BUCKET).remove(gone);
   return null;
 }
 

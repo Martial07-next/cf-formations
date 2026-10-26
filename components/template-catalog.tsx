@@ -6,7 +6,8 @@ import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
 import { FontsKit } from '@/components/fonts-kit';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, FileText, Folder, FolderPlus, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { isSupportFile, supportFileName, SUPPORT_BUCKET } from '@/lib/links';
 import {
   createTemplate,
   updateTemplate,
@@ -84,6 +85,39 @@ function TemplateFields({
   const linksJson = JSON.stringify(links.filter((l) => l.label.trim() || l.url.trim()));
   const updateLink = (i: number, patch: Partial<{ label: string; url: string }>) =>
     setLinks((list) => list.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  // Fichiers des supports (PDF, PowerPoint…) : envoyés directement dans le stockage.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  async function addFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadError(null);
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    for (const file of Array.from(files)) {
+      if (file.size > 50 * 1024 * 1024) {
+        setUploadError(`« ${file.name} » dépasse 50 Mo.`);
+        continue;
+      }
+      setUploading(file.name);
+      // Nom sans accents ni caractères spéciaux (exigé par le stockage).
+      const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-150) || 'fichier';
+      const id = crypto.randomUUID();
+      const { error } = await supabase.storage.from(SUPPORT_BUCKET).upload(`${id}/${safe}`, file, { contentType: file.type || undefined });
+      if (error) {
+        setUploadError(
+          /bucket|not found/i.test(error.message)
+            ? 'Exécute d’abord la migration 41 (supabase/migration_phase41.sql) dans Supabase.'
+            : `« ${file.name} » : envoi impossible (${error.message}).`
+        );
+        continue;
+      }
+      const label = file.name.replace(/\.[^.]+$/, '');
+      setLinks((list) => [...list, { label, url: `/supports/${id}/${safe}` }]);
+    }
+    setUploading(null);
+    if (fileInput.current) fileInput.current.value = '';
+  }
 
   return (
     <>
@@ -277,21 +311,41 @@ function TemplateFields({
         <h3><span className="tf-num">5</span> Supports de cours</h3>
       <div className="field" style={{ marginBottom: 14 }}>
         <FontsKit compact />
-        <span className="hint">Nomme chaque lien : les formateurs les retrouvent sur la fiche de session et dans « Liens utiles » du planning.</span>
+        <span className="hint">Ajoute un lien ou un fichier (PDF, PowerPoint, Word…) et nomme-le : les formateurs le retrouvent sur la fiche de session et dans « Liens utiles » du planning. Pense à « Enregistrer ».</span>
+        {uploadError && <div role="alert" className="alert alert-error">{uploadError}</div>}
         <input type="hidden" name="links_json" value={linksJson} />
         <div className="link-editor">
           {links.map((l, i) => (
             <div className="link-editor-row" key={i}>
               <input aria-label={`Nom du lien ${i + 1}`} placeholder="Ex. Support stagiaire (PDF)" value={l.label} onChange={(e) => updateLink(i, { label: e.target.value })} />
-              <input aria-label={`Adresse du lien ${i + 1}`} placeholder="https://…" inputMode="url" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
+              {isSupportFile(l.url) ? (
+                <a className="link-file-chip" href={l.url} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier">
+                  <FileText size={14} aria-hidden /> <span>{supportFileName(l.url)}</span>
+                </a>
+              ) : (
+                <input aria-label={`Adresse du lien ${i + 1}`} placeholder="https://…" inputMode="url" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
+              )}
               <button type="button" className="small icon ghost" aria-label={`Retirer le lien ${i + 1}`} onClick={() => setLinks((list) => list.filter((_, j) => j !== i))}>
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
-          <button type="button" className="small" style={{ alignSelf: 'flex-start' }} onClick={() => setLinks((list) => [...list, { label: '', url: '' }])}>
-            <Plus size={14} aria-hidden /> Ajouter un lien
-          </button>
+          <span className="row-actions" style={{ alignSelf: 'flex-start' }}>
+            <button type="button" className="small" onClick={() => setLinks((list) => [...list, { label: '', url: '' }])}>
+              <Plus size={14} aria-hidden /> Ajouter un lien
+            </button>
+            <button type="button" className="small" disabled={Boolean(uploading)} onClick={() => fileInput.current?.click()}>
+              {uploading ? <><Loader2 size={14} className="spin" aria-hidden /> Envoi de « {uploading} »…</> : <><Upload size={14} aria-hidden /> Ajouter un fichier</>}
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              hidden
+              accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.odp,.odt,.ods,.png,.jpg,.jpeg,.zip,.mp4"
+              onChange={(e) => addFiles(e.target.files)}
+            />
+          </span>
         </div>
       </div>
 

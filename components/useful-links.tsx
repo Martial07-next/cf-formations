@@ -3,9 +3,9 @@
 import { submitWith } from '@/lib/form-submit';
 import { FontsKit } from '@/components/fonts-kit';
 import { useMemo, useRef, useState, useTransition } from 'react';
-import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
+import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X, FileText } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
-import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink } from '@/lib/links';
+import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink, isSupportFile } from '@/lib/links';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 export type TemplateLinks = { template_id: string; title: string; links: LinkItem[] };
@@ -14,7 +14,7 @@ export type TemplateLinks = { template_id: string; title: string; links: LinkIte
 export function LinkRow({ link, note }: { link: LinkItem; note?: string | null }) {
   return (
     <a href={link.url} target="_blank" rel="noopener noreferrer" className="link-row">
-      <Link2 size={15} aria-hidden />
+      {isSupportFile(link.url) ? <FileText size={15} aria-hidden /> : <Link2 size={15} aria-hidden />}
       <span>
         <strong>{link.label}</strong>
         <small>{note || linkHost(link.url)}</small>

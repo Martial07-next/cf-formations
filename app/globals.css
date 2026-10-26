@@ -1434,3 +1434,8 @@ dialog.cf-confirm::backdrop{background:rgba(15,29,22,.55);backdrop-filter:blur(2
 button.cf-confirm-danger{background:var(--cf-red);border-color:var(--cf-red);color:#fff}
 button.cf-confirm-danger:hover{background:#c93a3f;border-color:#c93a3f}
 @media (max-width:480px){.cf-confirm-foot{flex-direction:column-reverse}.cf-confirm-foot button{width:100%}}
+.link-file-chip{display:flex;align-items:center;gap:6px;min-width:0;border:1px dashed var(--line-strong);border-radius:10px;padding:8px 10px;background:var(--surface-2);color:var(--ink);font-weight:600;font-size:13px;text-decoration:none}
+.link-file-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-file-chip svg{flex:none;color:#17613a}
+@media (max-width:640px){.link-editor-row .link-file-chip{grid-column:1/2}}
+.fonts-kit-text small{font-weight:500}
