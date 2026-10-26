@@ -449,7 +449,7 @@ export function SessionDetailView({
           n.delete(traineeId);
           return n;
         });
-      }
+      } else router.refresh();
     });
   }
 
@@ -457,6 +457,7 @@ export function SessionDetailView({
     startTransition(async () => {
       const result = await setTraineeCursus(session.id, ids, value);
       if (!result.ok) setError(result.error);
+      else router.refresh();
     });
   }
 
@@ -464,6 +465,7 @@ export function SessionDetailView({
     startTransition(async () => {
       const result = await removeTraineeFromSession(session.id, traineeId);
       if (!result.ok) setError(result.error);
+      else router.refresh();
     });
   }
 
@@ -471,6 +473,7 @@ export function SessionDetailView({
     startTransition(async () => {
       const result = await setTraineeStatus(session.id, traineeId, status);
       if (!result.ok) setError(result.error);
+      else router.refresh();
     });
   }
 

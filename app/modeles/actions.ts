@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { safeUrl, missingTable } from '@/lib/links';
+import { REUSSITE_MODELS } from '@/lib/reussite';
 
 function readTemplate(formData: FormData) {
   const get = (k: string) => String(formData.get(k) ?? '').trim();
@@ -22,7 +23,13 @@ function readTemplate(formData: FormData) {
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
     // Attestation de réussite remplie par le formateur (migration 39).
-    ...(formData.has('reussite_present') ? { attestation_reussite: get('attestation_reussite') || null } : {}),
+    // Plusieurs modèles possibles (ex. P1 + P2 + P3) : une attestation séparée pour chacun.
+    ...(formData.has('reussite_present')
+      ? {
+          attestation_reussite:
+            formData.getAll('attestation_reussite').map(String).filter((k) => REUSSITE_MODELS.some((m) => m.key === k)).join(',') || null,
+        }
+      : {}),
     // Formation disponible en recyclage + objectifs propres au recyclage (migration 33).
     ...(formData.has('recyclage_present')
       ? {

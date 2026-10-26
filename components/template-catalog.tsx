@@ -2,7 +2,7 @@
 
 import { submitWith } from '@/lib/form-submit';
 import { AUTH_KINDS } from '@/lib/autorisations';
-import { REUSSITE_MODELS } from '@/lib/reussite';
+import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
 import { useMemo, useState, useTransition } from 'react';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
@@ -201,13 +201,20 @@ function TemplateFields({
           Formation disponible en recyclage (boutons Initial / Recyclage pour chaque stagiaire de la session)
         </label>
         <input type="hidden" name="reussite_present" value="1" />
-        <label style={{ fontWeight: 600 }}>
-          Attestation de réussite (une par stagiaire, remplie et signée par le formateur)
-          <select name="attestation_reussite" className="input" defaultValue={t?.attestation_reussite || ''}>
-            <option value="">Aucune</option>
-            {REUSSITE_MODELS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-          </select>
-        </label>
+        <fieldset className="ar-models">
+          <legend>Attestations de réussite (remplies et signées par le formateur)</legend>
+          <span className="hint">
+            Coche chaque niveau couvert par la formation : chaque stagiaire reçoit une attestation séparée par niveau. Si la session a un module du même nom (P1, P2…), ses dates et ses stagiaires sont repris.
+          </span>
+          <div className="ar-models-list">
+            {REUSSITE_MODELS.map((m) => (
+              <label key={m.key} className="check-line">
+                <input type="checkbox" name="attestation_reussite" value={m.key} defaultChecked={reussiteModels(t?.attestation_reussite).some((x) => x.key === m.key)} />
+                {m.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="fiche_appreciation" checked={fai} onChange={(e) => setFai(e.target.checked)} />

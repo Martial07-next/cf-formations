@@ -35,8 +35,8 @@ import type { TdtData } from '@/lib/tdt';
 import type { Legal } from '@/lib/pdf-brand';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
-import { ReussiteEditor, type ReussiteSession } from '@/components/dossier/reussite-editor';
-import { reussiteDone, type ReussiteData } from '@/lib/reussite';
+import { ReussiteEditor, reussiteInputs, type ReussiteSession } from '@/components/dossier/reussite-editor';
+import { reussiteCount, reussiteDone, type ReussiteData } from '@/lib/reussite';
 import { setSessionAppreciation } from '@/app/dossier/actions';
 import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
@@ -104,7 +104,7 @@ export function DossierPanel({
   /** Facturation faite (migration 30) ; null = pas de suivi de facturation. */
   billingDone?: boolean | null;
   /** Attestations de réussite (formation avec un modèle choisi, migration 39). */
-  reussite?: { session: Omit<ReussiteSession, 'sessionId' | 'title' | 'legal' | 'trainees'>; data: ReussiteData | null } | null;
+  reussite?: { session: Omit<ReussiteSession, 'sessionId' | 'title' | 'legal'>; data: ReussiteData | null } | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
   appreciation?: {
     required: boolean;
@@ -190,12 +190,12 @@ export function DossierPanel({
   const [arOpen, setArOpen] = useState(false);
   const [arData, setArData] = useState<ReussiteData | null>(reussite?.data || null);
   useEffect(() => setArData(reussite?.data || null), [reussite]);
-  const arOn = Boolean(reussite);
-  const arDone = arOn && reussiteDone(arData, trainees.map((t) => t.id));
-  const arCount = trainees.filter((t) => arData?.trainees?.[t.id]?.avis).length;
-  const arSession: ReussiteSession | null = reussite
-    ? { ...reussite.session, sessionId, title, legal, trainees: trainees.map((t) => ({ id: t.id, name: t.name, company: t.company ?? null })) }
-    : null;
+  const arOn = Boolean(reussite?.session.series.length);
+  const arSession: ReussiteSession | null = arOn && reussite ? { ...reussite.session, sessionId, title, legal } : null;
+  const arGroups = (arSession?.series || []).map((s) => ({ key: s.model.key, traineeIds: s.trainees.map((t) => t.id) }));
+  const arDone = arOn && reussiteDone(arData, arGroups);
+  const { done: arCount, total: arTotal } = reussiteCount(arData, arGroups);
+  const arLabels = (arSession?.series || []).map((s) => s.model.label).join(' · ');
 
   const faiSession = appreciation
     ? {
@@ -347,9 +347,9 @@ export function DossierPanel({
           parts.push(await m.buildCompetencesPdf(input));
         }
       }
-      if (arSession && trainees.length) {
+      if (arSession && arTotal) {
         const { buildReussitePdf } = await import('@/lib/pdf-reussite');
-        parts.push(await buildReussitePdf({ ...arSession, entries: arData?.trainees || {}, signature: arData?.signature }));
+        parts.push(await buildReussitePdf(reussiteInputs(arSession, arData)));
       }
       for (const d of documents) {
         const url = res.files[d.id];
@@ -374,7 +374,7 @@ export function DossierPanel({
             ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${finReady.length}/${trainees.length} générées`, done: faiDone }]
             : []),
           ...(arSession
-            ? [{ title: `Attestations de réussite · ${arSession.model.label}`, detail: `${arCount}/${trainees.length} avis donnés${arData?.signature ? ' · signées' : ''}`, done: arDone }]
+            ? [{ title: `Attestations de réussite · ${arLabels}`, detail: `${arCount}/${arTotal} avis donnés${arData?.signature ? ' · signées' : ''}`, done: arDone }]
             : []),
           ...documents.map((d) => {
             const e = entryOf(d.id);
@@ -642,9 +642,9 @@ export function DossierPanel({
           <div className="doc-item">
             <Award size={16} aria-hidden />
             <span className="doc-item-main">
-              <strong>Attestations de réussite · {arSession.model.label}</strong>
+              <strong>Attestations de réussite · {arLabels}</strong>
               <small className="hint">
-                Une attestation par stagiaire, remplie et signée par le formateur · {arCount}/{trainees.length} avis donnés
+                {arSession.series.length > 1 ? 'Une attestation par stagiaire et par module' : 'Une attestation par stagiaire'}, remplie et signée par le formateur · {arCount}/{arTotal} avis donnés
                 {arData?.signature ? ' · signées' : ''}
               </small>
             </span>

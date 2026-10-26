@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { formatHours, weekdaysBetween } from '@/lib/week';
 import { freeWindows, hm, type Busy } from '@/lib/session-slots';
@@ -473,11 +473,14 @@ export function SessionForm({
             <>
               <strong>{formatHours(plannedHours)}</strong> sur {formatDays(countDays(plan.map((d) => d.minutes)))} :{' '}
               {plan.map((d, i) => (
-                <span key={d.day} className="plan-day">
-                  {new Date(d.day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{' '}
-                  {d.start.replace(':', 'h')}–{d.end.replace(':', 'h')}
+                // Séparateur hors du bloc insécable : la liste passe à la ligne au lieu de déborder.
+                <Fragment key={d.day}>
+                  <span className="plan-day">
+                    {new Date(d.day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{' '}
+                    {d.start.replace(':', 'h')}–{d.end.replace(':', 'h')}
+                  </span>
                   {i < plan.length - 1 ? ' · ' : ''}
-                </span>
+                </Fragment>
               ))}
               <span className="hint"> (pause 12h–13h déduite)</span>
               {modulePlan.length > 0 && (

@@ -18,7 +18,7 @@ import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/l
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
-import { reussiteModel } from '@/lib/reussite';
+import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
@@ -181,9 +181,9 @@ export default async function SessionDetailPage({
     supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'appreciation').maybeSingle(),
     supabase.from('sessions').select('fiche_appreciation').eq('id', id).maybeSingle(),
   ]);
-  // Attestations de réussite (migration 39) : modèle choisi sur la formation.
-  const arModel = reussiteModel((tplOpt as any)?.attestation_reussite);
-  const { data: arRow } = arModel
+  // Attestations de réussite (migration 39) : modèles choisis sur la formation.
+  const arModels = reussiteModels((tplOpt as any)?.attestation_reussite);
+  const { data: arRow } = arModels.length
     ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
     : { data: null };
   const tourDeTable =
@@ -236,6 +236,32 @@ export default async function SessionDetailPage({
   const trainer = one((session as any).trainers) as { id: string; full_name: string; color: string | null } | null;
   const template = one((session as any).templates) as { title: string; category: string | null; duration_hours: number } | null;
   const hours = sessionHours(session.start_at, session.end_at, (dayRows as any) || []);
+  // Une série d'attestations par modèle (P1, P2, P3… toujours séparées) : le
+  // module de la session du même nom donne les dates, la durée et les stagiaires.
+  const allDays = dayHours(session.start_at, session.end_at, (dayRows as any) || []);
+  const durationText = (h: number, d: number) => `${formatHours(h)} (${String(d).replace('.', ',')} jour${d > 1 ? 's' : ''})`;
+  const arSeries = arModels.map((model) => {
+    const mod = reussiteModule(model, ((modules as any[]) || []) as { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[]);
+    if (mod) {
+      const days = allDays.filter((d) => d.day >= mod.start_day && d.day <= mod.end_day);
+      const h = mod.duration_hours != null ? Number(mod.duration_hours) : Math.round(days.reduce((n, d) => n + d.minutes, 0) / 6) / 10;
+      return {
+        model,
+        startDate: mod.start_day,
+        endDate: mod.end_day,
+        duration: durationText(h, countDays(days.map((d) => d.minutes))),
+        trainees: validatedTrainees.filter((t) => !traineeModules[t.id]?.length || traineeModules[t.id].includes(mod.id)),
+      };
+    }
+    return {
+      model,
+      startDate: session.start_at.slice(0, 10),
+      endDate: session.end_at.slice(0, 10),
+      // Seul modèle : la session entière ; sinon la durée habituelle du modèle.
+      duration: arModels.length === 1 ? durationText(hours, countDays(allDays.map((d) => d.minutes))) : durationText(model.hours, model.days),
+      trainees: validatedTrainees,
+    };
+  });
   // Parcours POEC (migration 23) : erreur ignorée si la migration manque.
   const { data: poecRow } = await early.poec;
   const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string } | null;
@@ -355,16 +381,10 @@ export default async function SessionDetailPage({
               tourDeTable={tourDeTable}
               digiforma={digiformaDocs}
               reussite={
-                arModel
+                arSeries.length
                   ? {
                       session: {
-                        model: arModel,
-                        startDate: session.start_at.slice(0, 10),
-                        endDate: session.end_at.slice(0, 10),
-                        duration: (() => {
-                          const n = countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes));
-                          return `${formatHours(hours)} (${String(n).replace('.', ',')} jour${n > 1 ? 's' : ''})`;
-                        })(),
+                        series: arSeries,
                         lieu: room?.is_holding ? null : streetAddress(room) ? `Centre CF RÉSEAUX - ${streetAddress(room)}` : null,
                         trainerName: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
                       },

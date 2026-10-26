@@ -39,9 +39,11 @@ type Fonts = { title: PDFFont; light: PDFFont; regular: PDFFont; semibold: PDFFo
 
 const fr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
-export async function buildReussitePdf(input: ReussiteInput): Promise<Uint8Array> {
+/** Une ou plusieurs séries d'attestations (ex. P1, P2 et P3 d'une même session) dans un seul PDF. */
+export async function buildReussitePdf(inputs: ReussiteInput | ReussiteInput[]): Promise<Uint8Array> {
+  const list = Array.isArray(inputs) ? inputs : [inputs];
   const doc = await PDFDocument.create();
-  doc.setTitle(`Attestations de réussite - ${input.model.label}`);
+  doc.setTitle(`Attestations de réussite - ${list.map((i) => i.model.label).join(', ')}`);
   doc.setAuthor('CF Réseaux');
   doc.registerFontkit(fontkit);
   const get = (path: string) =>
@@ -72,19 +74,23 @@ export async function buildReussitePdf(input: ReussiteInput): Promise<Uint8Array
     bold: await doc.embedFont(bold, { subset: true }),
   };
   let sign: PDFImage | null = null;
-  if (input.signature?.startsWith('data:image/png;base64,')) {
+  const signature = list.find((i) => i.signature)?.signature;
+  if (signature?.startsWith('data:image/png;base64,')) {
     try {
-      sign = await doc.embedPng(Uint8Array.from(atob(input.signature.split(',')[1]), (c) => c.charCodeAt(0)));
+      sign = await doc.embedPng(Uint8Array.from(atob(signature.split(',')[1]), (c) => c.charCodeAt(0)));
     } catch {
       sign = null;
     }
   }
 
-  for (const t of input.trainees) {
-    const page = doc.addPage([W, H]);
-    drawDecor(page, logo, band);
-    drawSheet(page, f, icon, sign, input, t, input.entries[t.id] || {});
+  for (const input of list) {
+    for (const t of input.trainees) {
+      const page = doc.addPage([W, H]);
+      drawDecor(page, logo, band);
+      drawSheet(page, f, icon, sign, input, t, input.entries[t.id] || {});
+    }
   }
+  if (!doc.getPageCount()) throw new Error('Aucune attestation à imprimer.');
   return doc.save();
 }
 
@@ -142,8 +148,17 @@ function drawSheet(
   text('DE RÉUSSITE', 21, H - 155.15, 38.7, f.title);
   page.drawRectangle({ x: 23, y: H - 189, width: 77, height: 2.6, color: GREEN });
   const label = keep(f.title, input.model.label);
-  const ls = fitSize(f.title, label, 26, 200, 14);
-  gradientText(page, f.title, label, RIGHT - f.title.widthOfTextAtSize(label, ls), H - 155.15, ls);
+  // Pas de dégradé sur fond blanc : pastille sombre (comme le bandeau), intitulé en dégradé dessus.
+  const ls = fitSize(f.title, label, 19, 180, 12);
+  const lw = f.title.widthOfTextAtSize(label, ls);
+  const ph = ls + 16;
+  const px = RIGHT - lw - 28;
+  const pTop = 128;
+  page.drawSvgPath(
+    `M${px + ph / 2} ${pTop} L${RIGHT - ph / 2} ${pTop} A${ph / 2} ${ph / 2} 0 0 1 ${RIGHT - ph / 2} ${pTop + ph} L${px + ph / 2} ${pTop + ph} A${ph / 2} ${ph / 2} 0 0 1 ${px + ph / 2} ${pTop} Z`,
+    { x: 0, y: H, color: INK }
+  );
+  gradientText(page, f.title, label, px + 14, H - pTop - ph / 2 - ls * 0.36, ls);
 
   // Déclaration
   let y = H - 222;

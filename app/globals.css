@@ -374,7 +374,7 @@ dialog.modal::backdrop{background:rgba(10,20,14,.45)}
 .duration-input{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink-2)}
 .duration-input input{width:90px}
 .duration-input select{padding:9px 10px;min-height:40px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:#fff}
-.plan-summary{font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:-4px 0 14px;line-height:1.7}
+.plan-summary{font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:-4px 0 14px;line-height:1.7;overflow-wrap:anywhere;min-width:0}
 .plan-day{white-space:nowrap;text-transform:capitalize}
 
 /* Suivi mensuel / annuel */
@@ -1347,3 +1347,13 @@ html.no-zoom,html.no-zoom body{touch-action:pan-y;overscroll-behavior:none}
 .reussite-sign{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
 .reussite-sign img{max-height:80px;max-width:260px;object-fit:contain}
 .reussite-pad{max-width:520px}
+.ar-group{display:flex;flex-direction:column;gap:6px}
+.ar-group + .ar-group{margin-top:8px}
+.ar-group-h{margin:4px 2px 0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink,#17241b)}
+.ar-group-h small{font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+.ar-empty{margin:0 2px;font-size:12.5px}
+@media (max-width:760px){.ar-group{display:none}}
+.ar-models{border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:4px 0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ar-models legend{font-weight:600;padding:0 4px}
+.ar-models-list{display:flex;flex-wrap:wrap;gap:4px 18px}
+.ar-models-list .check-line{margin:0}

@@ -478,7 +478,7 @@ export function Planning({
     startTransition(async () => {
       const result = await createSession(formData);
       if (result.ok) {
-        // Normalement l'action redirige vers la fiche de la session ; filet de sécurité.
+        // Ouverture de la fiche de la session (chargement complet, état neuf).
         dialogRef.current?.close();
         setMessage({ text: 'Session enregistrée, ouverture de sa fiche…', isError: false });
         if (result.id) window.location.assign(`/sessions/${result.id}?nouvelle=1`);

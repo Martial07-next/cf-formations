@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { ClipboardPaste } from 'lucide-react';
 import { importTraineesFromText, type PasteImportResult } from '@/app/stagiaires/actions';
 import { parseNameList, type NameOrder } from '@/lib/name-list';
@@ -14,6 +15,7 @@ export function PasteImport({ sessionId, recyclage = false }: { sessionId?: stri
   const [order, setOrder] = useState<NameOrder>('nom_prenom');
   const [result, setResult] = useState<PasteImportResult | null>(null);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
 
   const preview = text.trim() ? parseNameList(text, order) : [];
@@ -23,7 +25,10 @@ export function PasteImport({ sessionId, recyclage = false }: { sessionId?: stri
     startTransition(async () => {
       const res = await importTraineesFromText(fd);
       setResult(res);
-      if (res.ok) setText('');
+      if (res.ok) {
+        setText('');
+        router.refresh();
+      }
     });
   }
 

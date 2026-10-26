@@ -11,6 +11,9 @@ export type ReussiteModel = {
   objectives: string[];
   /** Phrase finale (mention QUALIFELEC…). */
   mention: string;
+  /** Durée habituelle (sans module de session correspondant). */
+  hours: number;
+  days: number;
 };
 
 const IRVE = 'Une attestation de formation est délivrée à l’issue de cette formation, elle vous permettra d’obtenir la mention';
@@ -18,6 +21,8 @@ const IRVE = 'Une attestation de formation est délivrée à l’issue de cette 
 export const REUSSITE_MODELS: ReussiteModel[] = [
   {
     key: 'irve_p1',
+    hours: 7,
+    days: 1,
     label: 'IRVE P1',
     objectives: [
       'Comprendre les enjeux de ce marché.',
@@ -32,6 +37,8 @@ export const REUSSITE_MODELS: ReussiteModel[] = [
   },
   {
     key: 'irve_p2',
+    hours: 14,
+    days: 2,
     label: 'IRVE P2',
     objectives: [
       'Déterminer l’infrastructure nécessaire (déploiement en étoile ou en rocade et le sous-comptage) et les modifications de l’installation électrique.',
@@ -46,7 +53,25 @@ export const REUSSITE_MODELS: ReussiteModel[] = [
     mention: `${IRVE} IRVE de niveau 2 auprès de QUALIFELEC.`,
   },
   {
+    key: 'irve_p3',
+    hours: 14,
+    days: 2,
+    label: 'IRVE P3',
+    objectives: [
+      'Installer une infrastructure de recharge rapide selon les règles de l’art.',
+      'Déterminer l’infrastructure nécessaire (déploiement en étoile ou en rocade et le sous-comptage) et les modifications de l’installation électrique.',
+      'Connaître les réglementations applicables aux IRVE de recharge rapide dans les ERP, les parcs de stationnement, les stations-services, la voie publique.',
+      'Connaître les constituants de base des bornes de recharge en DC.',
+      'Mettre en œuvre et paramétrer les bornes de charge communicantes.',
+      'Effectuer les opérations d’auto-contrôle.',
+      'Élaborer les documents nécessaires à l’obtention de la conformité par un bureau de contrôle.',
+    ],
+    mention: `${IRVE} IRVE de niveau 3 auprès de QUALIFELEC.`,
+  },
+  {
     key: 'irve_ma1',
+    hours: 7,
+    days: 1,
     label: 'IRVE MA1',
     objectives: [
       'Comprendre et mettre en œuvre une maintenance préventive et/ou curative des IRVE, en complément des formations P1 ou P2, dans le respect des consignes des fabricants de bornes.',
@@ -58,6 +83,8 @@ export const REUSSITE_MODELS: ReussiteModel[] = [
   },
   {
     key: 'irve_ma2',
+    hours: 7,
+    days: 1,
     label: 'IRVE MA2',
     objectives: [
       'Comprendre et mettre en œuvre une maintenance préventive et/ou curative des IRVE, en complément de la formation MA1.',
@@ -70,6 +97,8 @@ export const REUSSITE_MODELS: ReussiteModel[] = [
   },
   {
     key: 'irve_ma3',
+    hours: 7,
+    days: 1,
     label: 'IRVE MA3',
     objectives: [
       'Comprendre et mettre en œuvre une maintenance préventive et/ou curative des IRVE, en complément de la formation MA1.',
@@ -84,19 +113,59 @@ export const REUSSITE_MODELS: ReussiteModel[] = [
 
 export const reussiteModel = (key: string | null | undefined) => REUSSITE_MODELS.find((m) => m.key === key) || null;
 
+/**
+ * Modèles choisis pour une formation (colonne texte, clés séparées par des
+ * virgules : « irve_p1,irve_p2,irve_p3 »), dans l'ordre du catalogue.
+ */
+export function reussiteModels(value: string | null | undefined): ReussiteModel[] {
+  const keys = new Set(String(value || '').split(',').map((k) => k.trim()));
+  return REUSSITE_MODELS.filter((m) => keys.has(m.key));
+}
+
+/** Module de la session qui correspond au modèle (« P1 », « IRVE P2 », « MA3 - DC »…). */
+export function reussiteModule<T extends { name: string }>(model: ReussiteModel, modules: T[]): T | null {
+  const code = model.label.replace(/^IRVE\s+/i, '');
+  const re = new RegExp(`(^|[^A-Z0-9])${code}([^0-9]|$)`, 'i');
+  return modules.find((m) => re.test(m.name)) || null;
+}
+
 /** Représentant de l'organisme qui signe les attestations de réussite. */
 export const REUSSITE_SIGNATAIRE = 'Aurélie LANCELLE';
 
 export type ReussiteAvis = 'favorable' | 'defavorable';
 export type ReussiteEntry = { avis?: ReussiteAvis | null; note?: string; observations?: string };
 export type ReussiteData = {
+  /** Saisies par modèle (clé du modèle → stagiaire → saisie). */
+  models?: Record<string, Record<string, ReussiteEntry>>;
+  /** Ancien format (un seul modèle) : rattaché au premier modèle. */
   trainees?: Record<string, ReussiteEntry>;
   /** Signature du formateur (image), apposée sur toutes les attestations. */
   signature?: string | null;
   signedBy?: string | null;
 };
 
-/** Terminé : un avis pour chaque stagiaire et la signature du formateur. */
-export function reussiteDone(data: ReussiteData | null | undefined, traineeIds: string[]) {
-  return traineeIds.length > 0 && Boolean(data?.signature) && traineeIds.every((id) => data?.trainees?.[id]?.avis);
+/** Saisies d'un modèle (l'ancien format compte pour le premier modèle). */
+export function reussiteEntries(data: ReussiteData | null | undefined, key: string, first: boolean): Record<string, ReussiteEntry> {
+  return data?.models?.[key] || (first ? data?.trainees : undefined) || {};
+}
+
+/** Une série d'attestations : un modèle et les stagiaires qui le suivent. */
+export type ReussiteGroup = { key: string; traineeIds: string[] };
+
+/** Nombre d'avis donnés / d'attestations attendues. */
+export function reussiteCount(data: ReussiteData | null | undefined, groups: ReussiteGroup[]) {
+  let done = 0;
+  let total = 0;
+  groups.forEach((g, i) => {
+    const e = reussiteEntries(data, g.key, i === 0);
+    total += g.traineeIds.length;
+    done += g.traineeIds.filter((id) => e[id]?.avis).length;
+  });
+  return { done, total };
+}
+
+/** Terminé : un avis sur chaque attestation et la signature du formateur. */
+export function reussiteDone(data: ReussiteData | null | undefined, groups: ReussiteGroup[]) {
+  const { done, total } = reussiteCount(data, groups);
+  return total > 0 && done === total && Boolean(data?.signature);
 }

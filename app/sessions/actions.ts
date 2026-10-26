@@ -85,10 +85,10 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   }
 
   refresh();
-  // Ouverture directe de la fiche de la nouvelle session (ajout des stagiaires).
-  // Redirection côté serveur : fiable, contrairement à une navigation lancée
-  // côté client juste après l'action.
-  redirect(`/sessions/${data.id}?nouvelle=1`);
+  // La fiche de la nouvelle session est ouverte par un chargement complet côté
+  // navigateur : après une redirection d'action serveur, les ajouts de
+  // stagiaires suivants ne s'affichaient qu'en quittant puis revenant.
+  return { ok: true, id: data.id };
 }
 
 export async function updateSessionStatus(sessionId: string, status: string): Promise<ActionResult> {
