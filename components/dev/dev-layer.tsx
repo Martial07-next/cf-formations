@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Bug, Check, Eye, EyeOff, Lightbulb, ListChecks, Loader2, MessageSquarePlus, Pencil, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Bug, Check, ChevronDown, Eye, EyeOff, Lightbulb, ListChecks, Loader2, MessageSquarePlus, Pencil, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { addReply, createFeedback, deleteFeedback, listFeedback, updateFeedback } from '@/app/ameliorations/actions';
 import { askConfirm } from '@/lib/confirm-dialog';
 import {
@@ -20,6 +20,7 @@ import {
 
 const MODE_KEY = 'cf_dev_mode';
 const DONE_KEY = 'cf_dev_show_done';
+const HIDE_KEY = 'cf_dev_bar_hidden';
 
 type Draft = { x: number; y: number; selector: string | null; rel_x: number | null; rel_y: number | null; page_x: number; page_y: number };
 
@@ -84,6 +85,34 @@ export function DevLayer({ me }: { me: { id: string; role: string; can_dev: bool
   const router = useRouter();
   const [mode, setMode] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  // Barre DEV repliée en une petite pastille (mémorisé) ; Alt+D la replie / l'affiche.
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setHidden(localStorage.getItem(HIDE_KEY) === '1');
+    } catch {}
+  }, []);
+  const setBarHidden = useCallback((v: boolean) => {
+    setHidden(v);
+    try {
+      localStorage.setItem(HIDE_KEY, v ? '1' : '0');
+    } catch {}
+  }, []);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'd' || e.key === 'D' || e.code === 'KeyD')) {
+        e.preventDefault();
+        setHidden((h) => {
+          try {
+            localStorage.setItem(HIDE_KEY, h ? '0' : '1');
+          } catch {}
+          return !h;
+        });
+      }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, []);
   const [items, setItems] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -351,7 +380,13 @@ export function DevLayer({ me }: { me: { id: string; role: string; can_dev: bool
       )}
       {placing && <div className="dev-placing-hint" role="status">Clique à l’endroit concerné · Échap pour annuler</div>}
 
-      {/* Barre d'outils */}
+      {/* Barre d'outils (repliable en pastille) */}
+      {hidden ? (
+        <button type="button" className="dev-fab" onClick={() => setBarHidden(false)} title="Afficher la barre DEV (Alt+D)" aria-label="Afficher la barre DEV">
+          <span>DEV</span>
+          {openCount > 0 && <span className="dev-count">{openCount}</span>}
+        </button>
+      ) : (
       <div className="dev-bar" role="toolbar" aria-label="Outils dev">
         <span className="dev-bar-tag">DEV</span>
         <button type="button" className={`dev-bar-btn${mode ? ' on' : ''}`} onClick={toggleMode} aria-pressed={mode} title={mode ? 'Masquer les bulles' : 'Afficher les bulles'}>
@@ -382,7 +417,11 @@ export function DevLayer({ me }: { me: { id: string; role: string; can_dev: bool
           <ListChecks size={15} aria-hidden /> <span className="dev-bar-label">Liste</span>
         </Link>
         {loading && <Loader2 size={14} className="spin" aria-hidden />}
+        <button type="button" className="dev-bar-btn dev-bar-min" onClick={() => setBarHidden(true)} title="Réduire la barre (Alt+D)" aria-label="Réduire la barre DEV">
+          <ChevronDown size={16} aria-hidden />
+        </button>
       </div>
+      )}
       {error && (mode || placing || draft) && (
         <div className="dev-error" role="alert">
           {error}

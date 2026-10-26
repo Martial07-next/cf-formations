@@ -1554,3 +1554,9 @@ html.dev-mode .mobile-bar{top:44px}
 .dev-dot{width:8px;height:8px;border-radius:50%;background:#17241b;animation:devDot 1.2s ease-in-out infinite}
 @keyframes devDot{50%{opacity:.25}}
 @media (max-width:760px){.dev-hide-m{display:none}}
+/* Barre DEV repliée : pastille discrète en bas à droite. */
+.dev-fab{position:fixed;right:16px;bottom:16px;z-index:70;display:inline-flex;align-items:center;gap:6px;min-height:0;height:38px;padding:0 12px;border-radius:999px;border:2px solid #08fa64;background:#17241b;color:#08fa64;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;box-shadow:0 10px 28px rgba(10,20,14,.35);opacity:.85;transition:opacity .15s,transform .15s}
+.dev-fab:hover{opacity:1;transform:translateY(-2px);background:#17241b;border-color:#08fa64}
+.dev-fab .dev-count{font-family:inherit;letter-spacing:0}
+.dev-bar-min{padding:6px 8px;color:#9fbcaa}
+@media (max-width:760px){.dev-fab{right:10px;bottom:calc(10px + env(safe-area-inset-bottom))}}
