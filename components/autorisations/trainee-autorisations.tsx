@@ -5,6 +5,7 @@ import { CheckCircle2, Ban, Undo2, Trash2, PackageCheck } from 'lucide-react';
 import { markReturned, deleteAuthorization } from '@/app/autorisations/actions';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
 import { AUTH_KIND, AUTH_KINDS, currentAuth, frDateTime, type Authorization } from '@/lib/autorisations';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 /** Fiche stagiaire : ses autorisations signées (valables pour toutes ses formations). */
 export function TraineeAutorisations({
@@ -73,7 +74,7 @@ export function TraineeAutorisations({
                         aria-label="Supprimer"
                         title="Supprimer (sera redemandée à la prochaine formation)"
                         disabled={isPending}
-                        onClick={() => confirm('Supprimer cette autorisation ? Elle sera redemandée à la prochaine formation.') && run(() => deleteAuthorization(a.id))}
+                        onClick={async () => (await askConfirm('Supprimer cette autorisation ? Elle sera redemandée à la prochaine formation.')) && run(() => deleteAuthorization(a.id))}
                       >
                         <Trash2 size={14} />
                       </button>

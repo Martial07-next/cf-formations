@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { purgeData, type PurgeResult } from '@/app/administration/donnees/actions';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 const ITEMS = [
   { name: 'sessions', label: 'Sessions', desc: 'avec les inscriptions des stagiaires et les horaires par jour' },
@@ -18,9 +19,9 @@ export function PurgePanel({ counts, phrase }: { counts: Record<string, number>;
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
-  function handle(fd: FormData) {
+  async function handle(fd: FormData) {
     const chosen = ITEMS.filter((i) => fd.get(i.name) === 'on').map((i) => i.label.toLowerCase());
-    if (!confirm(`Dernière confirmation : supprimer définitivement ${chosen.join(', ')} ? Cette action est irréversible.`)) return;
+    if (!(await askConfirm(`Dernière confirmation : supprimer définitivement ${chosen.join(', ')} ? Cette action est irréversible.`))) return;
     setResult(null);
     startTransition(async () => {
       const res = await purgeData(fd);

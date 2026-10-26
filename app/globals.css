@@ -1419,3 +1419,18 @@ button.linklike{all:unset;cursor:pointer;color:var(--ink);font-weight:700;text-d
   .sessions-list td.col-title{max-width:160px}
   .sessions-list td.col-trainer{max-width:128px}
 }
+/* Fenêtre de confirmation CF Réseaux (remplace confirm() du navigateur). */
+dialog.cf-confirm{border:none;padding:0;border-radius:18px;width:min(440px,calc(100vw - 32px));background:var(--surface);color:var(--ink);box-shadow:0 28px 70px rgba(10,20,14,.35);overflow:hidden;position:relative}
+dialog.cf-confirm[open]{animation:cfConfirmIn .18s cubic-bezier(.2,.8,.2,1)}
+dialog.cf-confirm::backdrop{background:rgba(15,29,22,.55);backdrop-filter:blur(2px)}
+@keyframes cfConfirmIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.cf-confirm-head{display:flex;align-items:center;gap:10px;background:#17241b;color:#fff;padding:14px 20px}
+.cf-confirm-head span{font-family:'CF Archivo Expanded',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.cf-confirm-body{padding:20px 22px 6px}
+.cf-confirm-main{margin:0;font-size:16px;font-weight:700;line-height:1.4;overflow-wrap:anywhere}
+.cf-confirm-more{margin:10px 0 0;font-size:13.5px;color:var(--muted);line-height:1.45}
+.cf-confirm-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px 20px;flex-wrap:wrap}
+.cf-confirm-foot button{min-width:110px}
+button.cf-confirm-danger{background:var(--cf-red);border-color:var(--cf-red);color:#fff}
+button.cf-confirm-danger:hover{background:#c93a3f;border-color:#c93a3f}
+@media (max-width:480px){.cf-confirm-foot{flex-direction:column-reverse}.cf-confirm-foot button{width:100%}}

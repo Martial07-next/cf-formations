@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { CalendarOff, Plus, Trash2 } from 'lucide-react';
 import { addAbsence, deleteAbsence, type AbsenceResult } from '@/app/formateurs/actions';
 import { ABSENCE_KINDS, ABSENCE_LABEL, frDate, type Absence } from '@/lib/absences';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export function AbsencesPanel({ trainerId, absences, canEdit }: { trainerId: string; absences: Absence[]; canEdit: boolean }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +36,7 @@ export function AbsencesPanel({ trainerId, absences, canEdit }: { trainerId: str
             className="danger small icon"
             aria-label="Supprimer"
             disabled={isPending}
-            onClick={() => confirm('Supprimer cette absence ?') && run(() => deleteAbsence(a.id, trainerId))}
+            onClick={async () => (await askConfirm('Supprimer cette absence ?')) && run(() => deleteAbsence(a.id, trainerId))}
           >
             <Trash2 size={14} />
           </button>

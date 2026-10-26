@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Receipt, Trash2, CheckCircle2, CircleDashed, Plus } from 'lucide-react';
 import { addInvoice, deleteInvoice, setBillingDone } from '@/app/facturation/actions';
 import type { BillingState, Invoice } from '@/lib/billing';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -82,7 +83,7 @@ export function BillingBox({
                 {i.company && <span className="hint"> · {i.company}</span>}
               </span>
               {canBill && !done && (
-                <button type="button" className="small icon ghost" aria-label={`Supprimer la facture ${i.label}`} disabled={isPending} onClick={() => confirm(`Supprimer la facture « ${i.label} » ?`) && (setRemoved((r) => new Set(r).add(i.id)), run(() => deleteInvoice(sessionId, i.id), undefined, () => setRemoved((r) => { const n = new Set(r); n.delete(i.id); return n; })))}>
+                <button type="button" className="small icon ghost" aria-label={`Supprimer la facture ${i.label}`} disabled={isPending} onClick={async () => (await askConfirm(`Supprimer la facture « ${i.label} » ?`)) && (setRemoved((r) => new Set(r).add(i.id)), run(() => deleteInvoice(sessionId, i.id), undefined, () => setRemoved((r) => { const n = new Set(r); n.delete(i.id); return n; })))}>
                   <Trash2 size={14} />
                 </button>
               )}
@@ -118,9 +119,9 @@ export function BillingBox({
               type="checkbox"
               checked={done}
               disabled={!done && !list.length}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const v = e.target.checked;
-                if (!v && !confirm('Annuler « Facturation faite » ? Le dossier ne sera plus complet.')) return;
+                if (!v && !(await askConfirm('Annuler « Facturation faite » ? Le dossier ne sera plus complet.'))) return;
                 setDone(v);
                 run(() => setBillingDone(sessionId, v), undefined, () => setDone(!v));
               }}

@@ -29,6 +29,7 @@ import { ReservationsBox } from '@/components/reservations-box';
 import { reservationStatus, type Reservation } from '@/lib/reservations';
 import { AddedBy, FollowupCell, type TraineeTracking } from '@/components/tracking/session-tracking';
 import type { Staff } from '@/lib/tracking';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Trainee = { id: string; full_name: string; email: string | null; company: string | null };
 type Cursus = 'initial' | 'recyclage';
@@ -533,8 +534,8 @@ export function SessionDetailView({
     });
   }
 
-  function handleDeleteSession() {
-    if (!confirm('Supprimer définitivement cette session ?')) return;
+  async function handleDeleteSession() {
+    if (!(await askConfirm('Supprimer définitivement cette session ?'))) return;
     startTransition(async () => {
       const result = await deleteSession(session.id);
       if (result.ok) router.push('/sessions');

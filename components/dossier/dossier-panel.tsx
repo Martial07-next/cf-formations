@@ -42,6 +42,7 @@ import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
 import type { EntryData } from '@/lib/pdf-dossier';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = { signer: string; trainee_id: string | null; day: string; half: Half; status: string };
 type Trainee = { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null };
@@ -853,7 +854,7 @@ export function DossierPanel({
                   </ul>
                 )}
                 <p className="hint" style={{ wordBreak: 'break-all' }}>{qr.url}</p>
-                <button className="small" onClick={() => confirm('Créer un nouveau QR code ? L’ancien ne fonctionnera plus.') && showQr(true)}>
+                <button className="small" onClick={async () => (await askConfirm('Créer un nouveau QR code ? L’ancien ne fonctionnera plus.')) && showQr(true)}>
                   <RefreshCw size={14} aria-hidden /> Nouveau QR code
                 </button>
               </div>

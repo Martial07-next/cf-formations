@@ -14,6 +14,7 @@ import {
 import { frDay, type SessionModule } from '@/lib/modules';
 import { formatHours, weekdaysBetween } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 function ModuleFields({ m, days }: { m?: SessionModule; days: string[] }) {
   const d = m?.duration_hours != null ? splitHours(Number(m.duration_hours)) : null;
@@ -141,7 +142,7 @@ export function SessionModulesPanel({
                     className="small icon danger"
                     aria-label={`Supprimer ${m.name}`}
                     disabled={isPending}
-                    onClick={() => confirm(`Supprimer le module « ${m.name} » ?`) && run(() => deleteSessionModule(sessionId, m.id))}
+                    onClick={async () => (await askConfirm(`Supprimer le module « ${m.name} » ?`)) && run(() => deleteSessionModule(sessionId, m.id))}
                   >
                     <Trash2 size={14} />
                   </button>

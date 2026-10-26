@@ -5,6 +5,7 @@ import { FileText, FolderOpen, Trash2, Upload, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { registerDocument, updateDocument, deleteDocument } from '@/app/dossier/actions';
 import type { DossierDocument } from '@/lib/dossier';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export const FILLED_BY_LABEL: Record<string, string> = {
   formateur: 'Rempli par le formateur',
@@ -145,7 +146,7 @@ export function DocumentList({ documents, emptyLabel }: { documents: DossierDocu
             className="small icon ghost danger"
             aria-label={`Supprimer ${d.title}`}
             disabled={isPending}
-            onClick={() => confirm(`Supprimer « ${d.title} » du dossier ? Les saisies déjà faites sur ce document seront perdues.`) && run(() => deleteDocument(d.id))}
+            onClick={async () => (await askConfirm(`Supprimer « ${d.title} » du dossier ? Les saisies déjà faites sur ce document seront perdues.`)) && run(() => deleteDocument(d.id))}
           >
             <Trash2 size={14} />
           </button>

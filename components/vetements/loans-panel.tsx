@@ -6,6 +6,7 @@ import { lendClothes, signLoan, returnClothes, deleteLoan } from '@/app/vetement
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
 import { LOAN_STATUS_LABEL, clothesText, loanStatus, missingOf, missingText, type ClothingLoan } from '@/lib/vetements';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Result = { ok: true } | { ok: false; error: string };
 type Person = { id: string; name: string; address: string | null };
@@ -177,7 +178,7 @@ function LoanItem({
         )}
         {loan.signed_at && <AuthPdfButton items={[loanPdf(loan, name)]} cachet={cachet} fileName={`Vêtements TST - ${name}.pdf`} />}
         {canManage && (
-          <button type="button" className="small icon ghost" aria-label="Supprimer le prêt" disabled={isPending} onClick={() => confirm('Supprimer ce prêt de vêtements ?') && run(() => deleteLoan(loan.id))}>
+          <button type="button" className="small icon ghost" aria-label="Supprimer le prêt" disabled={isPending} onClick={async () => (await askConfirm('Supprimer ce prêt de vêtements ?')) && run(() => deleteLoan(loan.id))}>
             <Trash2 size={14} />
           </button>
         )}

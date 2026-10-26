@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Building2, Minus, Plus, Trash2 } from 'lucide-react';
 import { addReservation, updateReservationSeats } from '@/app/sessions/[id]/actions';
 import type { Reservation } from '@/lib/reservations';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = Reservation & { named: number; unnamed: number };
 
@@ -100,7 +101,7 @@ export function ReservationsBox({
                     className="small icon ghost danger"
                     aria-label={`Supprimer la réservation ${r.company}`}
                     disabled={isPending}
-                    onClick={() => confirm(`Supprimer les places réservées pour ${r.company} ?`) && run(() => updateReservationSeats(sessionId, r.id, 0))}
+                    onClick={async () => (await askConfirm(`Supprimer les places réservées pour ${r.company} ?`)) && run(() => updateReservationSeats(sessionId, r.id, 0))}
                   >
                     <Trash2 size={14} />
                   </button>

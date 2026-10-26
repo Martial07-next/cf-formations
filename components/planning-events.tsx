@@ -8,6 +8,7 @@ import { createEvent, updateEvent, deleteEvent } from '@/app/evenements/actions'
 import { EVENT_KINDS, EVENT_KIND, eventTimeLabel, type EventKind, type PlanningEvent } from '@/lib/events';
 import { absenceText, type Absence } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Trainer = { id: string; full_name: string; color: string | null; status?: string | null };
 
@@ -121,8 +122,8 @@ export function DayDetails({
                       className="small icon ghost"
                       aria-label={`Supprimer ${e.title}`}
                       disabled={isPending}
-                      onClick={() =>
-                        confirm(`Supprimer l’évènement « ${e.title} » ?`) &&
+                      onClick={async () =>
+                        (await askConfirm(`Supprimer l’évènement « ${e.title} » ?`)) &&
                         startTransition(async () => {
                           const res = await deleteEvent(e.id);
                           if (!res.ok) setError(res.error);

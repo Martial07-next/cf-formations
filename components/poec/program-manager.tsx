@@ -22,6 +22,7 @@ import type { ProgramMember, ProgramSession } from '@/lib/poec-data';
 import type { Absence } from '@/lib/absences';
 import type { Legal } from '@/lib/pdf-brand';
 import type { Director } from '@/lib/poec-public';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -107,8 +108,8 @@ export function ProgramHeaderActions({ program }: { program: PoecProgram }) {
         type="button"
         className="danger"
         disabled={isPending}
-        onClick={() =>
-          confirm(`Supprimer le parcours « ${program.title} » ?\n\nToutes ses formations (sessions du planning, inscriptions, dossiers) et ses conventions seront supprimées définitivement.`) &&
+        onClick={async () =>
+          (await askConfirm(`Supprimer le parcours « ${program.title} » ?\n\nToutes ses formations (sessions du planning, inscriptions, dossiers) et ses conventions seront supprimées définitivement.`)) &&
           run(() => deleteProgram(program.id))
         }
       >
@@ -208,8 +209,8 @@ export function GroupPanel({ programId, members }: { programId: string; members:
                       className="small icon ghost"
                       aria-label={`Retirer ${m.full_name}`}
                       disabled={isPending}
-                      onClick={() =>
-                        confirm(`Retirer ${m.full_name} du groupe ? Il quitte aussi les formations à venir du parcours.`) &&
+                      onClick={async () =>
+                        (await askConfirm(`Retirer ${m.full_name} du groupe ? Il quitte aussi les formations à venir du parcours.`)) &&
                         run(() => removeProgramTrainee(programId, m.trainee_id))
                       }
                     >
@@ -335,7 +336,7 @@ export function ProgramPlanningActions({
                           type="button"
                           className="small icon ghost"
                           aria-label="Supprimer la période"
-                          onClick={() => confirm(`Supprimer « ${row.p.label} » et ses conventions ?`) && run(() => deletePeriod(program.id, row.p.id))}
+                          onClick={async () => (await askConfirm(`Supprimer « ${row.p.label} » et ses conventions ?`)) && run(() => deletePeriod(program.id, row.p.id))}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -355,7 +356,7 @@ export function ProgramPlanningActions({
                           className="small icon ghost"
                           aria-label="Détacher du parcours"
                           title="Détacher du parcours (la session reste au planning)"
-                          onClick={() => confirm(`Détacher « ${row.s.title} » du parcours ? La session reste au planning.`) && run(() => detachSession(program.id, row.s.id))}
+                          onClick={async () => (await askConfirm(`Détacher « ${row.s.title} » du parcours ? La session reste au planning.`)) && run(() => detachSession(program.id, row.s.id))}
                         >
                           <Unlink size={14} />
                         </button>
@@ -535,7 +536,7 @@ export function ConventionsPanel({
                             className="small icon ghost"
                             aria-label="Nouveaux liens"
                             title="Générer de nouveaux liens (les anciens ne fonctionneront plus)"
-                            onClick={() => confirm('Générer de nouveaux liens ? Les liens déjà envoyés ne fonctionneront plus.') && run(() => renewConventionLinks(program.id, c.id))}
+                            onClick={async () => (await askConfirm('Générer de nouveaux liens ? Les liens déjà envoyés ne fonctionneront plus.')) && run(() => renewConventionLinks(program.id, c.id))}
                           >
                             <RefreshCcw size={14} />
                           </button>
@@ -545,7 +546,7 @@ export function ConventionsPanel({
                               className="small icon ghost"
                               aria-label="Annuler les signatures"
                               title="Annuler toutes les signatures (pour corriger la convention)"
-                              onClick={() => confirm('Annuler toutes les signatures de cette convention ? Chaque partie devra signer de nouveau.') && run(() => resetConventionSignatures(program.id, c.id))}
+                              onClick={async () => (await askConfirm('Annuler toutes les signatures de cette convention ? Chaque partie devra signer de nouveau.')) && run(() => resetConventionSignatures(program.id, c.id))}
                             >
                               <RotateCcw size={14} />
                             </button>
@@ -661,7 +662,7 @@ export function FranceTravailLink({ program }: { program: PoecProgram }) {
           type="button"
           className="small ghost"
           disabled={isPending}
-          onClick={() => (!path || confirm('Générer un nouveau lien ? L’ancien ne fonctionnera plus.')) && run(() => renewFtLink(program.id))}
+          onClick={async () => (!path || (await askConfirm('Générer un nouveau lien ? L’ancien ne fonctionnera plus.'))) && run(() => renewFtLink(program.id))}
         >
           <RefreshCcw size={14} aria-hidden /> {path ? 'Nouveau lien' : 'Créer le lien'}
         </button>

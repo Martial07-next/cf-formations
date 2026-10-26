@@ -7,6 +7,7 @@ import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actio
 import type { AuthPdfItem } from '@/lib/pdf-autorisations';
 import { missingDocs, type DocSignature, type SignableDoc } from '@/lib/documents';
 import { AUTH_KINDS, AUTH_KIND, currentAuth, frDateTime, type AuthKind, type Authorization } from '@/lib/autorisations';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export type AutorRow = { id: string; name: string; auths: Authorization[]; docSigs?: DocSignature[] };
 
@@ -193,7 +194,7 @@ export function SessionAutorisations({
                 <button type="button" className="small primary" onClick={openBig}><Maximize2 size={14} aria-hidden /> Afficher en grand</button>
                 <a className="btn small" href={qr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden /> Remplir sur cette tablette</a>
                 {canManage && (
-                  <button type="button" className="small ghost" onClick={() => confirm('Nouveau QR code ? L’ancien ne fonctionnera plus.') && showQr(true)}>Nouveau QR</button>
+                  <button type="button" className="small ghost" onClick={async () => (await askConfirm('Nouveau QR code ? L’ancien ne fonctionnera plus.')) && showQr(true)}>Nouveau QR</button>
                 )}
               </span>
             </div>

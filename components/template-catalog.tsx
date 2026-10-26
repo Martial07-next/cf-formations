@@ -21,6 +21,7 @@ import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
 import type { DossierDocument } from '@/lib/dossier';
 import { TemplateDossierButton } from '@/components/dossier/document-manager';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Template = {
   id: string;
@@ -485,7 +486,7 @@ export function TemplateCatalog({
                             aria-label={`Supprimer ${t.title}`}
                             title="Supprimer"
                             disabled={isPending}
-                            onClick={() => confirm(`Supprimer la formation « ${t.title} » du catalogue ?`) && run(() => deleteTemplate(t.id))}
+                            onClick={async () => (await askConfirm(`Supprimer la formation « ${t.title} » du catalogue ?`)) && run(() => deleteTemplate(t.id))}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -547,7 +548,7 @@ export function TemplateCatalog({
               className="small icon ghost"
               aria-label={`Supprimer le dossier ${f.name}`}
               disabled={isPending}
-              onClick={() => confirm(`Supprimer le dossier « ${f.name} » ? (il doit être vide)`) && run(() => deleteFolder(f.id))}
+              onClick={async () => (await askConfirm(`Supprimer le dossier « ${f.name} » ? (il doit être vide)`)) && run(() => deleteFolder(f.id))}
             >
               <Trash2 size={14} />
             </button>

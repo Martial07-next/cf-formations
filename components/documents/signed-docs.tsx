@@ -5,6 +5,7 @@ import { CheckCircle2, Download, Trash2, Clock } from 'lucide-react';
 import { docVersionUrl, deleteDocSignature } from '@/app/administration/documents/actions';
 import { signatureFor, type DocSignature, type SignableDoc } from '@/lib/documents';
 import type { Legal } from '@/lib/pdf-brand';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 /** Téléchargement d'un document ajouté signé (PDF d'origine + page de signature). */
 export function SignedDocButton({
@@ -103,8 +104,8 @@ export function TraineeSignedDocs({
                       className="small icon ghost"
                       aria-label="Supprimer la signature"
                       disabled={isPending}
-                      onClick={() =>
-                        confirm('Supprimer cette signature ? Le document sera redemandé.') &&
+                      onClick={async () =>
+                        (await askConfirm('Supprimer cette signature ? Le document sera redemandé.')) &&
                         startTransition(async () => {
                           const r = await deleteDocSignature(sig.id);
                           setError(r.ok ? null : r.error);

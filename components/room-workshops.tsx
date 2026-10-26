@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Wrench, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
 import { createWorkshop, updateWorkshop, deleteWorkshop, setRoomTemplates } from '@/app/salles/actions';
 import { groupByFolder } from '@/components/session-form';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export type Workshop = { id: string; room_id: string; name: string };
 type Room = { id: string; name: string; location: string | null };
@@ -152,7 +153,7 @@ export function RoomWorkshops({
                             className="icon ghost tiny"
                             aria-label={`Supprimer ${w.name}`}
                             disabled={isPending}
-                            onClick={() => confirm(`Supprimer l’atelier « ${w.name} » ?`) && run(() => deleteWorkshop(w.id))}
+                            onClick={async () => (await askConfirm(`Supprimer l’atelier « ${w.name} » ?`)) && run(() => deleteWorkshop(w.id))}
                           >
                             <Trash2 size={12} />
                           </button>

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Plus, X, FileText, Pencil, Trash2, Upload, Lock } from 'lucide-react';
 import { createDocument, updateDocument, replaceDocumentFile, deleteDocument, documentFileUrl } from '@/app/administration/documents/actions';
 import { AUDIENCE_LABEL, SCOPE_LABEL, docStoragePath, type Audience, type SignableDoc } from '@/lib/documents';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -105,7 +106,7 @@ export function DocumentsAdmin({ docs, counts }: { docs: SignableDoc[]; counts: 
                           className="small icon ghost"
                           aria-label={`Supprimer ${d.title}`}
                           disabled={isPending}
-                          onClick={() => confirm(`Supprimer « ${d.title} » et toutes ses signatures ? Action définitive.`) && run(() => deleteDocument(d.id))}
+                          onClick={async () => (await askConfirm(`Supprimer « ${d.title} » et toutes ses signatures ? Action définitive.`)) && run(() => deleteDocument(d.id))}
                         >
                           <Trash2 size={14} />
                         </button>

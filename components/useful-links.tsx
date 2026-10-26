@@ -6,6 +6,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
 import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink } from '@/lib/links';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export type TemplateLinks = { template_id: string; title: string; links: LinkItem[] };
 
@@ -98,8 +99,8 @@ export function UsefulLinksButton({
     (t) => !q || t.title.toLowerCase().includes(q) || t.links.some((l) => l.label.toLowerCase().includes(q))
   );
 
-  function remove(l: UsefulLink) {
-    if (!confirm(`Supprimer le lien « ${l.label} » ?`)) return;
+  async function remove(l: UsefulLink) {
+    if (!(await askConfirm(`Supprimer le lien « ${l.label} » ?`))) return;
     setError(null);
     startTransition(async () => {
       const res = await deleteUsefulLink(l.id);

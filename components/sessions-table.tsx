@@ -9,6 +9,7 @@ import { ChevronRight, Pencil, Search, Trash2 } from 'lucide-react';
 import { updateSessionStatus, deleteSession } from '@/app/sessions/actions';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = {
   id: string;
@@ -97,8 +98,8 @@ export function SessionsTable({
     });
   }
 
-  function handleDelete(id: string, title: string) {
-    if (!confirm(`Supprimer définitivement la session « ${title} » ?`)) return;
+  async function handleDelete(id: string, title: string) {
+    if (!(await askConfirm(`Supprimer définitivement la session « ${title} » ?`))) return;
     setError(null);
     setHidden((h) => new Set(h).add(id));
     startTransition(async () => {

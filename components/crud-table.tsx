@@ -3,6 +3,7 @@
 import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Field = {
   name: string;
@@ -73,8 +74,8 @@ export function CrudTable({
     });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm('Supprimer définitivement cet élément ?')) return;
+  async function handleDelete(id: string) {
+    if (!(await askConfirm('Supprimer définitivement cet élément ?'))) return;
     setError(null);
     startTransition(async () => {
       const result = await onDelete(id);

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { History, PhoneCall, UserRound, Trash2 } from 'lucide-react';
 import { setSessionManager, setFollowupOwner, recordFollowup, setSessionCreator, deleteActivity, clearSessionHistory } from '@/app/suivi/actions';
 import { ACTIVITY_LABEL, activityDetail, frShortDate, since, type Staff } from '@/lib/tracking';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 export type TraineeTracking = {
   addedBy: string | null;
@@ -208,7 +209,7 @@ export function SessionHistory({ items, staff, sessionId, isAdmin = false }: { i
             type="button"
             className="small danger"
             disabled={isPending}
-            onClick={() => confirm('Effacer tout l’historique de cette session ? Cette action est définitive.') && run(() => clearSessionHistory(sessionId))}
+            onClick={async () => (await askConfirm('Effacer tout l’historique de cette session ? Cette action est définitive.')) && run(() => clearSessionHistory(sessionId))}
           >
             <Trash2 size={14} aria-hidden /> Effacer l’historique
           </button>

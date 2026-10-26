@@ -10,6 +10,7 @@ import { AuthPdfButton } from '@/components/autorisations/session-autorisations'
 import { missingDocs, signatureFor, type DocSignature, type SignableDoc } from '@/lib/documents';
 import { SignedDocButton } from '@/components/documents/signed-docs';
 import { DOC_LABEL, MATERIAL_ITEMS, materialSummary, type Employee, type EmployeeDoc } from '@/lib/salaries';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = Employee & { docs: EmployeeDoc[]; docSigs?: DocSignature[] };
 type Account = { id: string; full_name: string };
@@ -282,7 +283,7 @@ function EmployeeDetail({
               {d.kind === 'materiel' && d.signed_at && !d.returned_at && (
                 <button type="button" className="small" onClick={() => setReturning(returning === d.id ? null : d.id)}><PackageCheck size={14} aria-hidden /> Restitution</button>
               )}
-              <button type="button" className="small icon ghost" aria-label="Supprimer" onClick={() => confirm('Supprimer ce document ?') && run(() => deleteEmployeeDoc(d.id))}><Trash2 size={14} /></button>
+              <button type="button" className="small icon ghost" aria-label="Supprimer" onClick={async () => (await askConfirm('Supprimer ce document ?')) && run(() => deleteEmployeeDoc(d.id))}><Trash2 size={14} /></button>
             </span>
             {returning === d.id && (
               <div className="employee-return">
@@ -328,8 +329,8 @@ function EmployeeDetail({
         <div className="form-actions" style={{ marginTop: 12 }}>
           {materialOn && <button type="button" className="small" onClick={() => setAdding(true)}><PackagePlus size={14} aria-hidden /> Remettre du matériel</button>}
           <button type="button" className="small" disabled={isPending} onClick={() => run(() => requestImage(row.id))}>Redemander le droit à l’image</button>
-          <button type="button" className="small ghost" disabled={isPending} onClick={() => confirm('Nouveau lien ? L’ancien ne fonctionnera plus.') && run(() => renewEmployeeLink(row.id))}><RefreshCcw size={14} aria-hidden /> Nouveau lien</button>
-          <button type="button" className="small danger" disabled={isPending} onClick={() => confirm(`Supprimer ${row.full_name} et ses documents ?`) && run(() => deleteEmployee(row.id), onDeleted)}><Trash2 size={14} aria-hidden /> Supprimer</button>
+          <button type="button" className="small ghost" disabled={isPending} onClick={async () => (await askConfirm('Nouveau lien ? L’ancien ne fonctionnera plus.')) && run(() => renewEmployeeLink(row.id))}><RefreshCcw size={14} aria-hidden /> Nouveau lien</button>
+          <button type="button" className="small danger" disabled={isPending} onClick={async () => (await askConfirm(`Supprimer ${row.full_name} et ses documents ?`)) && run(() => deleteEmployee(row.id), onDeleted)}><Trash2 size={14} aria-hidden /> Supprimer</button>
         </div>
       )}
     </>

@@ -5,6 +5,7 @@ import { KeyRound, Trash2, Pencil, X } from 'lucide-react';
 import { updateRole, resetUserPassword, deleteUserAccess, updateUserAccess } from '@/app/administration/actions';
 import { setBillingAccess } from '@/app/facturation/actions';
 import { ROLE_LABELS, ROLE_OPTIONS, type Role } from '@/lib/roles';
+import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = { id: string; full_name: string; role: string; created_at: string; email?: string | null; can_invoice?: boolean | null };
 
@@ -79,8 +80,8 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
     });
   }
 
-  function handleReset(u: Row) {
-    if (!confirm(`Générer un nouveau mot de passe pour ${u.full_name} ?`)) return;
+  async function handleReset(u: Row) {
+    if (!(await askConfirm(`Générer un nouveau mot de passe pour ${u.full_name} ?`))) return;
     setError(null);
     setNotice(null);
     startTransition(async () => {
@@ -90,8 +91,8 @@ export function AdminUsersTable({ rows, currentUserId }: { rows: Row[]; currentU
     });
   }
 
-  function handleDelete(u: Row) {
-    if (!confirm(`Supprimer l’accès de ${u.full_name} ? Il ne pourra plus se connecter. Sa fiche formateur éventuelle est conservée.`)) return;
+  async function handleDelete(u: Row) {
+    if (!(await askConfirm(`Supprimer l’accès de ${u.full_name} ? Il ne pourra plus se connecter. Sa fiche formateur éventuelle est conservée.`))) return;
     run(() => deleteUserAccess(u.id), `Accès de ${u.full_name} supprimé.`);
   }
 
