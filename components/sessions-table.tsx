@@ -200,7 +200,7 @@ export function SessionsTable({
                       {trainer ? (
                         <span className="trainer-tag" style={{ fontWeight: 600 }}>
                           <span className="swatch" style={{ background: trainer.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
-                          {trainer.full_name}
+                          <span className="trainer-name" title={trainer.full_name}>{trainer.full_name}</span>
                         </span>
                       ) : (
                         <span className="hint">-</span>

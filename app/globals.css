@@ -1366,16 +1366,19 @@ table.data tr.row-link:hover td{background:var(--cf-mint-soft)}
 .sessions-list th,.sessions-list td{white-space:nowrap;vertical-align:middle;padding:10px 10px}
 table.data.sessions-list{overflow:visible}
 .sessions-list .btn svg{flex:none}
-.sessions-list td.col-title{max-width:210px}
-.sessions-list td.col-trainer{max-width:150px;overflow:hidden;text-overflow:ellipsis}
-.sessions-list select.input{padding-top:6px;padding-bottom:6px;min-height:34px;font-size:13px}
+.sessions-list td.col-title{max-width:230px}
+.sessions-list td.col-trainer{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.sessions-list select.input{padding:5px 26px 5px 10px;min-height:32px;font-size:12.5px;width:auto}
+.sessions-list td.col-actions button.icon{width:32px;height:32px;min-height:32px;padding:0}
 /* Boutons toujours visibles à droite, même si le tableau défile. */
 .sessions-list td.col-actions,.sessions-list th:last-child{position:sticky;right:0;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(10,20,14,.18)}
 .sessions-list th:last-child{background:var(--surface-2)}
 .sessions-list .row-title{display:block;overflow:hidden;text-overflow:ellipsis}
 .sessions-list td.col-actions{text-align:right;width:1%}
 .sessions-list td.col-actions .row-actions{display:inline-flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end}
-.sessions-list td .trainer-tag{white-space:nowrap;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.sessions-list td .trainer-tag{white-space:nowrap;display:inline-flex;align-items:center;gap:7px;max-width:100%;vertical-align:middle}
+.sessions-list td .trainer-tag .swatch{flex:none}
+.sessions-list td .trainer-tag .trainer-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sessions-list select.input{min-width:0;width:auto}
 }
 
@@ -1410,3 +1413,9 @@ dialog.modal.tpl-modal{width:min(860px,calc(100vw - 24px));max-width:860px;paddi
 .fonts-kit-done svg{color:#17613a}
 .fonts-kit-done a{color:var(--ink);font-weight:700}
 button.linklike{all:unset;cursor:pointer;color:var(--ink);font-weight:700;text-decoration:underline}
+/* Écrans portables (≈1280-1400 px avec le menu) : colonnes resserrées pour tout garder sur une ligne sans défilement. */
+@media (min-width:761px) and (max-width:1400px){
+  .sessions-list th,.sessions-list td{padding:9px 8px}
+  .sessions-list td.col-title{max-width:160px}
+  .sessions-list td.col-trainer{max-width:128px}
+}

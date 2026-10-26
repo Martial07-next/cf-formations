@@ -564,18 +564,16 @@ export function SessionDetailView({
         </>
       )}
 
-      {/* Supports de cours : toujours avec les polices à installer. */}
-      <div className="panel">
-        <h2><Link2 size={18} aria-hidden /> Supports et documents de la formation</h2>
-        <FontsKit compact hideWhenDone />
-        {formationLinks.length > 0 ? (
+      {/* Supports de cours (seulement s'il y en a), avec les polices à installer. */}
+      {formationLinks.length > 0 && (
+        <div className="panel">
+          <h2><Link2 size={18} aria-hidden /> Supports et documents de la formation</h2>
+          <FontsKit compact hideWhenDone />
           <div className="link-grid">
             {formationLinks.map((l) => <LinkRow key={l.id} link={l} />)}
           </div>
-        ) : (
-          <p className="hint" style={{ margin: 0 }}>Aucun support enregistré pour cette formation (Formations › Modifier › Supports de cours).</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {started ? (
         <>
