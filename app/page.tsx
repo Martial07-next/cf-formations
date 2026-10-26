@@ -1,4 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
+import { after } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { congesConfigured, syncCongesIfStale } from '@/lib/conges-sync';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
@@ -29,6 +32,16 @@ export default async function Page({
   const { week, view, month, day } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Congés de la plateforme de congés : mis à jour en arrière-plan (au plus toutes les 10 min).
+  if (congesConfigured()) {
+    after(async () => {
+      try {
+        await syncCongesIfStale(createAdminClient());
+      } catch {
+        // Sans effet sur l'affichage : l'erreur est visible dans Intégrations.
+      }
+    });
+  }
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
   const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([

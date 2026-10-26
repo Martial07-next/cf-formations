@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/digiforma-sync",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/conges-sync",
+      "schedule": "0 4 * * *"
     }
   ],
   "regions": [

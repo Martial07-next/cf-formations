@@ -1439,3 +1439,5 @@ button.cf-confirm-danger:hover{background:#c93a3f;border-color:#c93a3f}
 .link-file-chip svg{flex:none;color:#17613a}
 @media (max-width:640px){.link-editor-row .link-file-chip{grid-column:1/2}}
 .fonts-kit-text small{font-weight:500}
+.sql-box{position:relative;border:1px solid var(--line);border-radius:12px;background:#0f1d16;color:#d7f5e3;padding:12px 14px}
+.sql-box pre{margin:0 0 10px;white-space:pre-wrap;font-size:12px;line-height:1.55;overflow-x:auto}
