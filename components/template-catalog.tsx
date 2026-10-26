@@ -3,6 +3,7 @@
 import { submitWith } from '@/lib/form-submit';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
+import { FontsKit } from '@/components/fonts-kit';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
@@ -274,6 +275,7 @@ function TemplateFields({
       <section className="tf-section">
         <h3><span className="tf-num">5</span> Supports de cours</h3>
       <div className="field" style={{ marginBottom: 14 }}>
+        <FontsKit compact />
         <span className="hint">Nomme chaque lien : les formateurs les retrouvent sur la fiche de session et dans « Liens utiles » du planning.</span>
         <input type="hidden" name="links_json" value={linksJson} />
         <div className="link-editor">

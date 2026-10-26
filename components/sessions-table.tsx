@@ -28,15 +28,18 @@ function one<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString('fr-FR', {
-    timeZone: 'UTC',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/** Dates et horaires sur une ligne : « 27/10 → 02/11/26 · 8h–16h ». */
+function datesLabel(startIso: string, endIso: string) {
+  const [sd, st] = startIso.slice(0, 16).split('T');
+  const [ed, et] = endIso.slice(0, 16).split('T');
+  const day = (d: string, year: boolean) => {
+    const [y, m, dd] = d.split('-');
+    return year ? `${dd}/${m}/${y.slice(2)}` : `${dd}/${m}`;
+  };
+  const hm = (t: string) => t.replace(/^0/, '').replace(':00', 'h').replace(':', 'h');
+  const hours = `${hm(st)}–${hm(et)}`;
+  if (sd === ed) return `${day(sd, true)} · ${hours}`;
+  return `${day(sd, sd.slice(0, 4) !== ed.slice(0, 4))} → ${day(ed, true)} · ${hours}`;
 }
 
 export function SessionsTable({
@@ -145,8 +148,9 @@ export function SessionsTable({
       {filtered.length === 0 ? (
         <p className="empty">Aucune session ne correspond.</p>
       ) : (
+        <>
+        <p className="hint" style={{ margin: '0 0 8px' }}>Clique sur une session (ou sur « {isAdmin ? 'Modifier' : 'Ouvrir'} ») pour voir sa fiche{isAdmin ? ', la modifier et ajouter les stagiaires' : ''}.</p>
         <div className="table-wrap">
-          <p className="hint" style={{ margin: '0 0 8px' }}>Clique sur une session (ou sur « {isAdmin ? 'Ouvrir / modifier' : 'Ouvrir'} ») pour voir sa fiche{isAdmin ? ', la modifier et ajouter les stagiaires' : ''}.</p>
           <table className="data sessions-list">
             <thead>
               <tr>
@@ -154,9 +158,8 @@ export function SessionsTable({
                 <th>Formation</th>
                 <th>Formateur</th>
                 <th>Salle</th>
-                <th>Début</th>
-                <th>Fin</th>
-                <th className="num">Stagiaires</th>
+                <th>Dates</th>
+                <th className="num">Stag.</th>
                 <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -192,8 +195,8 @@ export function SessionsTable({
                         <SessionStatus status={s.status} startAt={s.start_at} endAt={s.end_at} nowKey={nowKey} />
                       )}
                     </td>
-                    <td><Link href={`/sessions/${s.id}`} className="row-title">{s.title}</Link></td>
-                    <td>
+                    <td className="col-title"><Link href={`/sessions/${s.id}`} className="row-title" title={s.title}>{s.title}</Link></td>
+                    <td className="col-trainer">
                       {trainer ? (
                         <span className="trainer-tag" style={{ fontWeight: 600 }}>
                           <span className="swatch" style={{ background: trainer.color || DEFAULT_TRAINER_COLOR }} aria-hidden />
@@ -204,12 +207,12 @@ export function SessionsTable({
                       )}
                     </td>
                     <td>{room?.is_holding ? <span className="badge en_attente">À affecter</span> : room?.name || '-'}</td>
-                    <td>{fmt(s.start_at)}</td>
-                    <td>{fmt(s.end_at)}</td>
+                    <td>{datesLabel(s.start_at, s.end_at)}</td>
                     <td className="num" title={(s as any).reserved ? `dont ${(s as any).reserved} place(s) réservée(s) sans nom` : undefined}>{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>
-                    <td className="row-actions">
+                    <td className="col-actions">
+                      <span className="row-actions">
                       <Link href={`/sessions/${s.id}`} className="btn small">
-                        {isAdmin ? <><Pencil size={14} aria-hidden /> Ouvrir / modifier</> : <>Ouvrir <ChevronRight size={14} aria-hidden /></>}
+                        {isAdmin ? <><Pencil size={14} aria-hidden /> Modifier</> : <>Ouvrir <ChevronRight size={14} aria-hidden /></>}
                       </Link>
                       {isAdmin && (
                         <button
@@ -222,6 +225,7 @@ export function SessionsTable({
                           <Trash2 size={15} />
                         </button>
                       )}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -229,6 +233,7 @@ export function SessionsTable({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </>
   );

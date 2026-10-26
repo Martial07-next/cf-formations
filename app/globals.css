@@ -1361,7 +1361,23 @@ html.no-zoom,html.no-zoom body{touch-action:pan-y;overscroll-behavior:none}
 table.data tr.row-link{cursor:pointer;transition:background .12s}
 table.data tr.row-link:hover td{background:var(--cf-mint-soft)}
 .sessions-list .row-title{font-weight:700}
-.sessions-list .row-actions{white-space:nowrap}
+/* Une session = une seule ligne (ordinateur) : rien ne passe à la ligne, le tableau défile si besoin. */
+@media (min-width:761px){
+.sessions-list th,.sessions-list td{white-space:nowrap;vertical-align:middle;padding:10px 10px}
+table.data.sessions-list{overflow:visible}
+.sessions-list .btn svg{flex:none}
+.sessions-list td.col-title{max-width:210px}
+.sessions-list td.col-trainer{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.sessions-list select.input{padding-top:6px;padding-bottom:6px;min-height:34px;font-size:13px}
+/* Boutons toujours visibles à droite, même si le tableau défile. */
+.sessions-list td.col-actions,.sessions-list th:last-child{position:sticky;right:0;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(10,20,14,.18)}
+.sessions-list th:last-child{background:var(--surface-2)}
+.sessions-list .row-title{display:block;overflow:hidden;text-overflow:ellipsis}
+.sessions-list td.col-actions{text-align:right;width:1%}
+.sessions-list td.col-actions .row-actions{display:inline-flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end}
+.sessions-list td .trainer-tag{white-space:nowrap;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.sessions-list select.input{min-width:0;width:auto}
+}
 
 /* Formations : fiche dans une fenêtre, en sections numérotées. */
 dialog.modal.tpl-modal{width:min(860px,calc(100vw - 24px));max-width:860px;padding:0}
@@ -1375,3 +1391,18 @@ dialog.modal.tpl-modal{width:min(860px,calc(100vw - 24px));max-width:860px;paddi
 .tpl-flags:empty{display:none}
 .tpl-flag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--cf-mint-soft);color:#17613a}
 @media (max-width:760px){dialog.modal.tpl-modal{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}.tpl-form{max-height:100vh;height:100%}}
+/* Polices des supports de cours (pack à installer). */
+@font-face{font-family:'CF Space Grotesk';src:url('/fonts/SpaceGrotesk-SemiBold.ttf') format('truetype');font-weight:600;font-display:swap}
+@font-face{font-family:'CF Archivo Expanded';src:url('/fonts/ArchivoExpanded-Bold.ttf') format('truetype');font-weight:700;font-display:swap}
+.fonts-kit{border:1px solid var(--line);border-left:4px solid #08fa64;border-radius:12px;background:var(--surface);padding:12px 14px;margin:0 0 14px}
+.fonts-kit-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.fonts-kit-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#17241b;color:#08fa64;flex:none}
+.fonts-kit-text{display:flex;flex-direction:column;gap:2px;flex:1;min-width:220px}
+.fonts-kit-text small{color:var(--muted);font-size:12.5px;line-height:1.4}
+.fonts-kit-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ff-sg{font-family:'CF Space Grotesk',sans-serif;font-weight:600;color:var(--ink)}
+.ff-ar{font-weight:700;color:var(--ink)}
+.ff-ax{font-family:'CF Archivo Expanded',sans-serif;font-weight:700;color:var(--ink);letter-spacing:.01em}
+.fonts-kit-help{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 24px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:13px}
+.fonts-kit-help ol{margin:4px 0 0;padding-left:18px}
+.fonts-kit.compact{padding:10px 12px}

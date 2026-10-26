@@ -1,6 +1,7 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
+import { FontsKit } from '@/components/fonts-kit';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
@@ -161,6 +162,11 @@ export function UsefulLinksButton({
             )}
           </section>
         ))}
+
+        <section className="link-group">
+          <h3>Polices des supports de cours</h3>
+          <FontsKit compact />
+        </section>
 
         {templateLinks.length > 0 && (
           <section className="link-group">

@@ -23,6 +23,7 @@ import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type Day
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
 import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2 } from 'lucide-react';
 import { LinkRow } from '@/components/useful-links';
+import { FontsKit } from '@/components/fonts-kit';
 import type { LinkItem } from '@/lib/links';
 import { ReservationsBox } from '@/components/reservations-box';
 import { reservationStatus, type Reservation } from '@/lib/reservations';
@@ -563,14 +564,18 @@ export function SessionDetailView({
         </>
       )}
 
-      {formationLinks.length > 0 && (
-        <div className="panel">
-          <h2><Link2 size={18} aria-hidden /> Supports et documents de la formation</h2>
+      {/* Supports de cours : toujours avec les polices à installer. */}
+      <div className="panel">
+        <h2><Link2 size={18} aria-hidden /> Supports et documents de la formation</h2>
+        <FontsKit compact />
+        {formationLinks.length > 0 ? (
           <div className="link-grid">
             {formationLinks.map((l) => <LinkRow key={l.id} link={l} />)}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="hint" style={{ margin: 0 }}>Aucun support enregistré pour cette formation (Formations › Modifier › Supports de cours).</p>
+        )}
+      </div>
 
       {started ? (
         <>
