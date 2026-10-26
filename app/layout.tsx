@@ -41,8 +41,24 @@ export default async function RootLayout({ children }: Readonly<{children: React
     const { count } = await supabase.from('access_requests').select('id', { count: 'exact', head: true }).eq('status', 'en_attente');
     pendingRequests = count ?? 0;
   }
+  // Remarques d'amélioration à traiter (accès dev, migration 42) : compteur du menu.
+  let devOpen = 0;
+  if (profile && (profile.role === 'admin' || profile.can_dev)) {
+    const supabase = await createClient();
+    const { count } = await supabase.from('dev_feedback').select('id', { count: 'exact', head: true }).in('status', ['a_faire', 'en_cours']);
+    devOpen = count ?? 0;
+  }
   const shellProfile = profile
-    ? { full_name: profile.full_name, role: profile.role, trainer_id: profile.trainer_id, can_invoice: profile.can_invoice, pending_requests: pendingRequests }
+    ? {
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+        trainer_id: profile.trainer_id,
+        can_invoice: profile.can_invoice,
+        can_dev: profile.can_dev,
+        pending_requests: pendingRequests,
+        dev_open: devOpen,
+      }
     : null;
   return (
     <html lang="fr">

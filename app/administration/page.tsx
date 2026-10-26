@@ -52,10 +52,13 @@ export default async function AdministrationPage() {
   const recentReqs = (recentRows as AccessRequest[]) || [];
   // Accès Facturation (migration 30) : null si la colonne n'existe pas encore.
   const { data: billingRows, error: billingError } = await supabase.from('profiles').select('id, can_invoice');
+  // Accès Dev (migration 42) : null si la colonne n'existe pas encore.
+  const { data: devRows, error: devError } = await supabase.from('profiles').select('id, can_dev');
   const rows = (profiles || []).map((p: any) => ({
     ...p,
     email: emails.get(p.id) || null,
     can_invoice: billingError ? null : Boolean(((billingRows as any[]) || []).find((b) => b.id === p.id)?.can_invoice),
+    can_dev: devError ? null : Boolean(((devRows as any[]) || []).find((b) => b.id === p.id)?.can_dev),
   }));
 
   return (

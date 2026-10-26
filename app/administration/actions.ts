@@ -59,7 +59,10 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
 
   const fullName = String(formData.get('full_name') || '').trim();
   const email = String(formData.get('email') || '').trim().toLowerCase();
-  const role = String(formData.get('role') || '') as Role;
+  // « Dev (testeur) » : consultation + accès dev (remarques d'amélioration).
+  const rawRole = String(formData.get('role') || '');
+  const devAccess = rawRole === 'dev';
+  const role = (devAccess ? 'consultation' : rawRole) as Role;
   const typedPassword = String(formData.get('password') || '');
 
   if (!fullName) return { ok: false, error: 'Indique le nom complet.' };
@@ -73,6 +76,10 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
   const res = await createAccount(admin, { fullName, email, role, password });
   if (!res.ok) return res;
   const { trainerLinked } = res;
+  if (devAccess) {
+    const { error: devError } = await admin.from('profiles').update({ can_dev: true }).eq('id', res.userId);
+    if (devError) return { ok: false, error: `Compte créé, mais accès dev non appliqué (migration 42 ?) : ${devError.message}` };
+  }
 
   revalidatePath('/administration');
   revalidatePath('/formateurs');
@@ -136,4 +143,14 @@ export async function updateUserAccess(
   if (pErr) return { ok: false, error: pErr.message };
   revalidatePath('/administration');
   return { ok: true, password };
+}
+
+/** Administrateur : donne ou retire l'accès Dev (remarques d'amélioration, migration 42). */
+export async function setDevAccess(userId: string, enabled: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await requireAdmin())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('profiles').update({ can_dev: enabled }).eq('id', userId);
+  if (error) return { ok: false, error: /can_dev|schema cache/i.test(error.message) ? 'Exécute d’abord la migration 42 (supabase/migration_phase42.sql) dans Supabase.' : error.message };
+  revalidatePath('/administration');
+  return { ok: true };
 }

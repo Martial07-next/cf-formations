@@ -9,6 +9,7 @@ const ACCESS_TYPES = [
   { value: 'referent', label: 'Référent cadre', desc: 'Suit son équipe, peut changer l’heure de début des sessions.' },
   { value: 'bureau', label: 'Bureau administratif', desc: 'Gère sessions, stagiaires, formateurs, salles et formations.' },
   { value: 'consultation', label: 'Consultation', desc: 'Voit le planning, sans rien modifier.' },
+  { value: 'dev', label: 'Dev (testeur)', desc: 'Voit le planning sans rien modifier et épingle des remarques d’amélioration sur les pages.' },
   { value: 'admin', label: 'Administrateur', desc: 'Gère la plateforme : accès, paramètres, intégrations.' },
 ];
 
