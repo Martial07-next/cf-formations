@@ -35,6 +35,8 @@ import type { TdtData } from '@/lib/tdt';
 import type { Legal } from '@/lib/pdf-brand';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
+import { ReussiteEditor, type ReussiteSession } from '@/components/dossier/reussite-editor';
+import { reussiteDone, type ReussiteData } from '@/lib/reussite';
 import { setSessionAppreciation } from '@/app/dossier/actions';
 import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
@@ -74,6 +76,7 @@ export function DossierPanel({
   billingDone = null,
   appreciation = null,
   digiforma = null,
+  reussite = null,
 }: {
   sessionId: string;
   title: string;
@@ -100,6 +103,8 @@ export function DossierPanel({
   digiforma?: { url: string | null; done: boolean } | null;
   /** Facturation faite (migration 30) ; null = pas de suivi de facturation. */
   billingDone?: boolean | null;
+  /** Attestations de réussite (formation avec un modèle choisi, migration 39). */
+  reussite?: { session: Omit<ReussiteSession, 'sessionId' | 'title' | 'legal' | 'trainees'>; data: ReussiteData | null } | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
   appreciation?: {
     required: boolean;
@@ -180,6 +185,18 @@ export function DossierPanel({
     }
   }
 
+  // Attestations de réussite.
+  const arRef = useRef<HTMLDialogElement>(null);
+  const [arOpen, setArOpen] = useState(false);
+  const [arData, setArData] = useState<ReussiteData | null>(reussite?.data || null);
+  useEffect(() => setArData(reussite?.data || null), [reussite]);
+  const arOn = Boolean(reussite);
+  const arDone = arOn && reussiteDone(arData, trainees.map((t) => t.id));
+  const arCount = trainees.filter((t) => arData?.trainees?.[t.id]?.avis).length;
+  const arSession: ReussiteSession | null = reussite
+    ? { ...reussite.session, sessionId, title, legal, trainees: trainees.map((t) => ({ id: t.id, name: t.name, company: t.company ?? null })) }
+    : null;
+
   const faiSession = appreciation
     ? {
         sessionId,
@@ -208,8 +225,9 @@ export function DossierPanel({
     requiredDocs.filter((d) => localEntries.some((e) => e.document_id === d.id && e.completed)).length +
     (tdt?.completed ? 1 : 0) +
     (faiDone ? 1 : 0) +
+    (arDone ? 1 : 0) +
     (dfOn && dfDone ? 1 : 0);
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (dfOn ? 1 : 0) } };
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (arOn ? 1 : 0) + (dfOn ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -329,6 +347,10 @@ export function DossierPanel({
           parts.push(await m.buildCompetencesPdf(input));
         }
       }
+      if (arSession && trainees.length) {
+        const { buildReussitePdf } = await import('@/lib/pdf-reussite');
+        parts.push(await buildReussitePdf({ ...arSession, entries: arData?.trainees || {}, signature: arData?.signature }));
+      }
       for (const d of documents) {
         const url = res.files[d.id];
         if (!url) continue;
@@ -350,6 +372,9 @@ export function DossierPanel({
           ...(faiOn ? [{ title: 'Fiches d’appréciation individuelle', detail: `${faiCount}/${trainees.length} avis donnés`, done: faiDone }] : []),
           ...(faiOn && fin
             ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${finReady.length}/${trainees.length} générées`, done: faiDone }]
+            : []),
+          ...(arSession
+            ? [{ title: `Attestations de réussite · ${arSession.model.label}`, detail: `${arCount}/${trainees.length} avis donnés${arData?.signature ? ' · signées' : ''}`, done: arDone }]
             : []),
           ...documents.map((d) => {
             const e = entryOf(d.id);
@@ -612,6 +637,37 @@ export function DossierPanel({
           </div>
         </div>
       )}
+      {arSession && (
+        <div className="doc-list" style={{ marginBottom: 6 }}>
+          <div className="doc-item">
+            <Award size={16} aria-hidden />
+            <span className="doc-item-main">
+              <strong>Attestations de réussite · {arSession.model.label}</strong>
+              <small className="hint">
+                Une attestation par stagiaire, remplie et signée par le formateur · {arCount}/{trainees.length} avis donnés
+                {arData?.signature ? ' · signées' : ''}
+              </small>
+            </span>
+            {arDone ? (
+              <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+            ) : arCount || arData?.signature ? (
+              <span className="badge en_attente">En cours</span>
+            ) : (
+              <span className="badge brouillon">À remplir</span>
+            )}
+            <button
+              type="button"
+              className={`small${canFill && !arDone ? ' primary' : ''}`}
+              onClick={() => {
+                setArOpen(true);
+                arRef.current?.showModal();
+              }}
+            >
+              {canFill && !arDone ? <><PenLine size={14} aria-hidden /> Remplir</> : 'Ouvrir'}
+            </button>
+          </div>
+        </div>
+      )}
       {faiOn && fin && (
         <div className="fin-docs">
           <div className="fin-docs-head">
@@ -672,7 +728,7 @@ export function DossierPanel({
         </div>
       )}
       {documents.length === 0 ? (
-        !tdt && !faiOn && <p className="hint">
+        !tdt && !faiOn && !arOn && <p className="hint">
           Aucun document à remplir.{canManage ? ' Ajoute-les une fois pour toutes dans Formations disponibles › Dossier, ou pour cette session ci-dessous.' : ''}
         </p>
       ) : (
@@ -729,6 +785,19 @@ export function DossierPanel({
             canEdit={canFill}
             onClose={() => faiRef.current?.close()}
             onSaved={(data) => setFaiData(data)}
+          />
+        )}
+      </dialog>
+
+      {/* Attestations de réussite */}
+      <dialog ref={arRef} className="modal modal-full" aria-label="Attestations de réussite" onClose={() => { setArOpen(false); router.refresh(); }}>
+        {arOpen && arSession && (
+          <ReussiteEditor
+            session={arSession}
+            initialData={arData}
+            canEdit={canFill}
+            onClose={() => arRef.current?.close()}
+            onSaved={(data) => setArData(data)}
           />
         )}
       </dialog>

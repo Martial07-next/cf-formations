@@ -29,6 +29,8 @@ export default async function ModelesPage() {
   const { data: authOpts } = await supabase.from('templates').select('id, authorizations');
   // Recyclage (migration 33).
   const { data: recOpts } = await supabase.from('templates').select('id, recyclage_available, objectifs_recyclage, competences_recyclage');
+  // Attestation de réussite (migration 39).
+  const { data: arOpts } = await supabase.from('templates').select('id, attestation_reussite');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -46,6 +48,7 @@ export default async function ModelesPage() {
     objectifs: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs ?? null,
     competences: ((objOpts as any[]) || []).find((x) => x.id === t.id)?.competences ?? null,
     authorizations: ((authOpts as any[]) || []).find((x) => x.id === t.id)?.authorizations ?? null,
+    attestation_reussite: ((arOpts as any[]) || []).find((x) => x.id === t.id)?.attestation_reussite ?? null,
     recyclage_available: Boolean(((recOpts as any[]) || []).find((x) => x.id === t.id)?.recyclage_available),
     objectifs_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs_recyclage ?? null,
     competences_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.competences_recyclage ?? null,

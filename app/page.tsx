@@ -3,6 +3,7 @@ import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { appreciationRequired } from '@/lib/appreciation';
+import { reussiteModel } from '@/lib/reussite';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { shortName } from '@/lib/tracking';
@@ -293,6 +294,12 @@ export default async function Page({
       supabase.from('session_forms').select('session_id, completed').eq('kind', 'digiforma').in('session_id', sessionIds),
     ]);
     const dfOn = new Set(dfErr ? [] : ((dfSess as any[]) || []).map((r) => r.id as string));
+    // Attestations de réussite (migration 39) : formations avec un modèle choisi.
+    const [{ data: arTpl, error: arErr }, { data: arForms }] = await Promise.all([
+      templateIds.length ? supabase.from('templates').select('id, attestation_reussite').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
+      supabase.from('session_forms').select('session_id, completed').eq('kind', 'reussite').in('session_id', sessionIds),
+    ]);
+    const arOn = new Set(arErr ? [] : ((arTpl as any[]) || []).filter((t) => reussiteModel(t.attestation_reussite)).map((t) => t.id as string));
     for (const s of (sessions as any[]) || []) {
       const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
       if (!traineeIds.length) continue;
@@ -318,6 +325,7 @@ export default async function Page({
           )
             ? [{ completed: ((faiForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]
             : []),
+          ...(s.template_id && arOn.has(s.template_id) ? [{ completed: ((arForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
           ...(dfOn.has(s.id) ? [{ completed: ((dfForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
         ],
       };

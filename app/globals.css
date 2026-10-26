@@ -1344,3 +1344,6 @@ html.no-zoom,html.no-zoom body{touch-action:pan-y;overscroll-behavior:none}
 .auth,.auth *{touch-action:pan-y}
 .trainer-day-pick{display:flex;align-items:center;gap:6px;margin-top:6px}
 .trainer-day-pick select{flex:1;min-height:34px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:#fff;font-weight:600}
+.reussite-sign{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.reussite-sign img{max-height:80px;max-width:260px;object-fit:contain}
+.reussite-pad{max-width:520px}

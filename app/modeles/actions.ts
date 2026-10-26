@@ -21,6 +21,8 @@ function readTemplate(formData: FormData) {
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
+    // Attestation de réussite remplie par le formateur (migration 39).
+    ...(formData.has('reussite_present') ? { attestation_reussite: get('attestation_reussite') || null } : {}),
     // Formation disponible en recyclage + objectifs propres au recyclage (migration 33).
     ...(formData.has('recyclage_present')
       ? {
@@ -41,7 +43,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

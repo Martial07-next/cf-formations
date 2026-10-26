@@ -412,6 +412,42 @@ export async function saveAppreciation(sessionId: string, data: unknown, complet
   return { ok: true };
 }
 
+/** Attestations de réussite (une par stagiaire) remplies et signées par le formateur. */
+export async function saveReussite(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const json = JSON.stringify(data ?? {});
+  if (json.length > 800_000) return { ok: false, error: 'Attestations trop longues.' };
+  const { data: before } = await r.supabase
+    .from('session_forms')
+    .select('completed')
+    .eq('session_id', sessionId)
+    .eq('kind', 'reussite')
+    .maybeSingle();
+  const { error } = await r.supabase.from('session_forms').upsert(
+    {
+      session_id: sessionId,
+      kind: 'reussite',
+      data: JSON.parse(json),
+      completed,
+      completed_at: completed ? new Date().toISOString() : null,
+      updated_by: r.profile.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) {
+    return {
+      ok: false,
+      error: /session_forms|kind_check|schema cache|does not exist/i.test(error.message)
+        ? 'Exécute d’abord la migration 39 (supabase/migration_phase39.sql) dans Supabase.'
+        : error.message,
+    };
+  }
+  if (Boolean((before as any)?.completed) !== completed) refresh(sessionId);
+  return { ok: true };
+}
+
 /** Fiches d'appréciation pour cette session : oui, non, ou comme la formation (null). */
 export async function setSessionAppreciation(sessionId: string, value: boolean | null): Promise<Result> {
   if (!(await requireManager())) return FORBIDDEN;

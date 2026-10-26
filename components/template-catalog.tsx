@@ -2,6 +2,7 @@
 
 import { submitWith } from '@/lib/form-submit';
 import { AUTH_KINDS } from '@/lib/autorisations';
+import { REUSSITE_MODELS } from '@/lib/reussite';
 import { useMemo, useState, useTransition } from 'react';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
@@ -35,6 +36,7 @@ type Template = {
   documents: DossierDocument[];
   tour_de_table?: boolean;
   fiche_appreciation?: boolean;
+  attestation_reussite?: string | null;
   authorizations?: string[] | null;
   recyclage_available?: boolean;
   objectifs_recyclage?: string | null;
@@ -197,6 +199,14 @@ function TemplateFields({
         <label className="check-line">
           <input type="checkbox" name="recyclage_available" checked={recyclage} onChange={(e) => setRecyclage(e.target.checked)} />
           Formation disponible en recyclage (boutons Initial / Recyclage pour chaque stagiaire de la session)
+        </label>
+        <input type="hidden" name="reussite_present" value="1" />
+        <label style={{ fontWeight: 600 }}>
+          Attestation de réussite (une par stagiaire, remplie et signée par le formateur)
+          <select name="attestation_reussite" className="input" defaultValue={t?.attestation_reussite || ''}>
+            <option value="">Aucune</option>
+            {REUSSITE_MODELS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
         </label>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">

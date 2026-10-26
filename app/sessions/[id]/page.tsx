@@ -18,6 +18,7 @@ import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/l
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
+import { reussiteModel } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
@@ -180,6 +181,11 @@ export default async function SessionDetailPage({
     supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'appreciation').maybeSingle(),
     supabase.from('sessions').select('fiche_appreciation').eq('id', id).maybeSingle(),
   ]);
+  // Attestations de réussite (migration 39) : modèle choisi sur la formation.
+  const arModel = reussiteModel((tplOpt as any)?.attestation_reussite);
+  const { data: arRow } = arModel
+    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
+    : { data: null };
   const tourDeTable =
     formError || (tplOpt as any)?.tour_de_table === false
       ? null
@@ -348,6 +354,24 @@ export default async function SessionDetailPage({
               canManage={editable}
               tourDeTable={tourDeTable}
               digiforma={digiformaDocs}
+              reussite={
+                arModel
+                  ? {
+                      session: {
+                        model: arModel,
+                        startDate: session.start_at.slice(0, 10),
+                        endDate: session.end_at.slice(0, 10),
+                        duration: (() => {
+                          const n = countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes));
+                          return `${formatHours(hours)} (${String(n).replace('.', ',')} jour${n > 1 ? 's' : ''})`;
+                        })(),
+                        lieu: room?.is_holding ? null : streetAddress(room) ? `Centre CF RÉSEAUX - ${streetAddress(room)}` : null,
+                        trainerName: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                      },
+                      data: ((arRow as any)?.data as any) || null,
+                    }
+                  : null
+              }
               appreciation={
                 faiError || flagError
                   ? null
