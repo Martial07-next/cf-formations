@@ -3,9 +3,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: {
-    // Pages déjà visitées gardées 30 s côté navigateur : retour arrière et
-    // allers-retours instantanés (les enregistrements rafraîchissent quand même).
-    staleTimes: { dynamic: 30, static: 180 },
+    // Pages dynamiques toujours fraîches : un cache navigateur (30 s) empêchait
+    // l'affichage immédiat des ajouts (stagiaires, facturation…) après une action.
+    staleTimes: { dynamic: 0, static: 180 },
     // Imports d'icônes allégés.
     optimizePackageImports: ['lucide-react'],
   },

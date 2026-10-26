@@ -12,6 +12,8 @@ export type PlanningEvent = {
   participants: string | null;
   notes: string | null;
   trainer_ids: string[];
+  /** Salariés concernés (migration 40). */
+  employees?: { id: string; name: string }[];
   /** Évènement calculé (ex. stage d'un parcours POEC) : ouvert via ce lien, non modifiable ici. */
   href?: string;
 };

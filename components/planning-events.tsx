@@ -140,7 +140,7 @@ export function DayDetails({
                 {eventTimeLabel(e)}
                 {e.location ? ` · ${e.location}` : ''}
               </span>
-              {(e.trainer_ids.length > 0 || e.participants) && (
+              {(e.trainer_ids.length > 0 || (e.employees?.length ?? 0) > 0 || e.participants) && (
                 <span className="event-people">
                   <Users size={13} aria-hidden />
                   {e.trainer_ids.map((id) => {
@@ -152,6 +152,9 @@ export function DayDetails({
                       </span>
                     ) : null;
                   })}
+                  {(e.employees || []).map((x) => (
+                    <span key={x.id} className="trainer-tag employee-tag" style={{ fontWeight: 600 }}>{x.name}</span>
+                  ))}
                   {e.participants && <span>{e.participants}</span>}
                 </span>
               )}
@@ -192,12 +195,17 @@ export function EventForm({
   event,
   defaultDay,
   trainers,
+  employees = [],
+  roomNames = [],
   onDone,
   onCancel,
 }: {
   event?: PlanningEvent | null;
   defaultDay?: string;
   trainers: Trainer[];
+  employees?: { id: string; name: string }[];
+  /** Salles proposées pour le lieu (saisie libre possible). */
+  roomNames?: string[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -249,7 +257,8 @@ export function EventForm({
           </label>
           <label>
             Lieu
-            <input name="location" defaultValue={event?.location || ''} placeholder="Optionnel" />
+            <input name="location" defaultValue={event?.location || ''} placeholder="Salle ou adresse (optionnel)" list="event-rooms" />
+            <datalist id="event-rooms">{roomNames.map((r) => <option key={r} value={r} />)}</datalist>
           </label>
         </div>
         <div className="form-row">
@@ -300,6 +309,20 @@ export function EventForm({
               ))}
           </div>
         </div>
+        {(employees.length > 0 || (event?.employees?.length ?? 0) > 0) && (
+          <div className="field" style={{ marginBottom: 14 }}>
+            <input type="hidden" name="employees_present" value="1" />
+            Salariés concernés (facultatif)
+            <div className="check-grid">
+              {[...employees, ...(event?.employees || []).filter((x) => !employees.some((e) => e.id === x.id))].map((x) => (
+                <label key={x.id} className="check-chip">
+                  <input type="checkbox" name="employee_ids" value={x.id} defaultChecked={event?.employees?.some((e) => e.id === x.id)} />
+                  {x.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="form-row">
           <label>
             Autres participants

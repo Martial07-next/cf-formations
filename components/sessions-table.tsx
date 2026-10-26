@@ -4,7 +4,8 @@ import { SessionStatus } from '@/components/session-status';
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Search, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, Pencil, Search, Trash2 } from 'lucide-react';
 import { updateSessionStatus, deleteSession } from '@/app/sessions/actions';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -60,10 +61,15 @@ export function SessionsTable({
   const [status, setStatus] = useState('');
   const [period, setPeriod] = useState<'upcoming' | 'past' | 'all'>('upcoming');
   const [mine, setMine] = useState(false);
+  const router = useRouter();
+  // Changements instantanés à l'écran (statut, suppression), confirmés ensuite par le serveur.
+  const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const now = new Date().toISOString();
   const filtered = useMemo(() => {
     const list = rows.filter((s) => {
+      if (hidden.has(s.id)) return false;
       if (period === 'upcoming' && s.end_at < now) return false;
       if (period === 'past' && s.end_at >= now) return false;
       if (status && s.status !== status) return false;
@@ -73,22 +79,35 @@ export function SessionsTable({
       return hay.includes(query.toLowerCase());
     });
     return period === 'upcoming' ? [...list].reverse() : list;
-  }, [rows, query, status, period, mine, myTrainerId, now]);
+  }, [rows, query, status, period, mine, myTrainerId, now, hidden]);
 
   function handleStatus(id: string, value: string) {
     setError(null);
+    const before = localStatus[id];
+    setLocalStatus((s) => ({ ...s, [id]: value }));
     startTransition(async () => {
       const result = await updateSessionStatus(id, value);
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setLocalStatus((s) => ({ ...s, [id]: before as string }));
+      } else router.refresh();
     });
   }
 
   function handleDelete(id: string, title: string) {
     if (!confirm(`Supprimer définitivement la session « ${title} » ?`)) return;
     setError(null);
+    setHidden((h) => new Set(h).add(id));
     startTransition(async () => {
       const result = await deleteSession(id);
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setHidden((h) => {
+          const n = new Set(h);
+          n.delete(id);
+          return n;
+        });
+      } else router.refresh();
     });
   }
 
@@ -127,7 +146,8 @@ export function SessionsTable({
         <p className="empty">Aucune session ne correspond.</p>
       ) : (
         <div className="table-wrap">
-          <table className="data">
+          <p className="hint" style={{ margin: '0 0 8px' }}>Clique sur une session (ou sur « {isAdmin ? 'Ouvrir / modifier' : 'Ouvrir'} ») pour voir sa fiche{isAdmin ? ', la modifier et ajouter les stagiaires' : ''}.</p>
+          <table className="data sessions-list">
             <thead>
               <tr>
                 <th>Statut</th>
@@ -137,7 +157,7 @@ export function SessionsTable({
                 <th>Début</th>
                 <th>Fin</th>
                 <th className="num">Stagiaires</th>
-                {isAdmin && <th><span className="sr-only">Actions</span></th>}
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -146,13 +166,21 @@ export function SessionsTable({
                 const room = one(s.rooms);
                 const validated = (s.session_trainees || []).filter((t) => t.status === 'validee').length + ((s as any).reserved || 0);
                 return (
-                  <tr key={s.id}>
+                  <tr
+                    key={s.id}
+                    className="row-link"
+                    onClick={(e) => {
+                      // Toute la ligne ouvre la fiche, sauf les commandes (statut, boutons).
+                      if ((e.target as HTMLElement).closest('a, button, select, input, label')) return;
+                      router.push(`/sessions/${s.id}`);
+                    }}
+                  >
                     <td>
                       {canEditStatus ? (
                         <select
                           aria-label={`Statut de ${s.title}`}
                           className="input"
-                          value={s.status}
+                          value={localStatus[s.id] ?? s.status}
                           onChange={(e) => handleStatus(s.id, e.target.value)}
                           disabled={isPending}
                         >
@@ -164,7 +192,7 @@ export function SessionsTable({
                         <SessionStatus status={s.status} startAt={s.start_at} endAt={s.end_at} nowKey={nowKey} />
                       )}
                     </td>
-                    <td><Link href={`/sessions/${s.id}`}>{s.title}</Link></td>
+                    <td><Link href={`/sessions/${s.id}`} className="row-title">{s.title}</Link></td>
                     <td>
                       {trainer ? (
                         <span className="trainer-tag" style={{ fontWeight: 600 }}>
@@ -179,8 +207,11 @@ export function SessionsTable({
                     <td>{fmt(s.start_at)}</td>
                     <td>{fmt(s.end_at)}</td>
                     <td className="num" title={(s as any).reserved ? `dont ${(s as any).reserved} place(s) réservée(s) sans nom` : undefined}>{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>
-                    {isAdmin && (
-                      <td className="row-actions">
+                    <td className="row-actions">
+                      <Link href={`/sessions/${s.id}`} className="btn small">
+                        {isAdmin ? <><Pencil size={14} aria-hidden /> Ouvrir / modifier</> : <>Ouvrir <ChevronRight size={14} aria-hidden /></>}
+                      </Link>
+                      {isAdmin && (
                         <button
                           className="danger small icon"
                           onClick={() => handleDelete(s.id, s.title)}
@@ -190,8 +221,8 @@ export function SessionsTable({
                         >
                           <Trash2 size={15} />
                         </button>
-                      </td>
-                    )}
+                      )}
+                    </td>
                   </tr>
                 );
               })}

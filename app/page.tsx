@@ -195,9 +195,18 @@ export default async function Page({
 
   const [{ data: workshops }, { data: absences }, { data: roomTemplates }] = await period.side;
   const { data: eventRows } = await period.events;
+  // Salariés des évènements (migration 40) et salariés proposés dans le formulaire.
+  const eventIds = ((eventRows as any[]) || []).map((e) => e.id as string);
+  const [{ data: eventEmployees }, { data: employeeChoices }] = await Promise.all([
+    eventIds.length
+      ? supabase.from('planning_event_employees').select('event_id, employee_id, employee_name').in('event_id', eventIds)
+      : Promise.resolve({ data: [] as any[] }),
+    canManage(profile?.role) ? supabase.rpc('event_employee_choices') : Promise.resolve({ data: [] as any[] }),
+  ]);
   const events = ((eventRows as any[]) || []).map((e) => ({
     ...e,
     trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
+    employees: ((eventEmployees as any[]) || []).filter((x) => x.event_id === e.id).map((x) => ({ id: x.employee_id, name: x.employee_name })),
   }));
 
   // Stages en entreprise des parcours POEC (migration 23) : affichés comme évènements.
@@ -437,6 +446,7 @@ export default async function Page({
         absences={(absences as any) || []}
         dayInfo={dayInfo}
         events={events}
+        employees={((employeeChoices as any[]) || []).map((x) => ({ id: x.id as string, name: x.full_name as string }))}
         usefulLinks={(usefulLinks as any) || []}
         templateLinks={templateLinks}
         dossierBadge={dossierBadge}

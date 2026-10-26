@@ -42,6 +42,22 @@ async function saveTrainers(supabase: Awaited<ReturnType<typeof createClient>>, 
   return null;
 }
 
+/** Salariés concernés (migration 40) : nom copié pour l'affichage du planning. */
+async function saveEmployees(supabase: Awaited<ReturnType<typeof createClient>>, eventId: string, formData: FormData) {
+  if (!formData.has('employees_present')) return null;
+  const ids = [...new Set(formData.getAll('employee_ids').map(String).filter(Boolean))];
+  const { error: delError } = await supabase.from('planning_event_employees').delete().eq('event_id', eventId);
+  if (delError) return ids.length ? 'Exécute d’abord la migration 40 (supabase/migration_phase40.sql) dans Supabase.' : null;
+  if (!ids.length) return null;
+  const { data: choices } = await supabase.rpc('event_employee_choices');
+  const rows = ((choices as { id: string; full_name: string }[]) || [])
+    .filter((c) => ids.includes(c.id))
+    .map((c) => ({ event_id: eventId, employee_id: c.id, employee_name: c.full_name }));
+  if (!rows.length) return null;
+  const { error } = await supabase.from('planning_event_employees').insert(rows);
+  return error ? error.message : null;
+}
+
 /** Évènements : purement informatifs, ils ne bloquent jamais une session. */
 export async function createEvent(formData: FormData): Promise<Result> {
   const profile = await requireManager();
@@ -53,8 +69,10 @@ export async function createEvent(formData: FormData): Promise<Result> {
   const { data, error } = await supabase.from('planning_events').insert({ ...e, created_by: profile.id }).select('id').single();
   if (error) return { ok: false, error: error.message };
   const trainerError = await saveTrainers(supabase, data.id, formData);
+  const employeeError = await saveEmployees(supabase, data.id, formData);
   revalidatePath('/');
-  return trainerError ? { ok: false, error: `Évènement créé, mais formateurs non enregistrés : ${trainerError}` } : { ok: true };
+  if (trainerError) return { ok: false, error: `Évènement créé, mais formateurs non enregistrés : ${trainerError}` };
+  return employeeError ? { ok: false, error: `Évènement créé, mais salariés non enregistrés : ${employeeError}` } : { ok: true };
 }
 
 export async function updateEvent(id: string, formData: FormData): Promise<Result> {
@@ -66,8 +84,9 @@ export async function updateEvent(id: string, formData: FormData): Promise<Resul
   const { error } = await supabase.from('planning_events').update(e).eq('id', id);
   if (error) return { ok: false, error: error.message };
   const trainerError = await saveTrainers(supabase, id, formData);
+  const employeeError = await saveEmployees(supabase, id, formData);
   revalidatePath('/');
-  return trainerError ? { ok: false, error: trainerError } : { ok: true };
+  return trainerError || employeeError ? { ok: false, error: (trainerError || employeeError)! } : { ok: true };
 }
 
 export async function deleteEvent(id: string): Promise<Result> {

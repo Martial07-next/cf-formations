@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Receipt, Trash2, CheckCircle2, CircleDashed, Plus } from 'lucide-react';
 import { addInvoice, deleteInvoice, setBillingDone } from '@/app/facturation/actions';
 import type { BillingState, Invoice } from '@/lib/billing';
@@ -34,13 +35,27 @@ export function BillingBox({
   const [company, setCompany] = useState(companies.length === 1 ? companies[0] : '');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const run = (fn: () => Promise<Result>, after?: () => void) =>
+  const router = useRouter();
+  // Affichage instantané (case cochée, facture ajoutée ou supprimée), confirmé ensuite par le serveur.
+  const [done, setDone] = useState(state.done);
+  useEffect(() => setDone(state.done), [state.done]);
+  const [added, setAdded] = useState<Invoice[]>([]);
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setAdded([]);
+    setRemoved(new Set());
+  }, [invoices]);
+  const list = [...invoices.filter((i) => !removed.has(i.id)), ...added];
+  const run = (fn: () => Promise<Result>, after?: () => void, undo?: () => void) =>
     startTransition(async () => {
       const r = await fn();
-      if (!r.ok) setError(r.error);
-      else {
+      if (!r.ok) {
+        setError(r.error);
+        undo?.();
+      } else {
         setError(null);
         after?.();
+        router.refresh();
       }
     });
   const listId = `companies-${sessionId}`;
@@ -48,9 +63,9 @@ export function BillingBox({
   return (
     <div className={`billing-box${compact ? ' compact' : ''}`}>
       <div className="billing-status">
-        {state.done ? (
-          <span className="badge validee"><CheckCircle2 size={13} aria-hidden /> Facturée{state.doneAt ? ` le ${new Date(state.doneAt).toLocaleDateString('fr-FR')}` : ''}{doneByName ? ` par ${doneByName}` : ''}</span>
-        ) : invoices.length ? (
+        {done ? (
+          <span className="badge validee"><CheckCircle2 size={13} aria-hidden /> Facturée{state.done && state.doneAt ? ` le ${new Date(state.doneAt).toLocaleDateString('fr-FR')}` : ''}{doneByName ? ` par ${doneByName}` : ''}</span>
+        ) : list.length ? (
           <span className="badge planifiee"><CircleDashed size={13} aria-hidden /> En cours</span>
         ) : (
           <span className="badge planifiee"><CircleDashed size={13} aria-hidden /> À faire</span>
@@ -58,16 +73,16 @@ export function BillingBox({
       </div>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
-      {invoices.length > 0 ? (
+      {list.length > 0 ? (
         <ul className="invoice-list">
-          {invoices.map((i) => (
+          {list.map((i) => (
             <li key={i.id}>
               <span>
                 <strong>{i.label}</strong>
                 {i.company && <span className="hint"> · {i.company}</span>}
               </span>
-              {canBill && !state.done && (
-                <button type="button" className="small icon ghost" aria-label={`Supprimer la facture ${i.label}`} disabled={isPending} onClick={() => confirm(`Supprimer la facture « ${i.label} » ?`) && run(() => deleteInvoice(sessionId, i.id))}>
+              {canBill && !done && (
+                <button type="button" className="small icon ghost" aria-label={`Supprimer la facture ${i.label}`} disabled={isPending} onClick={() => confirm(`Supprimer la facture « ${i.label} » ?`) && (setRemoved((r) => new Set(r).add(i.id)), run(() => deleteInvoice(sessionId, i.id), undefined, () => setRemoved((r) => { const n = new Set(r); n.delete(i.id); return n; })))}>
                   <Trash2 size={14} />
                 </button>
               )}
@@ -78,12 +93,15 @@ export function BillingBox({
         <p className="hint" style={{ margin: '6px 0' }}>Aucune facture pour l’instant.</p>
       )}
 
-      {canBill && !state.done && (
+      {canBill && !done && (
         <form
           className="invoice-form"
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => addInvoice(sessionId, { label, company }), () => setLabel(''));
+            const tmp: Invoice = { id: `tmp-${Date.now()}`, label: label.trim(), company: company.trim() || null } as Invoice;
+            setAdded((a) => [...a, tmp]);
+            setLabel('');
+            run(() => addInvoice(sessionId, { label: tmp.label, company: tmp.company || '' }), undefined, () => setAdded((a) => a.filter((x) => x !== tmp)));
           }}
         >
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nom de la facture *" aria-label="Nom de la facture" required />
@@ -95,15 +113,17 @@ export function BillingBox({
 
       {canBill ? (
         <div className="billing-actions">
-          <label className={`billing-done${state.done ? ' on' : ''}`}>
+          <label className={`billing-done${done ? ' on' : ''}`}>
             <input
               type="checkbox"
-              checked={state.done}
-              disabled={isPending || (!state.done && !invoices.length)}
-              onChange={(e) =>
-                (e.target.checked || confirm('Annuler « Facturation faite » ? Le dossier ne sera plus complet.')) &&
-                run(() => setBillingDone(sessionId, e.target.checked))
-              }
+              checked={done}
+              disabled={!done && !list.length}
+              onChange={(e) => {
+                const v = e.target.checked;
+                if (!v && !confirm('Annuler « Facturation faite » ? Le dossier ne sera plus complet.')) return;
+                setDone(v);
+                run(() => setBillingDone(sessionId, v), undefined, () => setDone(!v));
+              }}
             />
             Facturation faite
           </label>

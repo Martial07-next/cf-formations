@@ -1,7 +1,8 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Layers, Plus, Pencil, Trash2, Scissors } from 'lucide-react';
 import {
   addSessionModule,
@@ -180,15 +181,25 @@ export function TraineeModuleToggles({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const effective = chosen.length ? chosen : modules.map((m) => m.id);
+  const router = useRouter();
+  // Choix affiché tout de suite, confirmé ensuite par le serveur.
+  const [local, setLocal] = useState<string[] | null>(null);
+  const key = chosen.join(',');
+  useEffect(() => setLocal(null), [key]);
+  const current = local ?? chosen;
+  const effective = current.length ? current : modules.map((m) => m.id);
   const full = effective.length === modules.length;
 
   function toggle(id: string) {
     const next = effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
     setError(null);
+    setLocal(next);
     startTransition(async () => {
       const res = await setTraineeModules(sessionId, traineeId, next);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) {
+        setError(res.error);
+        setLocal(null);
+      } else router.refresh();
     });
   }
 
@@ -201,7 +212,6 @@ export function TraineeModuleToggles({
             type="button"
             className={`module-toggle${effective.includes(m.id) ? ' on' : ''}`}
             aria-pressed={effective.includes(m.id)}
-            disabled={isPending}
             onClick={() => toggle(m.id)}
             title={`${m.name} : ${frDay(m.start_day)}`}
           >

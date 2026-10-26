@@ -1357,3 +1357,21 @@ html.no-zoom,html.no-zoom body{touch-action:pan-y;overscroll-behavior:none}
 .ar-models legend{font-weight:600;padding:0 4px}
 .ar-models-list{display:flex;flex-wrap:wrap;gap:4px 18px}
 .ar-models-list .check-line{margin:0}
+/* Liste des sessions : toute la ligne ouvre la fiche. */
+table.data tr.row-link{cursor:pointer;transition:background .12s}
+table.data tr.row-link:hover td{background:var(--cf-mint-soft)}
+.sessions-list .row-title{font-weight:700}
+.sessions-list .row-actions{white-space:nowrap}
+
+/* Formations : fiche dans une fenêtre, en sections numérotées. */
+dialog.modal.tpl-modal{width:min(860px,calc(100vw - 24px));max-width:860px;padding:0}
+.tpl-form{display:flex;flex-direction:column;max-height:calc(100vh - 48px)}
+.tpl-form .modal-body{flex:1;min-height:0}
+.tf-section{border:1px solid var(--line);border-radius:14px;padding:14px 16px 4px;margin-bottom:14px;background:var(--surface)}
+.tf-section h3{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:15px}
+.tf-section > .hint{margin:-6px 0 10px}
+.tf-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:999px;background:#17241b;color:#08fa64;font-size:12px;font-weight:800;flex:none}
+.tpl-flags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tpl-flags:empty{display:none}
+.tpl-flag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--cf-mint-soft);color:#17613a}
+@media (max-width:760px){dialog.modal.tpl-modal{width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}.tpl-form{max-height:100vh;height:100%}}

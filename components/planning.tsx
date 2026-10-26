@@ -174,6 +174,7 @@ export function Planning({
   absences,
   dayInfo = {},
   events = [],
+  employees = [],
   usefulLinks = [],
   templateLinks = [],
   dossierBadge = {},
@@ -203,6 +204,8 @@ export function Planning({
   dayInfo?: Record<string, Record<string, { modules: string[]; present: number }>>;
   /** Évènements (repas, CACES/SST, recrutement, forums…) : aperçu, sans blocage. */
   events?: PlanningEvent[];
+  /** Salariés proposés dans le formulaire d'évènement (migration 40). */
+  employees?: { id: string; name: string }[];
   usefulLinks?: UsefulLink[];
   templateLinks?: TemplateLinks[];
   /** Pastille dossier / facturation de chaque session. */
@@ -938,6 +941,8 @@ export function Planning({
             event={eventPanel.event}
             defaultDay={eventPanel.day}
             trainers={trainers}
+            employees={employees}
+            roomNames={rooms.filter((r: any) => !r.is_holding).map((r) => r.name)}
             onDone={() => {
               eventRef.current?.close();
               setMessage({ text: 'Évènement enregistré.', isError: false });

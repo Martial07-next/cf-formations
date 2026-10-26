@@ -3,8 +3,9 @@
 import { submitWith } from '@/lib/form-submit';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
-import { useMemo, useState, useTransition } from 'react';
-import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, Folder, FolderPlus, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import {
   createTemplate,
   updateTemplate,
@@ -84,6 +85,8 @@ function TemplateFields({
 
   return (
     <>
+      <section className="tf-section">
+        <h3><span className="tf-num">1</span> Informations générales</h3>
       <div className="form-row">
         <label>
           Dossier
@@ -98,32 +101,6 @@ function TemplateFields({
           Nom de la formation
           <input name="title" required defaultValue={t?.title || ''} />
         </label>
-      </div>
-
-      <div className="field" style={{ marginBottom: 14 }}>
-        Modules (facultatif), ex. MA1, MA2, MA3 : un stagiaire peut ne suivre qu’une partie des modules
-        <input type="hidden" name="modules_json" value={modulesJson} />
-        <div className="module-rows">
-          {modules.map((m, i) => (
-            <div className="module-row" key={i}>
-              <span className="module-num">{i + 1}</span>
-              <input aria-label={`Nom du module ${i + 1}`} placeholder="Ex. MA1" value={m.name} onChange={(e) => update(i, { name: e.target.value })} />
-              <span className="duration-input">
-                <input type="number" min={0} aria-label="Heures" value={m.h} onChange={(e) => update(i, { h: e.target.value })} />
-                <span>h</span>
-                <select aria-label="Minutes" value={m.m} onChange={(e) => update(i, { m: e.target.value })}>
-                  {['0', '15', '30', '45'].map((x) => <option key={x} value={x}>{x.padStart(2, '0')}</option>)}
-                </select>
-              </span>
-              <button type="button" className="small icon ghost" aria-label={`Retirer le module ${i + 1}`} onClick={() => setModules((l) => l.filter((_, j) => j !== i))}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-          <button type="button" className="small" onClick={() => setModules((l) => [...l, { name: `MA${l.length + 1}`, h: '7', m: '0' }])}>
-            <Plus size={14} aria-hidden /> Ajouter un module
-          </button>
-        </div>
       </div>
 
       <div className="form-row">
@@ -154,8 +131,45 @@ function TemplateFields({
         </label>
       </div>
 
+      <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
+        <label>
+          Description / objectifs
+          <textarea name="description" rows={2} defaultValue={t?.description || ''} />
+        </label>
+      </div>
+      </section>
+      <section className="tf-section">
+        <h3><span className="tf-num">2</span> Modules</h3>
       <div className="field" style={{ marginBottom: 14 }}>
-        Formateurs habilités à animer cette formation
+        <span className="hint">Facultatif. Ex. P1, P2, P3 ou MA1, MA2, MA3 : un stagiaire peut ne suivre qu’une partie des modules, et la durée totale devient la somme des modules.</span>
+        <input type="hidden" name="modules_json" value={modulesJson} />
+        <div className="module-rows">
+          {modules.map((m, i) => (
+            <div className="module-row" key={i}>
+              <span className="module-num">{i + 1}</span>
+              <input aria-label={`Nom du module ${i + 1}`} placeholder="Ex. MA1" value={m.name} onChange={(e) => update(i, { name: e.target.value })} />
+              <span className="duration-input">
+                <input type="number" min={0} aria-label="Heures" value={m.h} onChange={(e) => update(i, { h: e.target.value })} />
+                <span>h</span>
+                <select aria-label="Minutes" value={m.m} onChange={(e) => update(i, { m: e.target.value })}>
+                  {['0', '15', '30', '45'].map((x) => <option key={x} value={x}>{x.padStart(2, '0')}</option>)}
+                </select>
+              </span>
+              <button type="button" className="small icon ghost" aria-label={`Retirer le module ${i + 1}`} onClick={() => setModules((l) => l.filter((_, j) => j !== i))}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="small" onClick={() => setModules((l) => [...l, { name: `MA${l.length + 1}`, h: '7', m: '0' }])}>
+            <Plus size={14} aria-hidden /> Ajouter un module
+          </button>
+        </div>
+      </div>
+
+      </section>
+      <section className="tf-section">
+        <h3><span className="tf-num">3</span> Formateurs habilités</h3>
+      <div className="field" style={{ marginBottom: 14 }}>
         <span className="hint">Seuls ceux-là seront proposés à la création d’une session. Aucun coché = tous les formateurs.</span>
         <div className="check-grid">
           {trainers.map((tr) => (
@@ -169,26 +183,10 @@ function TemplateFields({
         </div>
       </div>
 
-      <div className="field" style={{ marginBottom: 14 }}>
-        <span className="trainer-tag"><Link2 size={15} aria-hidden /> Supports de cours et documents utiles</span>
-        <span className="hint">Nomme chaque lien : les formateurs les retrouvent sur la fiche de session et dans « Liens utiles » du planning.</span>
-        <input type="hidden" name="links_json" value={linksJson} />
-        <div className="link-editor">
-          {links.map((l, i) => (
-            <div className="link-editor-row" key={i}>
-              <input aria-label={`Nom du lien ${i + 1}`} placeholder="Ex. Support stagiaire (PDF)" value={l.label} onChange={(e) => updateLink(i, { label: e.target.value })} />
-              <input aria-label={`Adresse du lien ${i + 1}`} placeholder="https://…" inputMode="url" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
-              <button type="button" className="small icon ghost" aria-label={`Retirer le lien ${i + 1}`} onClick={() => setLinks((list) => list.filter((_, j) => j !== i))}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-          <button type="button" className="small" style={{ alignSelf: 'flex-start' }} onClick={() => setLinks((list) => [...list, { label: '', url: '' }])}>
-            <Plus size={14} aria-hidden /> Ajouter un lien
-          </button>
-        </div>
-      </div>
-
+      </section>
+      <section className="tf-section">
+        <h3><span className="tf-num">4</span> Documents du dossier de session</h3>
+          <p className="hint">Ce que le formateur remplit pendant la session.</p>
       <div className="field" style={{ marginBottom: 14 }}>
         <input type="hidden" name="tdt_present" value="1" />
         <label className="check-line">
@@ -272,12 +270,29 @@ function TemplateFields({
         </div>
       </div>
 
-      <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
-        <label>
-          Description / objectifs
-          <textarea name="description" rows={2} defaultValue={t?.description || ''} />
-        </label>
+      </section>
+      <section className="tf-section">
+        <h3><span className="tf-num">5</span> Supports de cours</h3>
+      <div className="field" style={{ marginBottom: 14 }}>
+        <span className="hint">Nomme chaque lien : les formateurs les retrouvent sur la fiche de session et dans « Liens utiles » du planning.</span>
+        <input type="hidden" name="links_json" value={linksJson} />
+        <div className="link-editor">
+          {links.map((l, i) => (
+            <div className="link-editor-row" key={i}>
+              <input aria-label={`Nom du lien ${i + 1}`} placeholder="Ex. Support stagiaire (PDF)" value={l.label} onChange={(e) => updateLink(i, { label: e.target.value })} />
+              <input aria-label={`Adresse du lien ${i + 1}`} placeholder="https://…" inputMode="url" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
+              <button type="button" className="small icon ghost" aria-label={`Retirer le lien ${i + 1}`} onClick={() => setLinks((list) => list.filter((_, j) => j !== i))}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="small" style={{ alignSelf: 'flex-start' }} onClick={() => setLinks((list) => [...list, { label: '', url: '' }])}>
+            <Plus size={14} aria-hidden /> Ajouter un lien
+          </button>
+        </div>
       </div>
+
+      </section>
     </>
   );
 }
@@ -326,6 +341,19 @@ export function TemplateCatalog({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Fenêtre de la fiche formation : ouverte dès qu'on ajoute ou modifie.
+  const editorRef = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
+  const editing = editingId ? templates.find((t) => t.id === editingId) || null : null;
+  const editorOpen = addIn !== null || Boolean(editing);
+  useEffect(() => {
+    const d = editorRef.current;
+    if (!d) return;
+    if (editorOpen && !d.open) {
+      setError(null);
+      d.showModal();
+    } else if (!editorOpen && d.open) d.close();
+  }, [editorOpen]);
 
   const byPos = <T extends { position: number }>(a: T, b: T) => a.position - b.position;
   const roots = useMemo(() => folders.filter((f) => !f.parent_id).sort(byPos), [folders]);
@@ -351,7 +379,10 @@ export function TemplateCatalog({
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) setError(res.error || 'Une erreur est survenue.');
-      else after?.();
+      else {
+        after?.();
+        router.refresh();
+      }
     });
   }
 
@@ -372,17 +403,6 @@ export function TemplateCatalog({
   function renderRows(list: Template[], folderId: string | null) {
     return (
       <>
-        {canEdit && addIn === (folderId ?? '') && (
-          <div className="folder-add">
-            <form onSubmit={submitWith((fd) => run(() => createTemplate(fd), () => setAddIn(null)))}>
-              <TemplateFields folders={folderOptions} trainers={trainers} folder={folderId} />
-              <div className="row-actions">
-                <button type="submit" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Ajouter la formation'}</button>
-                <button type="button" onClick={() => setAddIn(null)}>Annuler</button>
-              </div>
-            </form>
-          </div>
-        )}
         {list.length > 0 && (
           <div style={{ overflowX: 'auto' }}>
             <table className="data">
@@ -396,23 +416,26 @@ export function TemplateCatalog({
                 </tr>
               </thead>
               <tbody>
-                {list.map((t, i) =>
-                  editingId === t.id ? (
-                    <tr key={t.id}>
-                      <td colSpan={canEdit ? 5 : 4} style={{ background: 'var(--surface-2)', padding: 16 }}>
-                        <form onSubmit={submitWith((fd) => run(() => updateTemplate(t.id, fd), () => setEditingId(null)))}>
-                          <TemplateFields t={t} folders={folderOptions} trainers={trainers} />
-                          <div className="row-actions">
-                            <button type="submit" className="primary" disabled={isPending}>Enregistrer</button>
-                            <button type="button" onClick={() => setEditingId(null)}>Annuler</button>
-                          </div>
-                        </form>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={t.id}>
+                {list.map((t, i) => (
+                    <tr
+                      key={t.id}
+                      className={canEdit ? 'row-link' : undefined}
+                      onClick={(e) => {
+                        // Toute la ligne ouvre la fiche de la formation (sauf boutons et liens).
+                        if (!canEdit || (e.target as HTMLElement).closest('a, button, input, select, label, dialog')) return;
+                        setEditingId(t.id);
+                      }}
+                    >
                       <td>
                         <strong>{t.title}</strong>
+                        <div className="tpl-flags">
+                          {t.tour_de_table !== false && <span className="tpl-flag">Tour de table</span>}
+                          {t.fiche_appreciation && <span className="tpl-flag">Fiche d’appréciation</span>}
+                          {reussiteModels(t.attestation_reussite).length > 0 && (
+                            <span className="tpl-flag">Attestations {reussiteModels(t.attestation_reussite).map((m) => m.label.replace(/^IRVE\s+/, '')).join(' · ')}</span>
+                          )}
+                          {t.recyclage_available && <span className="tpl-flag">Recyclage</span>}
+                        </div>
                         {t.modules.length > 0 && (
                           <div className="module-tags">
                             {t.modules.map((m) => (
@@ -467,8 +490,7 @@ export function TemplateCatalog({
                         </td>
                       )}
                     </tr>
-                  )
-                )}
+                ))}
               </tbody>
             </table>
           </div>
@@ -527,8 +549,8 @@ export function TemplateCatalog({
             >
               <Trash2 size={14} />
             </button>
-            <button className="small icon primary" aria-label={`Ajouter une formation dans ${f.name}`} title="Ajouter une formation" onClick={() => { setAddIn(f.id); setEditingId(null); }}>
-              <Plus size={16} />
+            <button className="small primary" aria-label={`Ajouter une formation dans ${f.name}`} title="Ajouter une formation dans ce dossier" onClick={() => { setAddIn(f.id); setEditingId(null); }}>
+              <Plus size={14} aria-hidden /> Formation
             </button>
           </span>
         )}
@@ -546,12 +568,54 @@ export function TemplateCatalog({
         </label>
         {canEdit && (
           <span className="row-actions">
-            <button className="primary" onClick={() => setNewFolder('')}>
+            <button className="primary" onClick={() => { setAddIn(''); setEditingId(null); }}>
+              <Plus size={16} aria-hidden /> Nouvelle formation
+            </button>
+            <button onClick={() => setNewFolder('')}>
               <FolderPlus size={16} aria-hidden /> Nouveau dossier
             </button>
           </span>
         )}
       </div>
+      {canEdit && templates.length > 0 && (
+        <p className="hint" style={{ margin: '-4px 0 12px' }}>Clique sur une formation pour la modifier (durée, modules, formateurs habilités, documents du dossier…).</p>
+      )}
+
+      {/* Fiche d'une formation (création / modification) */}
+      <dialog
+        ref={editorRef}
+        className="modal tpl-modal"
+        aria-label={editing ? `Modifier ${editing.title}` : 'Nouvelle formation'}
+        onClose={() => {
+          setEditingId(null);
+          setAddIn(null);
+        }}
+      >
+        {editorOpen && (
+          <form
+            key={editing?.id || `new-${addIn}`}
+            className="tpl-form"
+            onSubmit={submitWith((fd) =>
+              run(() => (editing ? updateTemplate(editing.id, fd) : createTemplate(fd)), () => editorRef.current?.close())
+            )}
+          >
+            <div className="modal-head">
+              <h2>{editing ? `Modifier · ${editing.title}` : 'Nouvelle formation'}</h2>
+              <button type="button" className="icon ghost" onClick={() => editorRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {error && <div role="alert" className="alert alert-error">{error}</div>}
+              <TemplateFields t={editing || undefined} folders={folderOptions} trainers={trainers} folder={addIn || null} />
+            </div>
+            <div className="modal-foot">
+              <button type="button" onClick={() => editorRef.current?.close()}>Annuler</button>
+              <button type="submit" className="primary" disabled={isPending}>
+                {isPending ? 'Enregistrement…' : editing ? 'Enregistrer' : 'Ajouter la formation'}
+              </button>
+            </div>
+          </form>
+        )}
+      </dialog>
 
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {canEdit && newFolder === '' && (
@@ -578,7 +642,7 @@ export function TemplateCatalog({
               );
             })}
             {renderRows(templatesIn(f.id), f.id)}
-            {countDeep(f.id) === 0 && subs.length === 0 && addIn !== f.id && <p className="hint" style={{ padding: '0 18px 14px' }}>Dossier vide : ajoute une formation avec +.</p>}
+            {countDeep(f.id) === 0 && subs.length === 0 && addIn !== f.id && <p className="hint" style={{ padding: '0 18px 14px' }}>Dossier vide : ajoute une formation avec « + Formation ».</p>}
           </details>
         );
       })}

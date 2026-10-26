@@ -2,7 +2,7 @@
 
 import { searchTrainees } from '@/lib/trainee-search';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   updateSessionDetails,
@@ -85,12 +85,12 @@ export function SessionDetailView({
   traineeModules = {},
   rooms,
   trainers,
-  enrolled,
+  enrolled: serverEnrolled,
   allTrainees,
   dayOverrides,
   tracking = null,
   staff = [],
-  cursus = null,
+  cursus: serverCursus = null,
   started = false,
   sessionEnded = false,
   isAdminUser = false,
@@ -142,6 +142,8 @@ export function SessionDetailView({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Transition propre aux stagiaires : n'affiche pas « Enregistrement… » sur le formulaire de la session.
+  const [traineesPending, startTrainees] = useTransition();
   const [traineeQuery, setTraineeQuery] = useState('');
   // Ajout rapide : initial / recyclage choisi une fois, stagiaires ajoutés masqués tout de suite.
   const [addCursus, setAddCursus] = useState<Cursus>('initial');
@@ -151,6 +153,28 @@ export function SessionDetailView({
   const locked = started && !unlocked;
   // Inscriptions modifiables : bureau / admin, tant que la session n'a pas commencé.
   const canManageTrainees = isAdmin && !locked;
+
+  // Affichage instantané : chaque ajout, retrait, changement de statut ou de
+  // cursus s'applique tout de suite à l'écran, sans attendre le rechargement
+  // des données du serveur (qui confirme ensuite).
+  const [localAdds, setLocalAdds] = useState<Record<string, EnrolledTrainee>>({});
+  const [localStatus, setLocalStatus] = useState<Record<string, 'validee' | 'en_attente'>>({});
+  const [localRemoved, setLocalRemoved] = useState<Set<string>>(new Set());
+  const [localCursus, setLocalCursus] = useState<Record<string, Cursus | null>>({});
+  useEffect(() => {
+    const ids = new Set(serverEnrolled.map((t) => t.id));
+    setLocalAdds((a) => Object.fromEntries(Object.entries(a).filter(([id]) => !ids.has(id))));
+    setLocalStatus((s) => Object.fromEntries(Object.entries(s).filter(([id, st]) => serverEnrolled.find((t) => t.id === id)?.status !== st)));
+    setLocalRemoved((r) => new Set([...r].filter((id) => ids.has(id))));
+  }, [serverEnrolled]);
+  useEffect(() => {
+    setLocalCursus((c) => Object.fromEntries(Object.entries(c).filter(([id, v]) => (serverCursus?.[id] ?? null) !== v)));
+  }, [serverCursus]);
+  const enrolled: EnrolledTrainee[] = [
+    ...serverEnrolled.map((t) => (localStatus[t.id] ? { ...t, status: localStatus[t.id] } : t)),
+    ...Object.values(localAdds).filter((t) => !serverEnrolled.some((s) => s.id === t.id)),
+  ].filter((t) => !localRemoved.has(t.id));
+  const cursus = serverCursus ? { ...serverCursus, ...localCursus } : null;
 
   const validated = enrolled.filter((t) => t.status === 'validee');
   const waiting = enrolled.filter((t) => t.status === 'en_attente');
@@ -303,8 +327,8 @@ export function SessionDetailView({
           {cursus && canManageTrainees && validated.length > 1 && (
             <span className="row-actions">
               <span className="hint">Tous en :</span>
-              <button type="button" className="small cursus-pill initial" disabled={isPending} onClick={() => handleCursus(validated.map((t) => t.id), 'initial')}>Initial</button>
-              <button type="button" className="small cursus-pill recyclage" disabled={isPending} onClick={() => handleCursus(validated.map((t) => t.id), 'recyclage')}>Recyclage</button>
+              <button type="button" className="small cursus-pill initial" disabled={traineesPending} onClick={() => handleCursus(validated.map((t) => t.id), 'initial')}>Initial</button>
+              <button type="button" className="small cursus-pill recyclage" disabled={traineesPending} onClick={() => handleCursus(validated.map((t) => t.id), 'recyclage')}>Recyclage</button>
             </span>
           )}
         </div>
@@ -319,7 +343,7 @@ export function SessionDetailView({
                   <td>
                     <span className="name-cursus">
                       {traineeName(t)}
-                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={false} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />
                   </td>
@@ -338,8 +362,8 @@ export function SessionDetailView({
                   <td>{t.company || '-'}</td>
                   {canManageTrainees && (
                     <td className="row-actions">
-                      <button className="small" onClick={() => handleStatusChange(t.id, 'en_attente')} disabled={isPending}>Mettre en attente</button>
-                      <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
+                      <button className="small" onClick={() => handleStatusChange(t.id, 'en_attente')}>Mettre en attente</button>
+                      <button className="danger small" onClick={() => handleRemove(t.id)}>Retirer</button>
                     </td>
                   )}
                 </tr>
@@ -368,7 +392,7 @@ export function SessionDetailView({
                   <td>
                     <span className="name-cursus">
                       {traineeName(t)}
-                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={isPending} onChange={(v) => handleCursus([t.id], v)} />}
+                      {cursus && <CursusToggle value={cursus[t.id]} canEdit={canManageTrainees} disabled={false} onChange={(v) => handleCursus([t.id], v)} />}
                     </span>
                     <AddedBy t={tracking?.[t.id]} staff={staff} />
                   </td>
@@ -390,8 +414,8 @@ export function SessionDetailView({
                   )}
                   {canManageTrainees && (
                     <td className="row-actions">
-                      <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')} disabled={isPending}>Valider</button>
-                      <button className="danger small" onClick={() => handleRemove(t.id)} disabled={isPending}>Retirer</button>
+                      <button className="primary small" onClick={() => handleStatusChange(t.id, 'validee')}>Valider</button>
+                      <button className="danger small" onClick={() => handleRemove(t.id)}>Retirer</button>
                     </td>
                   )}
                 </tr>
@@ -438,9 +462,17 @@ export function SessionDetailView({
     setError(null);
     // Ajout immédiat à l'écran ; on peut enchaîner le stagiaire suivant sans attendre.
     setJustAdded((s) => new Set(s).add(traineeId));
+    const base = allTrainees.find((t) => t.id === traineeId);
+    if (base) setLocalAdds((a) => ({ ...a, [traineeId]: { ...base, status } }));
+    setLocalRemoved((r) => {
+      const n = new Set(r);
+      n.delete(traineeId);
+      return n;
+    });
+    if (cursus) setLocalCursus((c) => ({ ...c, [traineeId]: addCursus }));
     setTraineeQuery('');
     searchRef.current?.focus();
-    startTransition(async () => {
+    startTrainees(async () => {
       const result = await addTraineeToSession(session.id, traineeId, status, cursus ? addCursus : null);
       if (!result.ok) {
         setError(result.error);
@@ -449,12 +481,17 @@ export function SessionDetailView({
           n.delete(traineeId);
           return n;
         });
+        setLocalAdds((a) => {
+          const { [traineeId]: _, ...rest } = a;
+          return rest;
+        });
       } else router.refresh();
     });
   }
 
   function handleCursus(ids: string[], value: Cursus | null) {
-    startTransition(async () => {
+    setLocalCursus((c) => ({ ...c, ...Object.fromEntries(ids.map((id) => [id, value])) }));
+    startTrainees(async () => {
       const result = await setTraineeCursus(session.id, ids, value);
       if (!result.ok) setError(result.error);
       else router.refresh();
@@ -462,17 +499,35 @@ export function SessionDetailView({
   }
 
   function handleRemove(traineeId: string) {
-    startTransition(async () => {
+    setLocalRemoved((r) => new Set(r).add(traineeId));
+    setJustAdded((s) => {
+      const n = new Set(s);
+      n.delete(traineeId);
+      return n;
+    });
+    startTrainees(async () => {
       const result = await removeTraineeFromSession(session.id, traineeId);
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setLocalRemoved((r) => {
+          const n = new Set(r);
+          n.delete(traineeId);
+          return n;
+        });
+      }
       else router.refresh();
     });
   }
 
   function handleStatusChange(traineeId: string, status: 'validee' | 'en_attente') {
-    startTransition(async () => {
+    const before = enrolled.find((t) => t.id === traineeId)?.status;
+    setLocalStatus((s) => ({ ...s, [traineeId]: status }));
+    startTrainees(async () => {
       const result = await setTraineeStatus(session.id, traineeId, status);
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        if (before) setLocalStatus((s) => ({ ...s, [traineeId]: before }));
+      }
       else router.refresh();
     });
   }
@@ -527,7 +582,7 @@ export function SessionDetailView({
               <span className="hint"> · salle, formateur, dates, horaires par jour</span>
             </summary>
             <div className="session-infos-body">
-      <div className="panel">
+      <div className="panel" id="infos">
         <div className="panel-head">
           <h2>Informations</h2>
           {template && (
@@ -597,7 +652,7 @@ export function SessionDetailView({
         </>
       ) : (
         <>
-      <div className="panel">
+      <div className="panel" id="infos">
         <div className="panel-head">
           <h2>Informations</h2>
           {template && (

@@ -22,8 +22,9 @@ import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
+import { JumpButton } from '@/components/jump-button';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations } from '@/lib/reservations';
@@ -464,6 +465,18 @@ export default async function SessionDetailPage({
                 </span>
               )}
             </p>
+          </div>
+          <div className="header-actions">
+            {editable && (
+              <JumpButton target="infos" className="btn primary">
+                <Pencil size={15} aria-hidden /> Modifier la session
+              </JumpButton>
+            )}
+            {editable && !started && (
+              <JumpButton target="stagiaires">
+                <UserPlus size={15} aria-hidden /> Ajouter des stagiaires
+              </JumpButton>
+            )}
           </div>
         </header>
 
