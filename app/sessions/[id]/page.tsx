@@ -70,11 +70,11 @@ export default async function SessionDetailPage({
       supabase
         .from('sessions')
         .select(
-          'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding, location), trainers(id, full_name, color), templates(title, category, duration_hours)'
+          'id, title, status, start_at, end_at, room_id, trainer_id, template_id, max_trainees, notes, digiforma_ref, rooms(name, is_holding, location, status), trainers(id, full_name, color), templates(title, category, duration_hours)'
         )
         .eq('id', id)
         .maybeSingle(),
-      supabase.from('rooms').select('id, name, capacity, is_holding, location').order('name'),
+      supabase.from('rooms').select('id, name, capacity, is_holding, location, status').order('name'),
       supabase.from('trainers').select('*').order('full_name'),
       editable ? allTraineesOf(supabase).then((data) => ({ data })) : Promise.resolve({ data: [] as any[] }),
       supabase.from('session_trainees').select('status, trainees(id, full_name, email, company, first_name, last_name)').eq('session_id', id),
@@ -233,7 +233,7 @@ export default async function SessionDetailPage({
   // Template docs first (dans l'ordre du catalogue), puis ceux propres à la session.
   const documents = [...((docRows as any[]) || [])].sort((a, b) => Number(!!a.session_id) - Number(!!b.session_id) || a.position - b.position);
 
-  const room = one((session as any).rooms) as { name: string; is_holding: boolean | null; location: string | null } | null;
+  const room = one((session as any).rooms) as { name: string; is_holding: boolean | null; location: string | null; status?: string | null } | null;
   const trainer = one((session as any).trainers) as { id: string; full_name: string; color: string | null } | null;
   const template = one((session as any).templates) as { title: string; category: string | null; duration_hours: number } | null;
   const hours = sessionHours(session.start_at, session.end_at, (dayRows as any) || []);
@@ -386,7 +386,13 @@ export default async function SessionDetailPage({
                   ? {
                       session: {
                         series: arSeries,
-                        lieu: room?.is_holding ? null : streetAddress(room) ? `Centre CF RÉSEAUX - ${streetAddress(room)}` : null,
+                        lieu: room?.is_holding
+                          ? null
+                          : (room as any)?.status === 'exterieur'
+                            ? buildingAddress(room as any)
+                            : streetAddress(room)
+                              ? `Centre CF RÉSEAUX - ${streetAddress(room)}`
+                              : null,
                         trainerName: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
                       },
                       data: ((arRow as any)?.data as any) || null,
@@ -447,7 +453,13 @@ export default async function SessionDetailPage({
               <SessionStatus status={session.status} startAt={session.start_at} endAt={session.end_at} nowKey={parisNowKey()} />
             </h1>
             <p style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{room?.is_holding ? 'Salle à affecter' : room?.name || 'Salle non définie'}</span>·
+              <span>
+                {room?.is_holding
+                  ? 'Salle à affecter'
+                  : (room as any)?.status === 'exterieur'
+                    ? `Formation extérieure (INTRA) · ${room?.name}${room?.location ? ` · ${room.location}` : ''}`
+                    : room?.name || 'Salle non définie'}
+              </span>·
               <span>{formatSessionPeriod(session.start_at, session.end_at)}</span>·
               <span>{formatHours(hours)}</span>
               {trainer && (

@@ -17,6 +17,8 @@ export type FormRoom = {
   capacity: number;
   is_holding?: boolean | null;
   location?: string | null;
+  /** « exterieur » : salle d'une formation INTRA en entreprise (migration 44). */
+  status?: string | null;
   /** Formations réalisables (vide = toutes). */
   template_ids?: string[];
 };
@@ -94,6 +96,7 @@ export function SessionForm({
   disabled = false,
   showTemplate = true,
   pickTemplate = true,
+  external = false,
   formId,
   absences = [],
   onSubmit,
@@ -115,6 +118,8 @@ export function SessionForm({
   showTemplate?: boolean;
   /** Session personnalisée : pas de formation du catalogue, durée saisie librement. */
   pickTemplate?: boolean;
+  /** Formation extérieure (INTRA) : entreprise et adresse à la place de la salle. */
+  external?: boolean;
   formId?: string;
   absences?: Absence[];
   onSubmit: (fd: FormData) => void;
@@ -227,7 +232,9 @@ export function SessionForm({
 
   // Salles : celles où la formation choisie est réalisable passent en premier
   // (et sont présélectionnées), les autres restent disponibles au cas où.
-  const physicalRooms = rooms.filter((r) => !r.is_holding);
+  // Salles extérieures (formations INTRA, migration 44) : seulement celle de la session modifiée.
+  const physicalRooms = rooms.filter((r) => !r.is_holding && r.status !== 'exterieur');
+  const externalRooms = rooms.filter((r) => r.status === 'exterieur' && r.id === defaults.room_id);
   const suitedRooms = template ? physicalRooms.filter((r) => r.template_ids?.includes(template.id)) : [];
   const otherRooms = physicalRooms.filter((r) => !suitedRooms.includes(r));
   const roomLabel = (r: FormRoom) => `${r.location ? `${r.location} · ` : ''}${r.name} (${r.capacity} places)`;
@@ -288,7 +295,21 @@ export function SessionForm({
           </label>
         </div>
 
+        {external && (
+          <div className="form-row">
+            <label>
+              Entreprise / lieu de la formation *
+              <input name="ext_name" required placeholder="Ex. ENEDIS Lille, Eiffage Énergie…" maxLength={120} />
+            </label>
+            <label style={{ gridColumn: 'span 2' }}>
+              Adresse
+              <input name="ext_address" placeholder="Ex. 12 rue de la Gare, 59000 Lille" maxLength={240} />
+            </label>
+          </div>
+        )}
+
         <div className="form-row">
+          {!external && (
           <label>
             Salle
             <select
@@ -314,16 +335,23 @@ export function SessionForm({
               {holdingRooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
+              {externalRooms.length > 0 && (
+                <optgroup label="Formation extérieure">
+                  {externalRooms.map((r) => <option key={r.id} value={r.id}>Extérieur · {r.name}</option>)}
+                </optgroup>
+              )}
             </select>
           </label>
+          )}
           <label>
             <span className="trainer-tag">
-              Formateur
+              {external ? 'Formateur qui part en entreprise *' : 'Formateur'}
               {trainer && <span className="swatch" style={{ background: trainer.color || undefined }} aria-hidden />}
             </span>
             {trainerDay && <input type="hidden" name="trainer_id" value={trainerId} />}
             {trainerDay && <input type="hidden" name="trainer_day" value={trainerDay} />}
             <select
+              required={external}
               name={trainerDay ? 'day_trainer_id' : 'trainer_id'}
               value={trainerDay ? dayTrainerId || trainerDays?.dayTrainers[trainerDay] || trainerId : trainerId}
               onChange={(e) => (trainerDay ? setDayTrainerId(e.target.value) : setTrainerId(e.target.value))}

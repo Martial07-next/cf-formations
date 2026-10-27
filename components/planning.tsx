@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2 } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
@@ -293,7 +293,11 @@ export function Planning({
 
   const holding = rooms.filter((r) => r.is_holding);
   const holdingWithSessions = holding.filter((r) => shown.some((s) => s.room_id === r.id));
-  const gridRooms = [...holdingWithSessions, ...rooms.filter((r) => !r.is_holding)];
+  // Formations extérieures (INTRA, migration 44) : une colonne par formation,
+  // seulement sur la période où elle a lieu.
+  const isExternal = (r: Room) => r.status === 'exterieur';
+  const externalWithSessions = rooms.filter((r) => isExternal(r) && shown.some((s) => s.room_id === r.id));
+  const gridRooms = [...holdingWithSessions, ...rooms.filter((r) => !r.is_holding && !isExternal(r)), ...externalWithSessions];
 
   // La grille tient toujours dans la largeur de l'écran (pas de défilement) :
   // les cartes se compactent selon la place disponible par salle.
@@ -708,11 +712,17 @@ export function Planning({
             <div className="plan-grid" style={{ gridTemplateColumns: `${density === 'tight' ? '70px' : density === 'dense' ? '86px' : 'minmax(96px, 120px)'} repeat(${gridRooms.length || 1}, minmax(0, 1fr))` }}>
               <div className="plan-head corner">{view === 'day' ? 'Jour' : 'Jours'}</div>
               {gridRooms.map((r) => (
-                <div className={`plan-head${r.is_holding ? ' holding' : ''}`} key={r.id}>
+                <div className={`plan-head${r.is_holding ? ' holding' : ''}${isExternal(r) ? ' external' : ''}`} key={r.id}>
                   {r.is_holding ? (
                     <>
                       <Inbox size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> À affecter
                       <small>Import Digiforma</small>
+                    </>
+                  ) : isExternal(r) ? (
+                    <>
+                      <span className="ext-tag"><Building2 size={11} aria-hidden /> INTRA</span>
+                      {r.name}
+                      <small>{r.location || 'Formation en entreprise'}</small>
                     </>
                   ) : (
                     <>
@@ -747,9 +757,9 @@ export function Planning({
                       <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                     </div>
                     {gridRooms.map((r) => (
-                      <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}`} key={r.id}>
+                      <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}${isExternal(r) ? ' external' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => card(s, d.iso))}
-                        {canEdit && !r.is_holding && (() => {
+                        {canEdit && !r.is_holding && !isExternal(r) && (() => {
                           const after = freeFrom(d.iso, r.id);
                           return (
                             <button
@@ -795,7 +805,7 @@ export function Planning({
                     </summary>
                     {items.map(({ s, r }) => (
                       <div key={s.id} className="agenda-item">
-                        <span className="agenda-room">{r.is_holding ? 'À affecter' : r.name}</span>
+                        <span className="agenda-room">{r.is_holding ? 'À affecter' : isExternal(r) ? `INTRA · ${r.name}` : r.name}</span>
                         {card(s, d.iso)}
                       </div>
                     ))}
@@ -814,7 +824,7 @@ export function Planning({
                   {items.length ? (
                     items.map(({ s, r }) => (
                       <div key={s.id} className="agenda-item">
-                        <span className="agenda-room">{r.is_holding ? 'À affecter' : r.name}</span>
+                        <span className="agenda-room">{r.is_holding ? 'À affecter' : isExternal(r) ? `INTRA · ${r.name}` : r.name}</span>
                         {card(s, d.iso)}
                       </div>
                     ))
@@ -953,6 +963,7 @@ export function Planning({
             defaultDay={eventPanel.day}
             trainers={trainers}
             employees={employees}
+            intra={canEdit ? { trainers: trainers as any, templates, absences } : null}
             roomNames={rooms.filter((r: any) => !r.is_holding).map((r) => r.name)}
             onDone={() => {
               eventRef.current?.close();

@@ -9,6 +9,9 @@ import { EVENT_KINDS, EVENT_KIND, eventTimeLabel, type EventKind, type PlanningE
 import { absenceText, type Absence } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { askConfirm } from '@/lib/confirm-dialog';
+import { Building2 } from 'lucide-react';
+import { SessionForm, type FormTemplate, type FormTrainer } from '@/components/session-form';
+import { createExternalSession } from '@/app/sessions/actions';
 
 type Trainer = { id: string; full_name: string; color: string | null; status?: string | null };
 
@@ -198,6 +201,7 @@ export function EventForm({
   trainers,
   employees = [],
   roomNames = [],
+  intra = null,
   onDone,
   onCancel,
 }: {
@@ -207,6 +211,8 @@ export function EventForm({
   employees?: { id: string; name: string }[];
   /** Salles proposées pour le lieu (saisie libre possible). */
   roomNames?: string[];
+  /** Formation extérieure (INTRA) : de quoi créer la session (bureau / admin). */
+  intra?: { trainers: FormTrainer[]; templates: FormTemplate[]; absences: Absence[] } | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -215,13 +221,73 @@ export function EventForm({
   const [start, setStart] = useState(event?.start_date || defaultDay || '');
   const [end, setEnd] = useState(event?.end_date || defaultDay || '');
   const [isPending, startTransition] = useTransition();
+  // « Formation extérieure (INTRA) » : une vraie session, avec sa colonne au planning.
+  const [mode, setMode] = useState<'event' | 'intra'>('event');
+
+  const head = (
+    <div className="modal-head">
+      <h2>{event ? 'Modifier l’évènement' : mode === 'intra' ? 'Formation extérieure (INTRA)' : 'Nouvel évènement'}</h2>
+      <button className="icon ghost" onClick={onCancel} aria-label="Fermer"><X size={18} /></button>
+    </div>
+  );
+  const switcher = !event && intra && (
+    <div className="event-mode" role="radiogroup" aria-label="Type">
+      <button type="button" role="radio" aria-checked={mode === 'event'} className={mode === 'event' ? 'on' : ''} onClick={() => setMode('event')}>
+        <Pin size={14} aria-hidden /> Évènement
+        <small>Information sur le planning</small>
+      </button>
+      <button type="button" role="radio" aria-checked={mode === 'intra'} className={mode === 'intra' ? 'on' : ''} onClick={() => setMode('intra')}>
+        <Building2 size={14} aria-hidden /> Formation extérieure (INTRA)
+        <small>Le formateur part en entreprise</small>
+      </button>
+    </div>
+  );
+
+  if (mode === 'intra' && intra) {
+    return (
+      <>
+        {head}
+        <div className="modal-body" style={{ paddingBottom: 18 }}>
+          {switcher}
+          {error && <div role="alert" className="alert alert-error">{error}</div>}
+          <p className="hint" style={{ marginTop: 0 }}>
+            Le formateur anime la formation dans les locaux de l’entreprise. Une colonne à son nom apparaît sur le
+            planning <strong>uniquement les semaines de la formation</strong>, et sa fiche de session s’ouvre à
+            l’enregistrement pour ajouter les stagiaires.
+          </p>
+          <SessionForm
+            formId="intra-form"
+            external
+            rooms={[]}
+            trainers={intra.trainers}
+            templates={intra.templates}
+            absences={intra.absences}
+            defaults={{ start_date: defaultDay || '', end_date: defaultDay || '', status: 'confirmee' }}
+            onSubmit={(fd) => {
+              setError(null);
+              startTransition(async () => {
+                const res = await createExternalSession(fd);
+                if (!res.ok) return setError(res.error);
+                // Fiche de la session ouverte directement (chargement complet, état neuf).
+                if (res.id) window.location.assign(`/sessions/${res.id}?nouvelle=1`);
+                else onDone();
+              });
+            }}
+          />
+          <div className="form-actions" style={{ marginTop: 12 }}>
+            <button type="submit" form="intra-form" className="primary" disabled={isPending}>
+              {isPending ? 'Enregistrement…' : 'Enregistrer et ouvrir la session'}
+            </button>
+            <button type="button" onClick={onCancel}>Annuler</button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <div className="modal-head">
-        <h2>{event ? 'Modifier l’évènement' : 'Nouvel évènement'}</h2>
-        <button className="icon ghost" onClick={onCancel} aria-label="Fermer"><X size={18} /></button>
-      </div>
+      {head}
       <form
         className="modal-body"
         style={{ paddingBottom: 18 }}
@@ -234,6 +300,7 @@ export function EventForm({
           });
         })}
       >
+        {switcher}
         {error && <div role="alert" className="alert alert-error">{error}</div>}
         <p className="hint" style={{ marginTop: 0 }}>
           Information affichée en aperçu sur le planning : elle ne bloque aucune session de formation.

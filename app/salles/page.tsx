@@ -14,6 +14,7 @@ export default async function SallesPage() {
     .from('rooms')
     .select('id, name, capacity, location, status')
     .eq('is_holding', false) // la salle virtuelle « À affecter » n'est pas une vraie salle
+    .neq('status', 'exterieur') // ni les lieux des formations extérieures (INTRA)
     .order('name');
   const [{ data: workshops }, { data: roomTemplates }, { data: templates }] = await Promise.all([
     supabase.from('room_workshops').select('id, room_id, name').order('name'),

@@ -1627,6 +1627,17 @@ header.dash-hero p.dash-date{color:#c9dcd0}
 .program-kind-chip.personnalise{background:#fff200;color:#17241b}
 .poec-list-badges{display:flex;gap:6px;flex-wrap:wrap}
 @media (max-width:640px){.program-kind{grid-template-columns:1fr}}
+/* Planning : colonnes des formations extérieures (INTRA), visibles la semaine de la formation. */
+.plan-head.external{background:#17241b;color:#fff;border-left:2px solid #08fa64}
+.plan-head.external small{color:#a9c4b3}
+.ext-tag{display:inline-flex;align-items:center;gap:3px;margin-right:5px;font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#17241b;background:#08fa64;border-radius:999px;padding:1px 6px;vertical-align:1px}
+.plan-cell.external{background:repeating-linear-gradient(135deg,rgba(8,250,100,.05) 0 10px,transparent 10px 20px);border-left:2px solid rgba(8,250,100,.5)}
+/* Nouvel évènement : évènement ou formation extérieure. */
+.event-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.event-mode button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border-radius:14px;padding:10px 12px;min-height:0;white-space:normal}
+.event-mode button small{font-weight:500;color:var(--muted);font-size:12px}
+.event-mode button.on{border-color:#17241b;box-shadow:0 0 0 1px #17241b;background:var(--cf-mint-soft)}
+@media (max-width:640px){.event-mode{grid-template-columns:1fr}}
 /* Tableau de bord : heure en direct au-dessus des raccourcis. */
 /* Colonne droite sur toute la hauteur : l'heure en haut (au niveau de « Tableau de bord »), les boutons en bas, tout aligné à droite. */
 .dash-hero-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:12px;position:relative;z-index:1;align-self:stretch}

@@ -91,6 +91,41 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   return { ok: true, id: data.id };
 }
 
+/**
+ * Formation extérieure (INTRA, dans les locaux d'une entreprise) : crée sa
+ * « salle » propre (entreprise + adresse, status « exterieur », migration 44)
+ * puis la session. La salle n'existe que pour cette formation : sa colonne
+ * n'apparaît au planning que les semaines où elle a lieu.
+ */
+export async function createExternalSession(formData: FormData): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const name = String(formData.get('ext_name') || '').trim().slice(0, 120);
+  const address = String(formData.get('ext_address') || '').trim().slice(0, 240) || null;
+  if (!name) return { ok: false, error: 'Indique l’entreprise ou le lieu de la formation.' };
+  if (!String(formData.get('trainer_id') || '')) return { ok: false, error: 'Choisis le formateur qui part en formation extérieure.' };
+  const supabase = await createClient();
+  const capacity = Math.max(1, Number(formData.get('max_trainees')) || 12);
+  const { data: room, error } = await supabase
+    .from('rooms')
+    .insert({ name, location: address, capacity, status: 'exterieur', is_holding: false })
+    .select('id')
+    .single();
+  if (error || !room) {
+    return {
+      ok: false,
+      error: /rooms_status_check|status/i.test(error?.message || '')
+        ? 'Exécute d’abord la migration 44 (supabase/migration_phase44.sql) dans Supabase.'
+        : error?.message || 'Création impossible.',
+    };
+  }
+  formData.set('room_id', room.id);
+  formData.delete('poec_id');
+  const res = await createSession(formData);
+  // Session refusée (conflit de formateur, dates…) : la salle extérieure est retirée.
+  if (!res.ok) await supabase.from('rooms').delete().eq('id', room.id);
+  return res;
+}
+
 export async function updateSessionStatus(sessionId: string, status: string): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   if (!isSessionStatus(status)) return { ok: false, error: 'Statut inconnu.' };

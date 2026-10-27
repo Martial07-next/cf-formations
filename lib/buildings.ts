@@ -22,8 +22,13 @@ export const BUILDING_ADDRESS: Record<string, string> = {
  * Lieu de formation d'une salle : bâtiment d'après la salle (renseigné, sinon
  * déduit du numéro : salles 1 à 3 → BAT 1, salles 4 à 6 → BAT 2).
  */
-export function trainingPlace(room: { name: string; location?: string | null } | null): string | null {
+type PlaceRoom = { name: string; location?: string | null; status?: string | null };
+/** Salle d'une formation extérieure (INTRA) : entreprise + adresse saisie (migration 44). */
+const external = (room: PlaceRoom | null) => room?.status === 'exterieur';
+
+export function trainingPlace(room: PlaceRoom | null): string | null {
   if (!room) return null;
+  if (external(room)) return room.location ? `${room.name} · ${room.location}` : room.name;
   let building = room.location && BUILDING_ADDRESS[room.location] ? room.location : null;
   if (!building) {
     const n = Number(room.name.match(/(\d+)/)?.[1]);
@@ -34,14 +39,16 @@ export function trainingPlace(room: { name: string; location?: string | null } |
 }
 
 /** Bâtiment et adresse seuls (sans la salle), ex. pour le « lieu de dispense ». */
-export function buildingAddress(room: { name: string; location?: string | null } | null): string | null {
+export function buildingAddress(room: PlaceRoom | null): string | null {
+  if (external(room)) return room!.location ? `${room!.name} · ${room!.location}` : room!.name;
   const place = trainingPlace(room);
   if (!place || !room) return null;
   return place.startsWith(`${room.name} · `) ? place.slice(room.name.length + 3) : null;
 }
 
 /** Adresse postale seule du bâtiment (ex. « 20 rue du Champ de Tir, 59553 Cuincy »). */
-export function streetAddress(room: { name: string; location?: string | null } | null): string | null {
+export function streetAddress(room: PlaceRoom | null): string | null {
+  if (external(room)) return room!.location || null;
   const b = buildingAddress(room);
   return b ? b.split(' · ').slice(1).join(' · ') || null : null;
 }
