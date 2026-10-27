@@ -27,7 +27,8 @@ export async function login(formData: FormData) {
   revalidatePath('/', 'layout');
   // Retour à la page demandée avant la connexion (chemin interne uniquement).
   const suite = String(formData.get('suite') || '');
-  redirect(/^\/(?!\/)[^\s\\]*$/.test(suite) && !suite.startsWith('/login') ? suite : '/');
+  // Sinon : tableau de bord (informations importantes de chacun).
+  redirect(/^\/(?!\/)[^\s\\]*$/.test(suite) && !suite.startsWith('/login') ? suite : '/tableau-de-bord');
 }
 
 export async function logout() {

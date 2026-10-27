@@ -21,6 +21,7 @@ import {
   IdCard,
   Receipt,
   Lightbulb,
+  LayoutDashboard,
 } from 'lucide-react';
 import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
@@ -34,6 +35,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
     {
       label: 'Planning',
       links: [
+        { href: '/tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard },
         { href: '/', label: 'Planning', icon: CalendarDays },
         { href: '/sessions', label: 'Sessions', icon: ListChecks },
       ],

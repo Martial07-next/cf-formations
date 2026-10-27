@@ -1560,3 +1560,54 @@ html.dev-mode .mobile-bar{top:44px}
 .dev-fab .dev-count{font-family:inherit;letter-spacing:0}
 .dev-bar-min{padding:6px 8px;color:#9fbcaa}
 @media (max-width:760px){.dev-fab{right:10px;bottom:calc(10px + env(safe-area-inset-bottom))}}
+/* ---------- Tableau de bord ---------- */
+.dash-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#17241b;color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px;position:relative;overflow:hidden}
+.dash-hero::after{content:'';position:absolute;right:-40px;top:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(8,250,100,.22),transparent 65%);pointer-events:none}
+.dash-hero .eyebrow{color:#08fa64}
+.dash-hero h1{color:#fff;margin:2px 0 4px;font-family:'CF Archivo Expanded',sans-serif;font-size:26px;letter-spacing:.01em}
+.dash-date{margin:0;color:#c9dcd0;font-size:14px}
+.dash-actions{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1}
+.dash-hero .btn:not(.primary){background:transparent;color:#fff;border-color:#3d5c48}
+.dash-hero .btn:not(.primary):hover{background:#243a2c}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+.dash-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 14px 10px;box-shadow:var(--shadow-sm);min-width:0}
+.dash-card h2{display:flex;align-items:center;gap:8px;font-size:15px;margin:0 0 8px}
+.dash-card-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--cf-mint-soft);color:#17613a;flex:none}
+.dash-card.tone-dark .dash-card-icon{background:#17241b;color:#08fa64}
+.dash-card.tone-warn{border-color:#f0d58a}
+.dash-card.tone-warn .dash-card-icon{background:#fff6d6;color:#8a6100}
+.dash-card.tone-urgent{border-color:#f3c2bd}
+.dash-card.tone-urgent .dash-card-icon{background:#fdecea;color:#9a2c0b}
+.dash-card-count{margin-left:auto;background:#17241b;color:#08fa64;border-radius:999px;font-size:12px;font-weight:800;padding:2px 9px}
+.dash-card-hint{margin:-4px 0 8px;font-size:12.5px}
+.dash-empty{display:flex;align-items:center;gap:6px;margin:6px 0 8px;color:var(--muted);font-size:13.5px}
+.dash-empty svg{color:#22c46f}
+.dash-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dash-list li + li{border-top:1px solid var(--line)}
+.dash-list a{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:10px;text-decoration:none;color:var(--ink)}
+.dash-list a:hover{background:var(--surface-2)}
+.dash-item-main{display:flex;flex-direction:column;min-width:0;flex:1}
+.dash-item-main strong{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-item-main small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-badge{flex:none;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.dash-badge.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.dash-badge.warn{background:#fff6d6;color:#8a6100}
+.dash-badge.urgent{background:#fdecea;color:#9a2c0b}
+.dash-badge.todo{background:var(--draft-bg);color:var(--draft-ink)}
+.dash-badge.info{background:#eef0ef;color:#46524c}
+.dash-go{flex:none;color:var(--muted)}
+.dash-more{padding:8px 6px;font-size:12.5px}
+.dash-card-foot{border-top:1px dashed var(--line);margin-top:6px;padding-top:8px}
+.dash-card-links{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px}
+.dash-card-links a{display:inline-flex;align-items:center;gap:4px;font-weight:700;color:var(--ink);text-decoration:none}
+.dash-card-links a:hover{text-decoration:underline}
+.dash-foot{margin-top:16px}
+@media (max-width:760px){
+  .dash-hero{padding:18px 16px;border-radius:16px}
+  .dash-hero h1{font-size:22px}
+  .dash-grid{grid-template-columns:1fr}
+  .dash-actions{width:100%}
+  .dash-actions .btn{flex:1;justify-content:center}
+}
+header.dash-hero p.dash-date{color:#c9dcd0}
+@media (max-width:760px){.dash-actions{display:grid;grid-template-columns:1fr 1fr}.dash-actions .btn.primary{grid-column:1/-1;order:-1}.dash-actions .btn{white-space:nowrap;font-size:13px;padding:9px 10px}}

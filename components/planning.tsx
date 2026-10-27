@@ -475,6 +475,17 @@ export function Planning({
     setFormKey((k) => k + 1);
     dialogRef.current?.showModal();
   }
+  // Lien « Nouvelle session » du tableau de bord (/?creer=1) : formulaire ouvert d'office.
+  const wantsCreate = searchParams.get('creer') === '1';
+  useEffect(() => {
+    if (!wantsCreate || !canEdit) return;
+    openForm({});
+    const p = new URLSearchParams(searchParams);
+    p.delete('creer');
+    router.replace(p.size ? `/?${p}` : '/', { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsCreate]);
+
 
   function handleCreate(formData: FormData) {
     setFormError(null);

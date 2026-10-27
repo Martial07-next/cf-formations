@@ -7,7 +7,8 @@ import { conventionStatus, frShort } from '@/lib/poec';
 
 export const metadata = { title: 'Parcours POEC · CF Réseaux' };
 
-export default async function PoecListPage() {
+export default async function PoecListPage({ searchParams }: { searchParams: Promise<{ nouveau?: string }> }) {
+  const { nouveau } = await searchParams;
   const profile = await getCurrentProfile();
   if (!canManage(profile?.role)) redirect('/');
   const supabase = await createClient();
@@ -37,7 +38,7 @@ export default async function PoecListPage() {
           </div>
         ) : (
           <>
-            <details className="panel poec-new" open={!programs?.length}>
+            <details className="panel poec-new" open={!programs?.length || nouveau === '1'}>
               <summary><strong>+ Nouveau parcours POEC</strong></summary>
               <div style={{ marginTop: 14 }}><ProgramForm /></div>
             </details>
