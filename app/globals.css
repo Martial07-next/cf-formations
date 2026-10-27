@@ -1628,7 +1628,10 @@ header.dash-hero p.dash-date{color:#c9dcd0}
 .poec-list-badges{display:flex;gap:6px;flex-wrap:wrap}
 @media (max-width:640px){.program-kind{grid-template-columns:1fr}}
 /* Tableau de bord : heure en direct au-dessus des raccourcis. */
-.dash-hero-right{display:flex;flex-direction:column;align-items:flex-end;gap:12px;position:relative;z-index:1}
+/* Colonne droite sur toute la hauteur : l'heure en haut (au niveau de « Tableau de bord »), les boutons en bas, tout aligné à droite. */
+.dash-hero-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:12px;position:relative;z-index:1;align-self:stretch}
+.dash-hero-right .live-clock{height:16px;align-items:center}
+.dash-hero-right .dash-actions{justify-content:flex-end}
 .live-clock{display:inline-flex;align-items:baseline;gap:5px;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
 .live-clock-hm{font-size:16px;letter-spacing:.02em}
 .live-clock-s{font-size:10px;color:#08fa64;min-width:2ch}
