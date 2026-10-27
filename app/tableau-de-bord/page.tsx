@@ -25,6 +25,10 @@ import { ALERT_DAYS, inDays, sessionAlerts } from '@/lib/session-alerts';
 import { conventionStatus } from '@/lib/poec';
 import { ABSENCE_LABEL, frDate } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { DOC_LABEL } from '@/lib/salaries';
+import { customDocs, signatureFor } from '@/lib/documents';
+import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { DashCard as Card, type DashItem as Item } from '@/components/dash-card';
 
 export const metadata = { title: 'Tableau de bord · CF PLANNING' };
@@ -250,6 +254,27 @@ export default async function DashboardPage() {
     ];
   }
 
+  // ---- Salarié : documents à signer (droit à l'image, remise de matériel, règlement…) ----
+  // Fiche salarié liée au compte ; seules ses propres signatures sont lues.
+  let toSign: { count: number; titles: string[]; href: string } | null = null;
+  try {
+    const admin = createAdminClient();
+    const { data: emp } = await admin.from('employees').select('id, token').eq('profile_id', profile.id).eq('active', true).maybeSingle();
+    if (emp) {
+      const [{ data: rows }, all, sigs] = await Promise.all([
+        admin.from('employee_documents').select('kind, signed_at').eq('employee_id', emp.id),
+        loadDocs(admin as any),
+        loadDocSignatures(admin as any, 'employee_id', [emp.id]),
+      ]);
+      const builtin = ((rows as any[]) || []).filter((d) => !d.signed_at).map((d) => DOC_LABEL[d.kind as keyof typeof DOC_LABEL] || 'Document');
+      const extra = customDocs(all, 'salarie').filter((d) => !signatureFor(d, sigs)).map((d) => d.title);
+      const titles = [...builtin, ...extra];
+      if (titles.length) toSign = { count: titles.length, titles, href: `/salarie/${emp.token}` };
+    }
+  } catch {
+    // Sans clé de service ou sans module salariés : rien à afficher.
+  }
+
   // Prénom : le mot qui n'est pas en majuscules (« EROUART Martial » → Martial).
   const words: string[] = String(profile.full_name || '').split(/\s+/).filter(Boolean);
   const first = words.find((w) => w !== w.toUpperCase()) || words[0] || '';
@@ -280,6 +305,20 @@ export default async function DashboardPage() {
             )}
           </div>
         </header>
+
+        {/* Documents à signer : en priorité, seulement s'il y en a. */}
+        {toSign && (
+          <Link href={toSign.href} className="dash-sign">
+            <span className="dash-sign-icon"><FileSignature size={20} aria-hidden /></span>
+            <span className="dash-sign-text">
+              <strong>
+                {toSign.count === 1 ? 'Tu as 1 document à signer' : `Tu as ${toSign.count} documents à signer`}
+              </strong>
+              <small>{toSign.titles.join(' · ')}</small>
+            </span>
+            <span className="btn primary small dash-sign-btn">Signer maintenant <ChevronRight size={14} aria-hidden /></span>
+          </Link>
+        )}
 
         <div className="dash-grid">
           {trainerId && (
