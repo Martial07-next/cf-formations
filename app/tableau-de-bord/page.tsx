@@ -30,6 +30,7 @@ import { DOC_LABEL } from '@/lib/salaries';
 import { customDocs, signatureFor } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { DashCard as Card, type DashItem as Item } from '@/components/dash-card';
+import { LiveClock } from '@/components/live-clock';
 
 export const metadata = { title: 'Tableau de bord · CF PLANNING' };
 
@@ -294,6 +295,8 @@ export default async function DashboardPage() {
               {trainerId && myCount > 0 && ` · ${myCount} dossier${myCount > 1 ? 's' : ''} à compléter`}
             </p>
           </div>
+          <div className="dash-hero-right">
+          <LiveClock />
           <div className="dash-actions">
             <Link href="/" className={`btn${staff ? '' : ' primary'} dash-open-planning`}><CalendarDays size={15} aria-hidden /> Ouvrir le planning</Link>
             {staff && (
@@ -303,6 +306,7 @@ export default async function DashboardPage() {
                 <Link href="/poec?nouveau=1&type=personnalise" className="btn"><PenLine size={15} aria-hidden /> Parcours personnalisé</Link>
               </>
             )}
+          </div>
           </div>
         </header>
 
