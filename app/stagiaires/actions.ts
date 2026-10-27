@@ -6,6 +6,7 @@ import { traineesLockError } from '@/lib/session-lock';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { resolveTraineesBulk, findTraineeConflictsBulk, upsertSessionLinks } from '@/lib/trainee-conflict';
 import { parseNameList } from '@/lib/name-list';
+import { sameCompany } from '@/lib/company';
 import { parseTraineeFile } from '@/lib/trainee-file';
 import { buildFullName, readTraineeName, duplicateMessage, isDuplicateError } from '@/lib/trainee-name';
 
@@ -220,6 +221,21 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
     else matched++;
     if (!ids.some((x) => x.id === trainee.id)) ids.push({ id: trainee.id, i });
   });
+
+  // Formation INTRA : entreprise donnée aux stagiaires qui n'en ont pas ;
+  // un stagiaire déjà rattaché à une autre entreprise est signalé (pas de mélange).
+  const company = String(formData.get('company') || '').trim().slice(0, 160);
+  if (company && ids.length) {
+    const { data: current } = await supabase.from('trainees').select('id, company').in('id', ids.map((x) => x.id));
+    const noCompany = ((current as any[]) || []).filter((t) => !String(t.company || '').trim()).map((t) => t.id);
+    if (noCompany.length) await supabase.from('trainees').update({ company }).in('id', noCompany);
+    for (const t of (current as any[]) || []) {
+      if (t.company && !sameCompany(t.company, company)) {
+        const i = ids.find((x) => x.id === t.id)?.i;
+        errors.push(`${i != null ? label(i) : 'Un stagiaire'} : déjà enregistré chez « ${t.company} », pas chez ${company}. Vérifie qu’il s’agit bien de la même personne.`);
+      }
+    }
+  }
 
   if (session && ids.length) {
     const conflicts =

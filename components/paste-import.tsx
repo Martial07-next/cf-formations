@@ -10,7 +10,17 @@ import { parseNameList, type NameOrder } from '@/lib/name-list';
  * Import le plus simple : copier les colonnes Nom et Prénom dans Excel et les
  * coller ici. Aucune entreprise ni e-mail nécessaire, aucune API externe.
  */
-export function PasteImport({ sessionId, recyclage = false }: { sessionId?: string; /** Formation disponible en recyclage : choix initial / recyclage. */ recyclage?: boolean }) {
+export function PasteImport({
+  sessionId,
+  recyclage = false,
+  company = null,
+}: {
+  sessionId?: string;
+  /** Formation disponible en recyclage : choix initial / recyclage. */
+  recyclage?: boolean;
+  /** Formation INTRA : les nouveaux stagiaires sont rattachés à cette entreprise. */
+  company?: string | null;
+}) {
   const [text, setText] = useState('');
   const [order, setOrder] = useState<NameOrder>('nom_prenom');
   const [result, setResult] = useState<PasteImportResult | null>(null);
@@ -58,6 +68,13 @@ export function PasteImport({ sessionId, recyclage = false }: { sessionId?: stri
 
       <form ref={formRef} action={handle}>
         {sessionId && <input type="hidden" name="session_id" value={sessionId} />}
+        {company && <input type="hidden" name="company" value={company} />}
+        {company && (
+          <p className="hint" style={{ marginTop: 0 }}>
+            Formation INTRA : les nouveaux stagiaires sont enregistrés chez <strong>{company}</strong>. Un stagiaire déjà
+            connu dans une autre entreprise est signalé.
+          </p>
+        )}
         <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
           <label>
             Liste

@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { companyKey } from '@/lib/company';
 import { congesConfigured, syncCongesIfStale } from '@/lib/conges-sync';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
@@ -207,12 +208,26 @@ export default async function Page({
   const { data: eventRows } = await period.events;
   // Salariés des évènements (migration 40) et salariés proposés dans le formulaire.
   const eventIds = ((eventRows as any[]) || []).map((e) => e.id as string);
-  const [{ data: eventEmployees }, { data: employeeChoices }] = await Promise.all([
+  const [{ data: eventEmployees }, { data: employeeChoices }, { data: companyRows }] = await Promise.all([
     eventIds.length
       ? supabase.from('planning_event_employees').select('event_id, employee_id, employee_name').in('event_id', eventIds)
       : Promise.resolve({ data: [] as any[] }),
     canManage(profile?.role) ? supabase.rpc('event_employee_choices') : Promise.resolve({ data: [] as any[] }),
+    // Entreprises de la base (formation INTRA : choix de l'entreprise sans faute de frappe).
+    canManage(profile?.role) ? supabase.from('trainees').select('company').not('company', 'is', null).limit(20000) : Promise.resolve({ data: [] as any[] }),
   ]);
+  const companies = (() => {
+    const byKey = new Map<string, { name: string; n: number }>();
+    for (const r of (companyRows as any[]) || []) {
+      const name = String(r.company || '').trim();
+      const k = companyKey(name);
+      if (!k) continue;
+      const cur = byKey.get(k);
+      if (cur) cur.n++;
+      else byKey.set(k, { name, n: 1 });
+    }
+    return [...byKey.values()].sort((a, b) => b.n - a.n).map((c) => ({ name: c.name, trainees: c.n }));
+  })();
   const events = ((eventRows as any[]) || []).map((e) => ({
     ...e,
     trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id),
@@ -380,6 +395,7 @@ export default async function Page({
         dayInfo={dayInfo}
         events={events}
         employees={((employeeChoices as any[]) || []).map((x) => ({ id: x.id as string, name: x.full_name as string }))}
+        companies={companies}
         usefulLinks={(usefulLinks as any) || []}
         templateLinks={templateLinks}
         dossierBadge={dossierBadge}

@@ -1632,6 +1632,20 @@ header.dash-hero p.dash-date{color:#c9dcd0}
 .plan-head.external small{color:#a9c4b3}
 .ext-tag{display:inline-flex;align-items:center;gap:3px;margin-right:5px;font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#17241b;background:#08fa64;border-radius:999px;padding:1px 6px;vertical-align:1px}
 .plan-cell.external{background:repeating-linear-gradient(135deg,rgba(8,250,100,.05) 0 10px,transparent 10px 20px);border-left:2px solid rgba(8,250,100,.5)}
+/* Formation INTRA : stagiaires de l'entreprise proposés en priorité. */
+.intra-known{display:block;margin-top:4px;font-weight:500;color:var(--muted);font-size:12px}
+.intra-known.ok{color:#17613a}
+.intra-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:9px 12px;border-radius:12px;background:#17241b;color:#d7f5e3;font-size:13px}
+.intra-filter svg{color:#08fa64;flex:none}
+.intra-filter span{flex:1;min-width:200px}
+.intra-filter strong{color:#fff}
+.intra-filter button{color:#08fa64;border-color:#2f4a39;background:transparent}
+.intra-filter button:hover{background:#243a2c;color:#fff;border-color:#3d5c48}
+.intra-filter.off{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+.intra-filter.off strong{color:var(--ink)}
+.intra-filter.off button{color:var(--ink);border-color:var(--line-strong)}
+.intra-filter.off button:hover{background:var(--surface);color:var(--ink)}
+.intra-suggest-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 /* Nouvel évènement : évènement ou formation extérieure. */
 .event-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .event-mode button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border-radius:14px;padding:10px 12px;min-height:0;white-space:normal}

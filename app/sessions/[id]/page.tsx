@@ -556,6 +556,7 @@ export default async function SessionDetailPage({
           sessionEnded={ended}
           isAdminUser={profile?.role === 'admin'}
           workPanels={workPanels}
+          intraCompany={room?.status === 'exterieur' ? room.name : null}
         />
 
         {billing && (editable || profile?.can_invoice) && (

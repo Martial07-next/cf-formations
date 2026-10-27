@@ -21,7 +21,8 @@ import type { SessionModule } from '@/lib/modules';
 import { DigiformaPanel } from '@/components/digiforma-panel';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
-import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2 } from 'lucide-react';
+import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2, Building2 } from 'lucide-react';
+import { sameCompany } from '@/lib/company';
 import { LinkRow } from '@/components/useful-links';
 import { FontsKit } from '@/components/fonts-kit';
 import type { LinkItem } from '@/lib/links';
@@ -97,7 +98,10 @@ export function SessionDetailView({
   sessionEnded = false,
   isAdminUser = false,
   workPanels = null,
+  intraCompany = null,
 }: {
+  /** Formation extérieure (INTRA) : entreprise chez qui elle a lieu (stagiaires proposés). */
+  intraCompany?: string | null;
   /** Formateurs habilités pour la formation (seuls proposés ; vide = tous). */
   qualifiedTrainerIds?: string[];
   /** Remplaçants par jour : jour → formateur. */
@@ -191,14 +195,19 @@ export function SessionDetailView({
   const traineeName = (t: { id: string; full_name: string }) =>
     isAdmin ? <a href={`/stagiaires/${t.id}`}>{t.full_name}</a> : <strong>{t.full_name}</strong>;
   // Recherche rapide (nom, prénom dans n'importe quel ordre, entreprise), 8 résultats les plus pertinents.
-  const matches =
-    traineeQuery.trim().length < 2
-      ? []
-      : searchTrainees(allTrainees.filter((t) => !enrolledIds.has(t.id) && !justAdded.has(t.id)), traineeQuery, 8);
+  // Formation INTRA : seuls les stagiaires de l'entreprise sont proposés (pas de mélange),
+  // sauf si l'on choisit d'afficher toute la base.
+  const [allCompanies, setAllCompanies] = useState(false);
+  const available = allTrainees.filter((t) => !enrolledIds.has(t.id) && !justAdded.has(t.id));
+  const companyPool = intraCompany ? available.filter((t) => sameCompany(t.company, intraCompany)) : [];
+  const pool = intraCompany && !allCompanies ? companyPool : available;
+  const matches = traineeQuery.trim().length < 2 ? [] : searchTrainees(pool, traineeQuery, 8);
+  // INTRA, sans recherche : les stagiaires de l'entreprise sont proposés directement.
+  const suggested = intraCompany && !allCompanies && traineeQuery.trim().length < 2 ? companyPool.slice(0, 30) : [];
 
   const traineeBlock = (
     <>
-      {canManageTrainees && <PasteImport sessionId={session.id} recyclage={Boolean(cursus)} />}
+      {canManageTrainees && <PasteImport sessionId={session.id} recyclage={Boolean(cursus)} company={intraCompany} />}
       {canManageTrainees && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
 
       <div className={`panel${locked ? ' trainees-locked' : ''}`}>
@@ -272,6 +281,24 @@ export function SessionDetailView({
 
         {canManageTrainees && (
           <div className="trainee-search" style={{ marginTop: 16 }}>
+            {intraCompany && (
+              <div className={`intra-filter${allCompanies ? ' off' : ''}`} role="status">
+                <Building2 size={15} aria-hidden />
+                <span>
+                  {allCompanies ? (
+                    <>Recherche dans <strong>toute la base</strong> de stagiaires.</>
+                  ) : (
+                    <>
+                      Formation INTRA chez <strong>{intraCompany}</strong> : seuls ses stagiaires sont proposés
+                      {` (${companyPool.length} disponible${companyPool.length > 1 ? 's' : ''})`}.
+                    </>
+                  )}
+                </span>
+                <button type="button" className="small ghost" onClick={() => setAllCompanies((v) => !v)}>
+                  {allCompanies ? `Seulement ${intraCompany}` : 'Chercher dans toute la base'}
+                </button>
+              </div>
+            )}
             <div className="trainee-add-bar">
               <label className="search" style={{ maxWidth: 420, flex: 1 }}>
                 <Search size={15} aria-hidden />
@@ -318,8 +345,42 @@ export function SessionDetailView({
                 ))}
               </div>
             )}
+            {suggested.length > 0 && (
+              <div className="trainee-results intra-suggest">
+                <p className="intra-suggest-head">
+                  <span>Stagiaires de {intraCompany}</span>
+                  <button type="button" className="small primary" onClick={() => suggested.forEach((t) => handleAddTrainee(t.id, 'validee'))}>
+                    + Tout valider ({suggested.length})
+                  </button>
+                </p>
+                {suggested.map((t) => (
+                  <div key={t.id} className="trainee-result">
+                    <span>
+                      <strong>{t.full_name}</strong>
+                      {t.company && <span className="hint"> · {t.company}</span>}
+                    </span>
+                    <span className="row-actions">
+                      <button type="button" className="small primary" onClick={() => handleAddTrainee(t.id, 'validee')}>
+                        + Valider{cursus ? ` (${addCursus === 'initial' ? 'initial' : 'recyclage'})` : ''}
+                      </button>
+                      <button type="button" className="small" onClick={() => handleAddTrainee(t.id, 'en_attente')}>+ En attente</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {intraCompany && !allCompanies && traineeQuery.trim().length < 2 && companyPool.length === 0 && (
+              <p className="hint">
+                Aucun stagiaire de {intraCompany} dans la base (ou tous déjà inscrits) : colle la liste ci-dessus, ils seront
+                rattachés à {intraCompany}.
+              </p>
+            )}
             {traineeQuery.trim().length >= 2 && matches.length === 0 && (
-              <p className="hint">Aucun stagiaire trouvé : ajoute-le avec « Coller une liste » ci-dessus, ou importe ton fichier Excel depuis la page Stagiaires.</p>
+              <p className="hint">
+                {intraCompany && !allCompanies
+                  ? `Aucun stagiaire de ${intraCompany} à ce nom : colle la liste ci-dessus, ou cherche dans toute la base.`
+                  : 'Aucun stagiaire trouvé : ajoute-le avec « Coller une liste » ci-dessus, ou importe ton fichier Excel depuis la page Stagiaires.'}
+              </p>
             )}
           </div>
         )}

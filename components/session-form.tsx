@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
+import { sameCompany } from '@/lib/company';
 import { formatHours, weekdaysBetween } from '@/lib/week';
 import { freeWindows, hm, type Busy } from '@/lib/session-slots';
 import { roomAvailability } from '@/app/sessions/actions';
@@ -97,6 +98,7 @@ export function SessionForm({
   showTemplate = true,
   pickTemplate = true,
   external = false,
+  companies = [],
   formId,
   absences = [],
   onSubmit,
@@ -120,6 +122,8 @@ export function SessionForm({
   pickTemplate?: boolean;
   /** Formation extérieure (INTRA) : entreprise et adresse à la place de la salle. */
   external?: boolean;
+  /** Formation INTRA : entreprises de la base de stagiaires (suggestions). */
+  companies?: { name: string; trainees: number }[];
   formId?: string;
   absences?: Absence[];
   onSubmit: (fd: FormData) => void;
@@ -235,6 +239,9 @@ export function SessionForm({
   // Salles extérieures (formations INTRA, migration 44) : seulement celle de la session modifiée.
   const physicalRooms = rooms.filter((r) => !r.is_holding && r.status !== 'exterieur');
   const externalRooms = rooms.filter((r) => r.status === 'exterieur' && r.id === defaults.room_id);
+  // Formation INTRA : entreprise choisie parmi celles de la base (stagiaires déjà connus).
+  const [extName, setExtName] = useState('');
+  const knownTrainees = extName.trim() ? companies.filter((c) => sameCompany(c.name, extName)).reduce((n, c) => n + c.trainees, 0) : 0;
   const suitedRooms = template ? physicalRooms.filter((r) => r.template_ids?.includes(template.id)) : [];
   const otherRooms = physicalRooms.filter((r) => !suitedRooms.includes(r));
   const roomLabel = (r: FormRoom) => `${r.location ? `${r.location} · ` : ''}${r.name} (${r.capacity} places)`;
@@ -299,7 +306,26 @@ export function SessionForm({
           <div className="form-row">
             <label>
               Entreprise / lieu de la formation *
-              <input name="ext_name" required placeholder="Ex. ENEDIS Lille, Eiffage Énergie…" maxLength={120} />
+              <input
+                name="ext_name"
+                required
+                placeholder="Ex. ENEDIS Lille, Eiffage Énergie…"
+                maxLength={120}
+                list="intra-companies"
+                autoComplete="off"
+                value={extName}
+                onChange={(e) => setExtName(e.target.value)}
+              />
+              <datalist id="intra-companies">
+                {companies.slice(0, 300).map((c) => <option key={c.name} value={c.name}>{`${c.trainees} stagiaire${c.trainees > 1 ? 's' : ''}`}</option>)}
+              </datalist>
+              {extName.trim().length >= 3 && (
+                <small className={`intra-known${knownTrainees ? ' ok' : ''}`}>
+                  {knownTrainees
+                    ? `${knownTrainees} stagiaire${knownTrainees > 1 ? 's' : ''} de cette entreprise dans la base : ils seront proposés en priorité.`
+                    : 'Nouvelle entreprise : les stagiaires collés en liste y seront rattachés.'}
+                </small>
+              )}
             </label>
             <label style={{ gridColumn: 'span 2' }}>
               Adresse

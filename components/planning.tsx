@@ -175,6 +175,7 @@ export function Planning({
   dayInfo = {},
   events = [],
   employees = [],
+  companies = [],
   usefulLinks = [],
   templateLinks = [],
   dossierBadge = {},
@@ -206,6 +207,8 @@ export function Planning({
   events?: PlanningEvent[];
   /** Salariés proposés dans le formulaire d'évènement (migration 40). */
   employees?: { id: string; name: string }[];
+  /** Entreprises de la base de stagiaires (formation INTRA). */
+  companies?: { name: string; trainees: number }[];
   usefulLinks?: UsefulLink[];
   templateLinks?: TemplateLinks[];
   /** Pastille dossier / facturation de chaque session. */
@@ -963,7 +966,7 @@ export function Planning({
             defaultDay={eventPanel.day}
             trainers={trainers}
             employees={employees}
-            intra={canEdit ? { trainers: trainers as any, templates, absences } : null}
+            intra={canEdit ? { trainers: trainers as any, templates, absences, companies } : null}
             roomNames={rooms.filter((r: any) => !r.is_holding).map((r) => r.name)}
             onDone={() => {
               eventRef.current?.close();

@@ -212,7 +212,7 @@ export function EventForm({
   /** Salles proposées pour le lieu (saisie libre possible). */
   roomNames?: string[];
   /** Formation extérieure (INTRA) : de quoi créer la session (bureau / admin). */
-  intra?: { trainers: FormTrainer[]; templates: FormTemplate[]; absences: Absence[] } | null;
+  intra?: { trainers: FormTrainer[]; templates: FormTemplate[]; absences: Absence[]; companies?: { name: string; trainees: number }[] } | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -258,6 +258,7 @@ export function EventForm({
           <SessionForm
             formId="intra-form"
             external
+            companies={intra.companies || []}
             rooms={[]}
             trainers={intra.trainers}
             templates={intra.templates}
