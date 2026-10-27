@@ -55,17 +55,26 @@ function readProgram(fd: FormData) {
       ft_email: txt(fd, 'ft_email', 200),
       pedagogical_tutor: txt(fd, 'pedagogical_tutor', 200),
       notes: txt(fd, 'notes', 4000),
+      // Type de parcours (migration 43) : POEC (France Travail) ou personnalisé.
+      ...(fd.has('kind') ? { kind: fd.get('kind') === 'personnalise' ? 'personnalise' : 'poec' } : {}),
     },
   };
 }
+
+/** Sans la migration 43, on enregistre le parcours sans son type. */
+const missingKind = (e: { message?: string } | null) => Boolean(e && /kind|schema cache/i.test(e.message || ''));
 
 export async function createProgram(fd: FormData): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const parsed = readProgram(fd);
   if (!parsed.ok) return parsed;
   const supabase = await createClient();
-  const { data, error } = await supabase.from('poec_programs').insert({ ...parsed.value, ft_token: newToken() }).select('id').single();
-  if (error) return dbError(error);
+  let { data, error } = await supabase.from('poec_programs').insert({ ...parsed.value, ft_token: newToken() }).select('id').single();
+  if (missingKind(error) && 'kind' in parsed.value) {
+    const { kind: _k, ...rest } = parsed.value as any;
+    ({ data, error } = await supabase.from('poec_programs').insert({ ...rest, ft_token: newToken() }).select('id').single());
+  }
+  if (error || !data) return dbError(error!);
   refresh();
   redirect(`/poec/${data.id}`);
 }
@@ -75,7 +84,11 @@ export async function updateProgram(id: string, fd: FormData): Promise<ActionRes
   const parsed = readProgram(fd);
   if (!parsed.ok) return parsed;
   const supabase = await createClient();
-  const { error } = await supabase.from('poec_programs').update(parsed.value).eq('id', id);
+  let { error } = await supabase.from('poec_programs').update(parsed.value).eq('id', id);
+  if (missingKind(error) && 'kind' in parsed.value) {
+    const { kind: _k, ...rest } = parsed.value as any;
+    ({ error } = await supabase.from('poec_programs').update(rest).eq('id', id));
+  }
   if (error) return dbError(error);
   refresh(id);
   return { ok: true };

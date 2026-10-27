@@ -41,7 +41,7 @@ function groupsFor(profile: Profile): { label: string; links: NavLink[] }[] {
       ],
     },
   ];
-  if (canManage(role)) groups[0].links.push({ href: '/poec', label: 'Parcours POEC', icon: Route });
+  if (canManage(role)) groups[0].links.push({ href: '/poec', label: 'Parcours POEC & perso.', icon: Route });
 
   const suivi: NavLink[] = [];
   if (profile?.trainer_id) suivi.push({ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History });

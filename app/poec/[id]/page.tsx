@@ -3,14 +3,14 @@ import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft, CalendarRange, CheckCircle2 } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadProgramData } from '@/lib/poec-data';
-import { conventionStatus, frShort } from '@/lib/poec';
+import { conventionStatus, frShort, isCustomProgram } from '@/lib/poec';
 import { compareRooms } from '@/lib/buildings';
 import { formatHours } from '@/lib/week';
 import { ProgramTimeline } from '@/components/poec/program-timeline';
 import { ProgrammePdfButton } from '@/components/poec/programme-pdf-button';
 import { ProgramHeaderActions, GroupPanel, ProgramPlanningActions, ConventionsPanel, FranceTravailLink } from '@/components/poec/program-manager';
 
-export const metadata = { title: 'Parcours POEC · CF Réseaux' };
+export const metadata = { title: 'Parcours · CF Réseaux' };
 
 export default async function PoecProgramPage({
   params,
@@ -60,19 +60,21 @@ export default async function PoecProgramPage({
   const totalHours = Math.round(sessions.reduce((n, x) => n + x.hours, 0) * 10) / 10;
   const signed = conventions.filter((c) => ['signee', 'validee_ft'].includes(conventionStatus(c))).length;
   const added = ajout ? sessions.find((x) => x.id === ajout) : null;
+  // Parcours personnalisé (migration 43) : sans France Travail ; conventions seulement s'il y a des stages.
+  const custom = isCustomProgram(program);
 
   return (
     <main>
       <section className="content">
         <header>
           <div>
-            <Link href="/poec" className="back-link"><ArrowLeft size={14} aria-hidden /> Parcours POEC</Link>
-            <p className="eyebrow">Parcours POEC{program.reference ? ` · ${program.reference}` : ''}</p>
+            <Link href="/poec" className="back-link"><ArrowLeft size={14} aria-hidden /> Parcours</Link>
+            <p className="eyebrow">{custom ? 'Parcours personnalisé' : 'Parcours POEC'}{program.reference ? ` · ${program.reference}` : ''}</p>
             <h1>{program.title}</h1>
             <p style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <span><CalendarRange size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> du {frShort(program.start_date)} au {frShort(program.end_date)}</span>
-              {program.recruiter && <span>Chargée de recrutement : <strong>{program.recruiter}</strong></span>}
-              {program.ft_advisor && <span>France Travail : <strong>{[program.ft_advisor, program.ft_agency].filter(Boolean).join(' · ')}</strong></span>}
+              {program.recruiter && <span>{custom ? 'Référent' : 'Chargée de recrutement'} : <strong>{program.recruiter}</strong></span>}
+              {!custom && program.ft_advisor && <span>France Travail : <strong>{[program.ft_advisor, program.ft_agency].filter(Boolean).join(' · ')}</strong></span>}
             </p>
           </div>
           <div className="form-actions">
@@ -104,7 +106,9 @@ export default async function PoecProgramPage({
           <div className="stat"><span>Stagiaires</span><strong>{members.length}</strong><small>groupe fixe</small></div>
           <div className="stat"><span>Formations</span><strong>{sessions.length}</strong><small>{formatHours(totalHours)} en centre</small></div>
           <div className="stat"><span>Stages</span><strong>{periods.length}</strong><small>période{periods.length > 1 ? 's' : ''} en entreprise</small></div>
-          <div className="stat"><span>Conventions</span><strong>{signed}/{conventions.length}</strong><small>signées par les 3 parties</small></div>
+          {(!custom || conventions.length > 0) && (
+            <div className="stat"><span>Conventions</span><strong>{signed}/{conventions.length}</strong><small>signées par les 3 parties</small></div>
+          )}
         </div>
 
         {program.objectives && (
@@ -119,7 +123,7 @@ export default async function PoecProgramPage({
         <section className="panel">
           <h2>Programme</h2>
           <p className="panel-intro">
-            Construis le parcours avec les formations du catalogue : chacune apparaît au planning (badge POEC) avec le groupe déjà inscrit. Les stages en entreprise s’affichent aussi au planning.
+            Construis le parcours avec les formations du catalogue (ou des sessions personnalisées) : chacune apparaît au planning avec le groupe déjà inscrit. Les stages en entreprise s’affichent aussi au planning.
           </p>
           <ProgramPlanningActions
             program={program}
@@ -143,6 +147,7 @@ export default async function PoecProgramPage({
           <ProgramTimeline start={program.start_date} end={program.end_date} sessions={sessions} periods={periods} linkSessions />
         </section>
 
+        {(!custom || periods.length > 0) && (
         <section className="panel">
           <h2>Conventions de stage</h2>
           <p className="panel-intro">
@@ -158,11 +163,14 @@ export default async function PoecProgramPage({
             signerName={profile?.full_name || ''}
           />
         </section>
+        )}
 
-        <section className="panel">
-          <h2>France Travail</h2>
-          <FranceTravailLink program={program} />
-        </section>
+        {!custom && (
+          <section className="panel">
+            <h2>France Travail</h2>
+            <FranceTravailLink program={program} />
+          </section>
+        )}
       </section>
     </main>
   );

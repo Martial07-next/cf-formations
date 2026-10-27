@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 /**
@@ -28,14 +28,28 @@ function defaults(message: string, o: ConfirmOptions) {
   };
 }
 
-function ConfirmBox({ message, options, onDone }: { message: string; options: ReturnType<typeof defaults>; onDone: (ok: boolean) => void }) {
+type InputSpec = { label?: string; placeholder?: string; defaultValue?: string; required?: boolean };
+
+function ConfirmBox({
+  message,
+  options,
+  input,
+  onDone,
+}: {
+  message: string;
+  options: ReturnType<typeof defaults>;
+  input?: InputSpec;
+  onDone: (ok: boolean, value: string) => void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const answered = useRef(false);
+  const [value, setValue] = useState(input?.defaultValue || '');
   const finish = (ok: boolean) => {
     if (answered.current) return;
+    if (ok && input?.required && !value.trim()) return;
     answered.current = true;
     ref.current?.close();
-    onDone(ok);
+    onDone(ok, value);
   };
   useEffect(() => {
     ref.current?.showModal();
@@ -64,12 +78,33 @@ function ConfirmBox({ message, options, onDone }: { message: string; options: Re
       <div className="cf-confirm-body" id="cf-confirm-msg">
         <p className="cf-confirm-main">{first}</p>
         {rest.map((p, i) => <p key={i} className="cf-confirm-more">{p}</p>)}
+        {input && (
+          <label className="cf-confirm-field">
+            {input.label && <span>{input.label}</span>}
+            <textarea
+              rows={3}
+              autoFocus
+              value={value}
+              placeholder={input.placeholder}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) finish(true);
+              }}
+            />
+          </label>
+        )}
       </div>
       <div className="cf-confirm-foot">
-        <button type="button" onClick={() => finish(false)} autoFocus={options.danger}>
+        <button type="button" onClick={() => finish(false)} autoFocus={options.danger && !input}>
           {options.cancelLabel}
         </button>
-        <button type="button" className={options.danger ? 'cf-confirm-danger' : 'primary'} onClick={() => finish(true)} autoFocus={!options.danger}>
+        <button
+          type="button"
+          className={options.danger ? 'cf-confirm-danger' : 'primary'}
+          onClick={() => finish(true)}
+          autoFocus={!options.danger && !input}
+          disabled={Boolean(input?.required && !value.trim())}
+        >
           {options.confirmLabel}
         </button>
       </div>
@@ -77,25 +112,40 @@ function ConfirmBox({ message, options, onDone }: { message: string; options: Re
   );
 }
 
+function open(message: string, options: ConfirmOptions, input: InputSpec | undefined, done: (ok: boolean, value: string) => void) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  root.render(
+    <ConfirmBox
+      message={message}
+      options={defaults(message, options)}
+      input={input}
+      onDone={(ok, value) => {
+        done(ok, value);
+        // Laisse l'animation de fermeture se terminer avant de démonter.
+        window.setTimeout(() => {
+          root.unmount();
+          host.remove();
+        }, 0);
+      }}
+    />
+  );
+}
+
 export function askConfirm(message: string, options: ConfirmOptions = {}): Promise<boolean> {
   if (typeof document === 'undefined') return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    root.render(
-      <ConfirmBox
-        message={message}
-        options={defaults(message, options)}
-        onDone={(ok) => {
-          resolve(ok);
-          // Laisse l'animation de fermeture se terminer avant de démonter.
-          window.setTimeout(() => {
-            root.unmount();
-            host.remove();
-          }, 0);
-        }}
-      />
-    );
-  });
+  return new Promise((resolve) => open(message, options, undefined, (ok) => resolve(ok)));
+}
+
+/**
+ * Saisie d'un texte (remplace le prompt() du navigateur) : renvoie le texte
+ * saisi, ou null si l'on annule.
+ *
+ *   const motif = await askText('Refuser la demande ?', { input: { label: 'Motif (facultatif)' } });
+ */
+export function askText(message: string, options: ConfirmOptions & { input?: InputSpec } = {}): Promise<string | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+  const { input = {}, ...rest } = options;
+  return new Promise((resolve) => open(message, rest, input, (ok, value) => resolve(ok ? value.trim() : null)));
 }

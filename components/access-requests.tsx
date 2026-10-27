@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { Check, Copy, KeyRound, UserPlus, X } from 'lucide-react';
 import { acceptAccessRequest, dismissRequest, refuseAccessRequest, resolvePasswordRequest } from '@/app/acces/actions';
 import { ROLE_LABELS, type Role } from '@/lib/roles';
+import { askText } from '@/lib/confirm-dialog';
 
 export type AccessRequest = {
   id: string;
@@ -116,8 +117,12 @@ export function AccessRequests({ pending, recent }: { pending: AccessRequest[]; 
                       type="button"
                       className="small danger"
                       disabled={isPending}
-                      onClick={() => {
-                        const note = prompt('Refuser la demande. Motif (facultatif) :');
+                      onClick={async () => {
+                        const note = await askText(`Refuser la demande de ${r.full_name || r.email} ?\n\nLe motif est facultatif.`, {
+                          confirmLabel: 'Refuser',
+                          danger: true,
+                          input: { label: 'Motif', placeholder: 'Ex. compte déjà existant, personne hors CF Réseaux…' },
+                        });
                         if (note !== null) run(() => refuseAccessRequest(r.id, note), r.id);
                       }}
                     >

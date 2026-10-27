@@ -14,7 +14,13 @@ export type PoecProgram = {
   ft_token: string | null;
   pedagogical_tutor: string | null;
   notes: string | null;
+  /** POEC (France Travail) ou parcours personnalisé (migration 43, « poec » par défaut). */
+  kind?: ProgramKind | null;
 };
+
+export type ProgramKind = 'poec' | 'personnalise';
+export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = { poec: 'POEC', personnalise: 'Parcours personnalisé' };
+export const isCustomProgram = (p: { kind?: string | null } | null | undefined) => p?.kind === 'personnalise';
 
 export type PoecPeriod = { id: string; program_id: string; label: string; start_date: string; end_date: string };
 

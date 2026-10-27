@@ -186,17 +186,20 @@ export default async function DashboardPage() {
       .filter((s) => !(todo[s.id]?.trainer) && (todo[s.id]?.office || 0) > 0)
       .map((s) => ({ href: `/sessions/${s.id}#dossier`, title: s.title, meta: period(s), badge: { text: `${todo[s.id].office} pour le bureau`, tone: 'todo' } }));
 
-    const [{ data: programs }, { data: conventions }] = await Promise.all([
+    const [{ data: programs }, { data: conventions }, { data: kinds }] = await Promise.all([
       supabase.from('poec_programs').select('id, title, start_date, end_date').gte('end_date', today).order('start_date'),
       supabase.from('poec_conventions').select('program_id, cf_signed_at, company_signed_at, trainee_signed_at, ft_signed_at, company_name, company_address, company_rep, company_rep_role, company_tutor'),
+      // Type de parcours (migration 43) : « POEC » si la colonne manque.
+      supabase.from('poec_programs').select('id, kind').gte('end_date', today),
     ]);
     poecItems = ((programs as any[]) || []).map((p) => {
       const conv = ((conventions as any[]) || []).filter((c) => c.program_id === p.id);
       const open = conv.filter((c) => !['signee', 'validee_ft'].includes(conventionStatus(c))).length;
+      const custom = ((kinds as any[]) || []).find((k) => k.id === p.id)?.kind === 'personnalise';
       return {
         href: `/poec/${p.id}`,
         title: p.title,
-        meta: `du ${frDate(p.start_date)} au ${frDate(p.end_date)}`,
+        meta: `${custom ? 'Personnalisé' : 'POEC'} · du ${frDate(p.start_date)} au ${frDate(p.end_date)}`,
         badge: open ? { text: `${open} convention${open > 1 ? 's' : ''} à signer`, tone: 'warn' } : conv.length ? { text: 'Conventions signées', tone: 'ok' } : undefined,
       };
     });
@@ -238,9 +241,12 @@ export default async function DashboardPage() {
     const st = (settings as any) || {};
     const when = (v: string | null) => (v ? new Date(v).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) : 'jamais');
     const congesKo = String(st.absences_last_log || '').startsWith('ERREUR');
+    // Synchronisations : affichées seulement en cas d'erreur.
     syncs = [
-      { href: '/administration/integrations#conges', title: 'Plateforme de congés', meta: `Dernière synchronisation : ${when(st.absences_last_sync)}`, badge: congesKo ? { text: 'Erreur', tone: 'urgent' } : st.absences_last_sync ? { text: 'OK', tone: 'ok' } : { text: 'À configurer', tone: 'todo' } },
-      { href: '/administration/integrations', title: 'Digiforma', meta: `Dernière synchronisation : ${when(st.digiforma_last_sync)}`, badge: st.digiforma_last_sync_status === 'error' ? { text: 'Erreur', tone: 'urgent' } : st.digiforma_last_sync ? { text: 'OK', tone: 'ok' } : { text: 'Jamais', tone: 'todo' } },
+      ...(congesKo ? [{ href: '/administration/integrations#conges', title: 'Plateforme de congés', meta: `Échec de la synchronisation du ${when(st.absences_last_sync)}`, badge: { text: 'Erreur', tone: 'urgent' as const } }] : []),
+      ...(st.digiforma_last_sync_status === 'error'
+        ? [{ href: '/administration/integrations', title: 'Digiforma', meta: `Échec de la synchronisation du ${when(st.digiforma_last_sync)}`, badge: { text: 'Erreur', tone: 'urgent' as const } }]
+        : []),
     ];
   }
 
@@ -264,11 +270,12 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="dash-actions">
-            <Link href="/" className="btn"><CalendarDays size={15} aria-hidden /> Planning</Link>
+            <Link href="/" className={`btn${staff ? '' : ' primary'} dash-open-planning`}><CalendarDays size={15} aria-hidden /> Ouvrir le planning</Link>
             {staff && (
               <>
                 <Link href="/?creer=1" className="btn primary"><Plus size={15} aria-hidden /> Nouvelle session</Link>
-                <Link href="/poec?nouveau=1" className="btn"><Route size={15} aria-hidden /> Nouveau parcours POEC</Link>
+                <Link href="/poec?nouveau=1" className="btn"><Route size={15} aria-hidden /> Parcours POEC</Link>
+                <Link href="/poec?nouveau=1&type=personnalise" className="btn"><PenLine size={15} aria-hidden /> Parcours personnalisé</Link>
               </>
             )}
           </div>
@@ -292,12 +299,13 @@ export default async function DashboardPage() {
               <Card icon={<FileSignature size={17} aria-hidden />} title="Dossiers à boucler (bureau)" items={officeTodo} empty="Rien à boucler." />
               <Card
                 icon={<Route size={17} aria-hidden />}
-                title="Parcours POEC en cours"
+                title="Parcours POEC et personnalisés en cours"
                 items={poecItems}
                 empty="Aucun parcours en cours."
                 footer={
                   <span className="dash-card-links">
-                    <Link href="/poec?nouveau=1"><Plus size={13} aria-hidden /> Nouveau parcours</Link>
+                    <Link href="/poec?nouveau=1"><Plus size={13} aria-hidden /> Parcours POEC</Link>
+                    <Link href="/poec?nouveau=1&type=personnalise"><Plus size={13} aria-hidden /> Parcours personnalisé</Link>
                     {poecItems.length > 0 && <span className="hint">Session personnalisée : ouvre le parcours › « Session personnalisée »</span>}
                   </span>
                 }
@@ -318,7 +326,7 @@ export default async function DashboardPage() {
                 ]}
                 empty=""
               />
-              <Card icon={<RefreshCcw size={17} aria-hidden />} title="Synchronisations" items={syncs} empty="" />
+              {syncs.length > 0 && <Card icon={<RefreshCcw size={17} aria-hidden />} title="Synchronisation en erreur" items={syncs} empty="" tone="urgent" />}
             </>
           )}
 
