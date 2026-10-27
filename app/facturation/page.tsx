@@ -4,7 +4,6 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { BillingList, type BillingRow } from '@/components/billing/billing-list';
 import { INVOICE_SELECT, companiesSummary, type Invoice } from '@/lib/billing';
 import { formatSessionPeriod } from '@/lib/week';
-import { BackLink } from '@/components/back-link';
 
 export const metadata = { title: 'Facturation · CF Réseaux' };
 
@@ -78,7 +77,6 @@ export default async function FacturationPage({ searchParams }: { searchParams: 
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Suivi</p>
             <h1>Facturation</h1>
             <p>

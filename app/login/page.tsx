@@ -14,9 +14,9 @@ export const metadata = { title: 'Connexion · CF PLANNING' };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string; vue?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; vue?: string; suite?: string }>;
 }) {
-  const { error, message, vue } = await searchParams;
+  const { error, message, vue, suite } = await searchParams;
   const view = vue === 'oubli' || vue === 'demande' ? vue : 'connexion';
   // Cloudflare Turnstile (anti-robot), actif quand les clés sont configurées.
   const protectedOn = turnstileEnabled();
@@ -36,6 +36,7 @@ export default async function LoginPage({
 
         {view === 'connexion' && (
           <form className="auth-form">
+            {suite && <input type="hidden" name="suite" value={suite} />}
             <EmailField autoFocus />
             <label>
               <span className="auth-label-row">

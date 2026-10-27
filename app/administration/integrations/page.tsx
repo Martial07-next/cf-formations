@@ -4,7 +4,6 @@ import { DigiformaTestButton } from '@/components/digiforma-test-button';
 import { DigiformaSyncPanel } from '@/components/digiforma-sync-panel';
 import { CongesSyncPanel } from '@/components/conges-sync-panel';
 import { congesConfigured } from '@/lib/conges-sync';
-import { BackLink } from '@/components/back-link';
 
 export default async function IntegrationsPage() {
   const supabase = await createClient();
@@ -33,7 +32,6 @@ export default async function IntegrationsPage() {
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Comptes, paramètres et intégrations de la plateforme.</p>

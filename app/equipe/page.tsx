@@ -10,7 +10,6 @@ import { MonthlyTable } from '@/components/monthly-table';
 import { formatHours, formatSessionPeriod } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
-import { BackLink } from '@/components/back-link';
 
 type Trainer = {
   id: string;
@@ -131,7 +130,6 @@ export default async function EquipePage({ searchParams }: { searchParams: Promi
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Suivi</p>
             <h1>{isAdmin ? 'Équipes & suivi des formateurs' : 'Mon équipe'}</h1>
             <p>

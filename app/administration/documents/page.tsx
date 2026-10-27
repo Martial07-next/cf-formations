@@ -2,7 +2,6 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { AdminTabs } from '@/components/admin-tabs';
 import { DocumentsAdmin } from '@/components/documents/documents-admin';
 import { DOC_SELECT, type SignableDoc } from '@/lib/documents';
-import { BackLink } from '@/components/back-link';
 
 export const metadata = { title: 'Documents à signer · CF Réseaux' };
 
@@ -25,7 +24,6 @@ export default async function DocumentsPage() {
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Documents à signer en ligne par les stagiaires (QR code en formation) et par les salariés (lien personnel).</p>

@@ -4,7 +4,6 @@ import { Briefcase, CalendarRange, Users, GraduationCap } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { ProgramForm } from '@/components/poec/program-form';
 import { conventionStatus, frShort } from '@/lib/poec';
-import { BackLink } from '@/components/back-link';
 
 export const metadata = { title: 'Parcours POEC · CF Réseaux' };
 
@@ -26,7 +25,6 @@ export default async function PoecListPage() {
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Planning</p>
             <h1>Parcours POEC</h1>
             <p>Sessions de ~3 mois construites pour un groupe : formations, stages en entreprise, conventions signées en ligne.</p>

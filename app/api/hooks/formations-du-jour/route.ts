@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       const trainerId = ((replacements as any[]) || []).find((r) => r.session_id === s.id)?.trainer_id || s.trainer_id;
       const t = effectiveDayTime(day, s.start_at, s.end_at, ((dayRows as any[]) || []).filter((d) => d.session_id === s.id));
       const room = Array.isArray(s.rooms) ? s.rooms[0] : s.rooms;
-      return { trainerId, formation: s.title as string, debut: t.start, fin: t.end, salle: (room?.name as string) || null };
+      return { trainerId, sessionId: s.id as string, formation: s.title as string, debut: t.start, fin: t.end, salle: (room?.name as string) || null };
     })
     .filter((r) => r.trainerId);
 
@@ -62,7 +62,10 @@ export async function GET(request: NextRequest) {
   const formateurs = rows
     .map((r) => {
       const t = ((trainers as any[]) || []).find((x) => x.id === r.trainerId);
-      return t ? { nom: t.full_name as string, email: (t.email as string | null) || null, formation: r.formation, debut: r.debut, fin: r.fin, salle: r.salle } : null;
+      // Lien de la fiche session (connexion au planning obligatoire pour l'ouvrir).
+      return t
+        ? { nom: t.full_name as string, email: (t.email as string | null) || null, sessionId: r.sessionId, formation: r.formation, debut: r.debut, fin: r.fin, salle: r.salle }
+        : null;
     })
     .filter(Boolean);
 

@@ -2,7 +2,6 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { AdminTabs } from '@/components/admin-tabs';
 import { PurgePanel } from '@/components/purge-panel';
 import { PURGE_CONFIRM_PHRASE as CONFIRM_PHRASE } from '@/lib/purge';
-import { BackLink } from '@/components/back-link';
 
 export default async function DonneesPage() {
   const supabase = await createClient();
@@ -37,7 +36,6 @@ export default async function DonneesPage() {
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Comptes, paramètres et intégrations de la plateforme.</p>

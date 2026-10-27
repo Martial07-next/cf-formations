@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { FileSignature } from 'lucide-react';
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { NameForm, PasswordForm } from '@/components/profile-forms';
-import { BackLink } from '@/components/back-link';
 
 export default async function ProfilPage() {
   const profile = await getCurrentProfile();
@@ -18,7 +17,6 @@ export default async function ProfilPage() {
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Mon compte</p>
             <h1>Mon profil</h1>
             <p>Gère ton nom et ton mot de passe.</p>

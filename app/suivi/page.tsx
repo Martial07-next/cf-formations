@@ -4,7 +4,6 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { loadStaff, internalStaff } from '@/lib/tracking';
 import { FollowupCell } from '@/components/tracking/session-tracking';
 import { formatSessionPeriod } from '@/lib/week';
-import { BackLink } from '@/components/back-link';
 
 export const metadata = { title: 'Suivi interne · CF Réseaux' };
 
@@ -57,7 +56,6 @@ export default async function SuiviPage({ searchParams }: { searchParams: Promis
       <section className="content">
         <header>
           <div>
-            <BackLink />
             <p className="eyebrow">Organisation interne</p>
             <h1>Suivi interne</h1>
             <p>Qui relance qui, et quelles sessions chacun gère. Vue : <strong>{label}</strong></p>

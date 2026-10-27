@@ -5,7 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminTabs, AdminResourceLinks } from '@/components/admin-tabs';
 import { RightsTable } from '@/components/rights-table';
 import { AccessRequests, type AccessRequest } from '@/components/access-requests';
-import { BackLink } from '@/components/back-link';
 
 export default async function AdministrationPage() {
   const supabase = await createClient();
@@ -17,7 +16,6 @@ export default async function AdministrationPage() {
         <section className="content">
           <header>
             <div>
-              <BackLink />
               <p className="eyebrow">Bureau administratif</p>
               <h1>Administration</h1>
               <p>Accès réservé aux administrateurs.</p>

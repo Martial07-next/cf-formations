@@ -40,6 +40,8 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    // Page demandée (ex. une fiche session ouverte depuis la plateforme de congés) : rouverte après connexion.
+    url.search = path !== '/' ? `?suite=${encodeURIComponent(path + request.nextUrl.search)}` : '';
     return NextResponse.redirect(url);
   }
 
