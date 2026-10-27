@@ -1629,13 +1629,13 @@ header.dash-hero p.dash-date{color:#c9dcd0}
 @media (max-width:640px){.program-kind{grid-template-columns:1fr}}
 /* Tableau de bord : heure en direct au-dessus des raccourcis. */
 .dash-hero-right{display:flex;flex-direction:column;align-items:flex-end;gap:12px;position:relative;z-index:1}
-.live-clock{display:inline-flex;align-items:baseline;gap:6px;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
-.live-clock-hm{font-size:34px;letter-spacing:.02em}
-.live-clock-s{font-size:15px;color:#08fa64;min-width:2ch}
+.live-clock{display:inline-flex;align-items:baseline;gap:5px;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
+.live-clock-hm{font-size:16px;letter-spacing:.02em}
+.live-clock-s{font-size:10px;color:#08fa64;min-width:2ch}
 .live-clock-sep{animation:clockBlink 1s steps(1) infinite}
 @keyframes clockBlink{50%{opacity:.25}}
-.live-clock-dot{width:8px;height:8px;border-radius:50%;background:#08fa64;align-self:center;box-shadow:0 0 0 0 rgba(8,250,100,.6);animation:devPulse 1.6s infinite}
-@media (max-width:760px){.dash-hero-right{align-items:stretch;width:100%;position:static}.live-clock{position:absolute;top:14px;right:16px;z-index:1}.live-clock-hm{font-size:20px}.live-clock-s{font-size:11px}}
+.live-clock-dot{width:6px;height:6px;border-radius:50%;background:#08fa64;align-self:center;box-shadow:0 0 0 0 rgba(8,250,100,.6);animation:devPulse 1.6s infinite}
+@media (max-width:760px){.dash-hero-right{align-items:stretch;width:100%;position:static}.live-clock{position:absolute;top:16px;right:16px;z-index:1}.live-clock-hm{font-size:13px}.live-clock-s{font-size:9px}}
 /* Tableau de bord : documents à signer, en tête. */
 .dash-sign{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding:14px 16px;border-radius:16px;background:var(--surface);color:var(--ink);text-decoration:none;border:1px solid var(--line);border-left:5px solid #17241b;box-shadow:var(--shadow-sm);animation:dashSignIn .35s cubic-bezier(.2,.8,.2,1) both;transition:box-shadow .15s,transform .15s}
 @keyframes dashSignIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
