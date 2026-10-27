@@ -175,12 +175,12 @@ export function defaultLook(id: string, color?: string | null): AvatarLook {
   const h = hash(id);
   return {
     skin: SKINS[h % SKINS.length],
-    hair: HAIR_STYLES[(h >> 3) % HAIR_STYLES.length].value,
-    hairColor: HAIR_COLORS[(h >> 6) % HAIR_COLORS.length],
-    top: color && HEX.test(color) ? color.toLowerCase() : OUTFIT_COLORS[(h >> 9) % OUTFIT_COLORS.length],
+    hair: HAIR_STYLES[(h >>> 3) % HAIR_STYLES.length].value,
+    hairColor: HAIR_COLORS[(h >>> 6) % HAIR_COLORS.length],
+    top: color && HEX.test(color) ? color.toLowerCase() : OUTFIT_COLORS[(h >>> 9) % OUTFIT_COLORS.length],
     bottom: '#2b2f36',
     accessory: 'aucun',
-    vacation: VACATION_COLORS[(h >> 12) % VACATION_COLORS.length],
+    vacation: VACATION_COLORS[(h >>> 12) % VACATION_COLORS.length],
   };
 }
 
