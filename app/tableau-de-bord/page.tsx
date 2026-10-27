@@ -310,6 +310,16 @@ export default async function DashboardPage() {
           </div>
         </header>
 
+        {/* CF Réseaux City 3D : mode facultatif, chargé seulement à l'ouverture (rien de plus ici). */}
+        <Link href="/tableau-de-bord/ville" prefetch={false} className="dash-city">
+          <span className="dash-city-icon" aria-hidden>🏙️</span>
+          <span className="dash-city-text">
+            <strong>Activer CF Réseaux City 3D</strong>
+            <small>La journée du centre en mini-ville : bâtiments, salles, formateurs, parkings</small>
+          </span>
+          <ChevronRight size={16} aria-hidden />
+        </Link>
+
         {/* Documents à signer : en priorité, seulement s'il y en a. */}
         {toSign && (
           <Link href={toSign.href} className="dash-sign">
