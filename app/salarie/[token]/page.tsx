@@ -5,6 +5,7 @@ import { EmployeeSign, type ExtraDoc } from '@/components/salaries/employee-sign
 import { customDocs, signatureFor } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { docStoragePath } from '@/lib/documents';
+import { BackLink } from '@/components/back-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Mes documents · CF Réseaux', robots: { index: false, follow: false } };
@@ -48,6 +49,7 @@ export default async function SalariePage({ params }: { params: Promise<{ token:
   return (
     <main className="sign-page">
       <div className="sign-card">
+        <BackLink />
         <div className="poec-band"><img src="/logo-cf-reseaux.svg" alt="CF Réseaux" /></div>
         <p className="sign-brand">Documents salarié</p>
         {error ? (

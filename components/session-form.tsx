@@ -93,6 +93,7 @@ export function SessionForm({
   defaults = {},
   disabled = false,
   showTemplate = true,
+  pickTemplate = true,
   formId,
   absences = [],
   onSubmit,
@@ -112,6 +113,8 @@ export function SessionForm({
   /** Session modifiée : formateurs habilités pour sa formation. */
   qualifiedTrainerIds?: string[];
   showTemplate?: boolean;
+  /** Session personnalisée : pas de formation du catalogue, durée saisie librement. */
+  pickTemplate?: boolean;
   formId?: string;
   absences?: Absence[];
   onSubmit: (fd: FormData) => void;
@@ -268,7 +271,7 @@ export function SessionForm({
       }}
     >
       <fieldset className="plain" disabled={disabled}>
-        {showTemplate && (
+        {showTemplate && pickTemplate && (
           <div className="form-row">
             <div className="field">
               Formation du catalogue

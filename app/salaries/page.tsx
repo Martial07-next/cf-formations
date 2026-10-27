@@ -4,6 +4,7 @@ import { EmployeesManager } from '@/components/salaries/employees-manager';
 import { builtinActive, customDocs } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { EMPLOYEE_DOC_SELECT, EMPLOYEE_SELECT, type Employee, type EmployeeDoc } from '@/lib/salaries';
+import { BackLink } from '@/components/back-link';
 
 export const metadata = { title: 'Salariés · CF Réseaux' };
 
@@ -28,6 +29,7 @@ export default async function SalariesPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Administrateur</p>
             <h1>Salariés</h1>
             <p>Droit à l’image et attestation de remise de matériel : chaque salarié signe en ligne avec son lien personnel.</p>

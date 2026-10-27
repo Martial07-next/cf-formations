@@ -6,6 +6,7 @@ import { frDate } from '@/lib/absences';
 import { EmargementSign } from '@/components/emargement-sign';
 import { notFound } from 'next/navigation';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
+import { BackLink } from '@/components/back-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Émargement · CF Réseaux', robots: { index: false, follow: false } };
@@ -19,6 +20,7 @@ export default async function EmargementPage({ params }: { params: Promise<{ tok
   return (
     <main className="sign-page">
       <div className="sign-card">
+        <BackLink />
         <p className="sign-brand">CF Réseaux · Feuille d’émargement</p>
         {!ctx.ok ? (
           <div role="alert" className="alert alert-error">{ctx.error}</div>

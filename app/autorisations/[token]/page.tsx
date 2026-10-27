@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { loadAutorContext } from '@/lib/autorisations-server';
 import { AUTH_KIND } from '@/lib/autorisations';
 import { AutorSign } from '@/components/autorisations/autor-sign';
+import { BackLink } from '@/components/back-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Autorisations · CF Réseaux', robots: { index: false, follow: false } };
@@ -13,6 +14,7 @@ export default async function AutorisationsPage({ params }: { params: Promise<{ 
   return (
     <main className="sign-page">
       <div className="sign-card">
+        <BackLink />
         <div className="poec-band"><img src="/logo-cf-reseaux.svg" alt="CF Réseaux" /></div>
         <p className="sign-brand">Autorisations stagiaire</p>
         {!ctx.ok ? (

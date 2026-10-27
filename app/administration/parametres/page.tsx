@@ -1,6 +1,7 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { AdminTabs } from '@/components/admin-tabs';
 import { SettingsForm } from '@/components/settings-form';
+import { BackLink } from '@/components/back-link';
 
 export default async function ParametresPage() {
   const supabase = await createClient();
@@ -23,6 +24,7 @@ export default async function ParametresPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Bureau administratif</p>
             <h1>Administration</h1>
             <p>Comptes, paramètres et intégrations de la plateforme.</p>

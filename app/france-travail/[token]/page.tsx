@@ -5,6 +5,7 @@ import { loadSettings, stripTokens } from '@/lib/poec-public';
 import { frShort, validToken } from '@/lib/poec';
 import { ProgramTimeline } from '@/components/poec/program-timeline';
 import { FranceTravailPanel } from '@/components/poec/france-travail-panel';
+import { BackLink } from '@/components/back-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Suivi POEC · France Travail · CF Réseaux', robots: { index: false, follow: false } };
@@ -35,6 +36,7 @@ export default async function FranceTravailPage({ params }: { params: Promise<{ 
   return (
     <main className="sign-page">
       <div className="sign-card poec-card wide">
+        <BackLink />
         <div className="poec-band"><img src="/logo-cf-reseaux.svg" alt="CF Réseaux" /></div>
         <p className="sign-brand">Espace France Travail · POEC</p>
         {error || !data || !settings ? (

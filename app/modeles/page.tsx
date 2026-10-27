@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { TemplateCatalog } from '@/components/template-catalog';
+import { BackLink } from '@/components/back-link';
 
 export default async function ModelesPage() {
   const supabase = await createClient();
@@ -65,6 +66,7 @@ export default async function ModelesPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Ressources</p>
             <h1>Formations disponibles</h1>
             <p>Range tes formations dans des dossiers et sous-dossiers, dans l’ordre que tu veux (flèches ↑ ↓). Elles se choisissent ensuite à la création d’une session.</p>

@@ -3,6 +3,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { SessionsTable } from '@/components/sessions-table';
 import { Download } from 'lucide-react';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
+import { BackLink } from '@/components/back-link';
 
 export default async function SessionsPage() {
   const supabase = await createClient();
@@ -28,6 +29,7 @@ export default async function SessionsPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Planning</p>
             <h1>Sessions</h1>
             <p>Toutes les sessions, passées et à venir, avec leur statut.</p>

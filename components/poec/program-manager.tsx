@@ -291,7 +291,7 @@ export function ProgramPlanningActions({
   absences: Absence[];
   memberCount: number;
 }) {
-  const [mode, setMode] = useState<null | 'session' | 'attach' | 'period'>(null);
+  const [mode, setMode] = useState<null | 'session' | 'custom' | 'attach' | 'period'>(null);
   const [period, setPeriod] = useState<PoecPeriod | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
   const { error, setError, isPending, run } = useAction();
@@ -301,6 +301,7 @@ export function ProgramPlanningActions({
     <>
       <div className="form-actions" style={{ marginBottom: 14 }}>
         <button type="button" className="primary" onClick={() => { setError(null); setMode('session'); }}><Plus size={15} aria-hidden /> Ajouter une formation</button>
+        <button type="button" onClick={() => { setError(null); setMode('custom'); }} title="Formation hors catalogue, propre à ce parcours"><PenLine size={15} aria-hidden /> Session personnalisée</button>
         <button type="button" onClick={() => { setError(null); setMode('period'); setPeriod(null); }}><Briefcase size={15} aria-hidden /> Ajouter une période de stage</button>
         {attachable.length > 0 && (
           <button type="button" onClick={() => { setChosen([]); setMode('attach'); }}><Link2 size={15} aria-hidden /> Rattacher une session du planning</button>
@@ -344,7 +345,10 @@ export function ProgramPlanningActions({
                     </tr>
                   ) : (
                     <tr key={row.s.id}>
-                      <td><Link href={`/sessions/${row.s.id}`}><strong>{row.s.title}</strong></Link></td>
+                      <td>
+                        <Link href={`/sessions/${row.s.id}`}><strong>{row.s.title}</strong></Link>
+                        {row.s.custom && <span className="badge brouillon" style={{ marginLeft: 6 }} title="Session créée hors catalogue">Personnalisée</span>}
+                      </td>
                       <td>{row.s.start_at.slice(0, 10) === row.s.end_at.slice(0, 10) ? frShort(row.s.start_at) : `du ${frShort(row.s.start_at)} au ${frShort(row.s.end_at)}`}</td>
                       <td>{[row.s.trainer || 'Formateur à définir', row.s.room].filter(Boolean).join(' · ')}</td>
                       <td>
@@ -388,6 +392,32 @@ export function ProgramPlanningActions({
         />
         <div className="form-actions" style={{ marginTop: 12 }}>
           <button type="submit" form="poec-session-form" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Ajouter au parcours'}</button>
+        </div>
+      </Modal>
+
+      <Modal open={mode === 'custom'} onClose={() => setMode(null)} title="Session personnalisée" wide>
+        {error && <div role="alert" className="alert alert-error">{error}</div>}
+        <p className="hint" style={{ marginTop: 0 }}>
+          Pour une formation hors catalogue, propre à ce parcours (remise à niveau, savoir-être, visite d’entreprise,
+          préparation à l’entretien…). Donne-lui un nom, une durée, les dates, la salle et le formateur ; décris le
+          programme dans « Notes ». Les {memberCount} stagiaires du groupe sont inscrits automatiquement.
+        </p>
+        <SessionForm
+          formId="poec-custom-form"
+          rooms={rooms}
+          trainers={trainers}
+          templates={[]}
+          pickTemplate={false}
+          absences={absences}
+          defaults={{ start_date: lastEnd > program.start_date ? lastEnd : program.start_date, status: 'confirmee' }}
+          onSubmit={(fd) => {
+            fd.set('poec_id', program.id);
+            fd.delete('template_id');
+            run(() => createSession(fd) as Promise<Result>, () => setMode(null));
+          }}
+        />
+        <div className="form-actions" style={{ marginTop: 12 }}>
+          <button type="submit" form="poec-custom-form" className="primary" disabled={isPending}>{isPending ? 'Enregistrement…' : 'Ajouter au parcours'}</button>
         </div>
       </Modal>
 

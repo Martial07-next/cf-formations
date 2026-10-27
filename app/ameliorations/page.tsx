@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/supabase/server';
 import { listFeedback } from '@/app/ameliorations/actions';
 import { FeedbackBoard } from '@/components/dev/feedback-board';
+import { BackLink } from '@/components/back-link';
 
 export default async function AmeliorationsPage() {
   const profile = await getCurrentProfile();
@@ -12,6 +13,7 @@ export default async function AmeliorationsPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Dev</p>
             <h1>Améliorations</h1>
             <p>

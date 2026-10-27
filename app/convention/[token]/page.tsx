@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { loadConventionByToken } from '@/lib/poec-public';
 import { ConventionPublic } from '@/components/poec/convention-public';
+import { BackLink } from '@/components/back-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Convention de stage · CF Réseaux', robots: { index: false, follow: false } };
@@ -13,6 +14,7 @@ export default async function ConventionPage({ params }: { params: Promise<{ tok
   return (
     <main className="sign-page">
       <div className="sign-card poec-card">
+        <BackLink />
         <div className="poec-band"><img src="/logo-cf-reseaux.svg" alt="CF Réseaux" /></div>
         <p className="sign-brand">Convention de stage tripartite · POEC</p>
         {!res.ok ? (

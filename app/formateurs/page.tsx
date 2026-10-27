@@ -6,6 +6,7 @@ import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { ROLE_LABELS, type Role } from '@/lib/roles';
 import { missionText } from '@/lib/external';
 import { createTrainer, deleteTrainer, updateTrainer, updateTrainerStatus } from './actions';
+import { BackLink } from '@/components/back-link';
 
 export default async function FormateursPage() {
   const supabase = await createClient();
@@ -56,6 +57,7 @@ export default async function FormateursPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Ressources</p>
             <h1>Formateurs</h1>
             <p>Chaque formateur a sa couleur sur le planning, un référent cadre et, s’il se connecte, un compte lié.</p>

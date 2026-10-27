@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { setNewPassword } from '@/app/acces/actions';
 import { AuthBackdrop } from '@/components/auth-backdrop';
+import { BackLink } from '@/components/back-link';
 
 // Page de connexion : zoom désactivé (ni dézoom, ni pincement, ni double-tap).
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, minimumScale: 1, maximumScale: 1, userScalable: false, viewportFit: 'cover', themeColor: '#0b120d' };
@@ -19,6 +20,7 @@ export default async function NewPasswordPage({ searchParams }: { searchParams: 
     <main className="auth">
       <AuthBackdrop />
       <div className="auth-card">
+        <BackLink />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-cf-reseaux.svg" alt="CF Réseaux" className="auth-logo" width={200} height={32} />
         <p className="auth-kicker">PLANNING · FORMATIONS</p>

@@ -9,6 +9,7 @@ import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
 import { PasteImport } from '@/components/paste-import';
+import { BackLink } from '@/components/back-link';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
 export const maxDuration = 60;
@@ -107,6 +108,7 @@ export default async function StagiairesPage({
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Ressources</p>
             <h1>Stagiaires</h1>
             <p>L’annuaire des stagiaires : clique sur un nom pour voir son historique de formations.</p>

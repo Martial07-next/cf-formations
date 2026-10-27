@@ -4,6 +4,7 @@ import { CrudTable } from '@/components/crud-table';
 import { BUILDINGS, compareRooms } from '@/lib/buildings';
 import { RoomWorkshops } from '@/components/room-workshops';
 import { createRoom, deleteRoom, updateRoom, updateRoomStatus } from './actions';
+import { BackLink } from '@/components/back-link';
 
 export default async function SallesPage() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export default async function SallesPage() {
       <section className="content">
         <header>
           <div>
+            <BackLink />
             <p className="eyebrow">Ressources</p>
             <h1>Salles</h1>
             <p>Deux adresses : BAT 1 (salles 1, 2, 3) et BAT 2 (salles 4, 5, 6).</p>

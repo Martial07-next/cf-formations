@@ -22,6 +22,8 @@ export type ProgramSession = {
   trainerColor: string | null;
   hours: number;
   enrolled: number;
+  /** Session personnalisée : créée sans formation du catalogue. */
+  custom: boolean;
 };
 
 export type ProgramData = {
@@ -40,7 +42,7 @@ export async function loadProgramData(supabase: SupabaseClient, programId: strin
     supabase.from('poec_trainees').select('trainee_id, address, ft_id, trainees(full_name, company, email)').eq('program_id', programId),
     supabase
       .from('sessions')
-      .select('id, title, status, start_at, end_at, rooms(name), trainers(full_name, color), session_trainees(status)')
+      .select('id, title, status, start_at, end_at, template_id, rooms(name), trainers(full_name, color), session_trainees(status)')
       .eq('poec_id', programId)
       .order('start_at'),
     supabase.from('poec_periods').select('id, program_id, label, start_date, end_date').eq('program_id', programId).order('start_date'),
@@ -66,6 +68,7 @@ export async function loadProgramData(supabase: SupabaseClient, programId: strin
       trainerColor: one<any>(s.trainers)?.color || null,
       hours: hoursOf(s, overrides),
       enrolled: (s.session_trainees || []).filter((t: any) => t.status === 'validee').length,
+      custom: !s.template_id,
     })),
     periods: (periods as PoecPeriod[]) || [],
     conventions: (conventions as unknown as Convention[]) || [],
