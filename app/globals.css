@@ -1845,3 +1845,27 @@ button.nav-group-toggle:hover,button.nav-group-toggle:focus{color:#cfdcd3;backgr
   .city-panel,.city-drawer{top:auto;bottom:12px;left:12px;right:12px;width:auto;max-height:58%;z-index:7}
 }
 @media (max-width:520px){.city-back span,.city-title small,.city-title strong{display:none}.city-clock{margin-left:auto}.city-back{padding:7px 9px}.city-kpi{flex-basis:112px}.city-kpi strong{font-size:19px}.city-range{width:150px}}
+
+/* ---- Titres d'habilitation (migration 46) ---- */
+.tdt-titles{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);border-left:4px solid #08fa64}
+.tdt-titles.missing{border-left-color:#d97706;background:#fffaf0}
+.tdt-titles-text{display:flex;align-items:flex-start;gap:8px;font-size:13.5px}
+.tdt-titles-text svg{flex:none;margin-top:2px}
+.tdt-titles.missing .tdt-titles-text svg{color:#b45309}
+.tdt-exempt{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.tdt-table th.tdt-title-col{color:#fffdf3}
+td.tdt-title-col{min-width:128px;padding:8px !important}
+td.tdt-title-col.ko{background:#fff4e5}
+.tdt-check{display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;cursor:pointer}
+.tdt-check input{width:17px;height:17px;accent-color:#17241b}
+.title-files{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
+.title-files.compact{flex-direction:column;align-items:flex-start;gap:3px}
+.title-file{display:inline-flex;align-items:center;gap:4px}
+.title-file .link{background:none;border:0;padding:0;color:#0f7a4a;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;text-decoration:underline}
+.title-file .icon.small{padding:2px;min-height:0;width:22px;height:22px}
+.title-add{font-size:12px}
+.title-error{color:var(--cf-red-ink);font-size:12px;width:100%}
+.titles-docs{margin-bottom:10px}
+.fin-warn-inline{color:#b45309;font-weight:600}
+.title-public-actions{display:flex;flex-direction:column;gap:8px;margin:14px 0}
+.title-public-actions button{justify-content:center;padding:14px;font-size:15px;display:flex;align-items:center;gap:8px}

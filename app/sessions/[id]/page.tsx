@@ -187,6 +187,12 @@ export default async function SessionDetailPage({
   const { data: arRow } = arModels.length
     ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
     : { data: null };
+  // Titres d'habilitation déposés (migration 46) : null si la migration manque.
+  const { data: titleRows, error: titleError } = await supabase
+    .from('habilitation_titles')
+    .select('id, trainee_id, file_name, mime, size, source, created_at')
+    .eq('session_id', id)
+    .order('created_at');
   const tourDeTable =
     formError || (tplOpt as any)?.tour_de_table === false
       ? null
@@ -380,6 +386,7 @@ export default async function SessionDetailPage({
               canFill={canEditStartTimes(profile?.role) || isOwn}
               canManage={editable}
               tourDeTable={tourDeTable}
+              titleFiles={titleError ? null : ((titleRows as any) || [])}
               digiforma={digiformaDocs}
               reussite={
                 arSeries.length

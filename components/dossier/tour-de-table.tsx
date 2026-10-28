@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { CheckCircle2, Download, Loader2, RotateCcw, X } from 'lucide-react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { AlertTriangle, CheckCircle2, Download, Loader2, RotateCcw, X } from 'lucide-react';
 import { saveTourDeTable } from '@/app/dossier/actions';
 import { TDT_COLUMNS, type TdtData, type TdtKey } from '@/lib/tdt';
+import { titleOk, type TitleFile } from '@/lib/titres';
+import { TitleFiles, TitleQrButton } from '@/components/dossier/titles';
 
 /** Zone de texte qui grandit avec son contenu. */
 export function AutoText({
@@ -65,6 +67,9 @@ export function TourDeTable({
   initialCompleted,
   completedAt,
   canEdit,
+  canExempt = false,
+  titleFiles = [],
+  onTitleFiles,
   onClose,
   onSaved,
 }: {
@@ -73,6 +78,11 @@ export function TourDeTable({
   initialCompleted: boolean;
   completedAt: string | null;
   canEdit: boolean;
+  /** Bureau : peut indiquer que le titre n'est pas exigé pour cette session. */
+  canExempt?: boolean;
+  /** Titres d'habilitation déposés (migration 46). */
+  titleFiles?: TitleFile[];
+  onTitleFiles?: (files: TitleFile[]) => void;
   onClose: () => void;
   onSaved?: (data: TdtData, completed: boolean) => void;
 }) {
@@ -117,6 +127,9 @@ export function TourDeTable({
     [data, session.trainees]
   );
 
+  const setTitle = (traineeId: string, value: boolean) => setData((d) => ({ ...d, titles: { ...(d.titles || {}), [traineeId]: value } }));
+  const titlesMissing = session.trainees.filter((t) => !titleOk(t.id, { data }, titleFiles));
+
   function setDone(value: boolean) {
     startTransition(async () => {
       const res = await saveTourDeTable(session.sessionId, data, value);
@@ -133,7 +146,7 @@ export function TourDeTable({
     try {
       const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
-      const bytes = await buildTourDeTablePdf({ ...session, data, completedAt: completed ? doneAt : null });
+      const bytes = await buildTourDeTablePdf({ ...session, data, completedAt: completed ? doneAt : null, titleFiles: titleFiles.map((f) => f.trainee_id) });
       downloadPdf(bytes, `Tour de table - ${session.title}.pdf`);
     } catch (e: any) {
       setError(e?.message || 'PDF impossible.');
@@ -189,6 +202,28 @@ export function TourDeTable({
           <span className="hint">{filled}/{session.trainees.length} stagiaire{session.trainees.length > 1 ? 's' : ''} renseigné{filled > 1 ? 's' : ''}</span>
         </div>
 
+        {/* Titre d'habilitation : sans titre, les attestations du stagiaire ne sont pas remises. */}
+        <div className={`tdt-titles${titlesMissing.length && !data.noTitle ? ' missing' : ''}`}>
+          <span className="tdt-titles-text">
+            {data.noTitle ? (
+              <><CheckCircle2 size={15} aria-hidden /> Titre d’habilitation non exigé pour cette session.</>
+            ) : titlesMissing.length ? (
+              <><AlertTriangle size={15} aria-hidden /> <span><strong>Titre d’habilitation manquant : {titlesMissing.length}/{session.trainees.length}</strong> · leurs attestations ne pourront pas être remises tant que le titre n’est pas fourni (case cochée ou fichier déposé).</span></>
+            ) : (
+              <><CheckCircle2 size={15} aria-hidden /> Tous les titres d’habilitation sont fournis.</>
+            )}
+          </span>
+          <span className="row-actions">
+            {canEdit && !data.noTitle && <TitleQrButton sessionId={session.sessionId} title={session.title} />}
+            {canExempt && (
+              <label className="tdt-exempt">
+                <input type="checkbox" checked={Boolean(data.noTitle)} onChange={(e) => setData((d) => ({ ...d, noTitle: e.target.checked }))} />
+                Titre non exigé (ex. habilitation initiale)
+              </label>
+            )}
+          </span>
+        </div>
+
         {session.trainees.length === 0 ? (
           <p className="empty">Aucun stagiaire validé sur cette session : ajoute-les d’abord, ils apparaîtront ici automatiquement.</p>
         ) : (
@@ -198,7 +233,12 @@ export function TourDeTable({
                 <tr>
                   <th className="tdt-num">N°</th>
                   <th className="tdt-name">Nom Prénom</th>
-                  {TDT_COLUMNS.map((c) => <th key={c.key} style={{ minWidth: c.width * 1.6 }}>{c.label}</th>)}
+                  {TDT_COLUMNS.map((c) => (
+                    <Fragment key={c.key}>
+                      <th style={{ minWidth: c.width * 1.6 }}>{c.label}</th>
+                      {c.key === 'habilitations' && !data.noTitle && <th className="tdt-title-col">Titre d’habilitation</th>}
+                    </Fragment>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -209,15 +249,44 @@ export function TourDeTable({
                       <td className="tdt-num">{i + 1}</td>
                       <td className="tdt-name">{t.name}</td>
                       {TDT_COLUMNS.map((c) => (
-                        <td key={c.key}>
-                          <AutoText
-                            label={`${c.label} : ${t.name}`}
-                            placeholder={'placeholder' in c ? c.placeholder : undefined}
-                            readOnly={!editable}
-                            value={c.key === 'company' ? row.company ?? t.company ?? '' : row[c.key] ?? ''}
-                            onChange={(v) => setCell(t.id, c.key, v)}
-                          />
-                        </td>
+                        <Fragment key={c.key}>
+                          <td>
+                            <AutoText
+                              label={`${c.label} : ${t.name}`}
+                              placeholder={'placeholder' in c ? c.placeholder : undefined}
+                              readOnly={!editable}
+                              value={c.key === 'company' ? row.company ?? t.company ?? '' : row[c.key] ?? ''}
+                              onChange={(v) => setCell(t.id, c.key, v)}
+                            />
+                          </td>
+                          {c.key === 'habilitations' && !data.noTitle && (
+                            <td className={`tdt-title-col${titleOk(t.id, { data }, titleFiles) ? ' ok' : ' ko'}`}>
+                              {(() => {
+                                const hasFile = titleFiles.some((f) => f.trainee_id === t.id);
+                                return (
+                                  <label className="tdt-check" title={hasFile ? 'Fichier déposé : titre fourni' : undefined}>
+                                    <input
+                                      type="checkbox"
+                                      checked={hasFile || Boolean(data.titles?.[t.id])}
+                                      disabled={!canEdit || hasFile}
+                                      onChange={(e) => setTitle(t.id, e.target.checked)}
+                                    />
+                                    Fourni
+                                  </label>
+                                );
+                              })()}
+                              <TitleFiles
+                                sessionId={session.sessionId}
+                                traineeId={t.id}
+                                traineeName={t.name}
+                                files={titleFiles}
+                                canUpload={canEdit}
+                                onFiles={(f) => onTitleFiles?.(f)}
+                                compact
+                              />
+                            </td>
+                          )}
+                        </Fragment>
                       ))}
                     </tr>
                   );

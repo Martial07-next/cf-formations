@@ -18,6 +18,7 @@ import {
   UserX,
   X,
   Award,
+  IdCard,
 } from 'lucide-react';
 import {
   ensureSignToken,
@@ -36,6 +37,8 @@ import type { Legal } from '@/lib/pdf-brand';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
 import { ReussiteEditor, reussiteInputs, type ReussiteSession } from '@/components/dossier/reussite-editor';
+import { TitleFiles, TitleQrButton, downloadAllTitles } from '@/components/dossier/titles';
+import { titleOk, type TitleFile } from '@/lib/titres';
 import { reussiteCount, reussiteDone, type ReussiteData } from '@/lib/reussite';
 import { setSessionAppreciation } from '@/app/dossier/actions';
 import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
@@ -78,6 +81,7 @@ export function DossierPanel({
   appreciation = null,
   digiforma = null,
   reussite = null,
+  titleFiles = null,
 }: {
   sessionId: string;
   title: string;
@@ -106,6 +110,8 @@ export function DossierPanel({
   billingDone?: boolean | null;
   /** Attestations de réussite (formation avec un modèle choisi, migration 39). */
   reussite?: { session: Omit<ReussiteSession, 'sessionId' | 'title' | 'legal'>; data: ReussiteData | null } | null;
+  /** Titres d'habilitation déposés (null si la migration 46 manque). */
+  titleFiles?: TitleFile[] | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
   appreciation?: {
     required: boolean;
@@ -157,8 +163,16 @@ export function DossierPanel({
   const faiOn = Boolean(appreciation?.required);
   const faiDone = faiOn && appreciationDone(faiData, trainees.map((t) => t.id));
   const faiCount = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis).length;
+  // Titres d'habilitation (migration 46) : sans titre, pas d'attestation remise.
+  const [titles, setTitles] = useState<TitleFile[]>(titleFiles || []);
+  useEffect(() => setTitles(titleFiles || []), [titleFiles]);
+  const titleOn = Boolean(tdt) && titleFiles !== null && !tdt?.data?.noTitle;
+  const hasTitle = (id: string) => !titleOn || titleOk(id, tdt, titles);
+  const titleMissing = trainees.filter((t) => !hasTitle(t.id));
   // Stagiaires dont la fiche d'appréciation a un avis : documents de fin de formation prêts.
   const finReady = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis);
+  // Attestation de fin de formation : en plus, titre d'habilitation fourni.
+  const attReady = finReady.filter((t) => hasTitle(t.id));
   const fin = appreciation?.finFormation || null;
   async function downloadFin(kind: 'attestation' | 'competences', only?: string) {
     if (!fin || !appreciation) return;
@@ -167,7 +181,9 @@ export function DossierPanel({
     try {
       const m = await import('@/lib/pdf-fin-formation');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
-      const list = only ? finReady.filter((t) => t.id === only) : finReady;
+      const pool = kind === 'attestation' ? attReady : finReady;
+      const list = only ? pool.filter((t) => t.id === only) : pool;
+      if (!list.length) throw new Error('Titre d’habilitation manquant : attestation bloquée.');
       const input = {
         ...fin,
         trainees: list,
@@ -344,13 +360,14 @@ export function DossierPanel({
         if (fin && finReady.length && appreciation) {
           const m = await import('@/lib/pdf-fin-formation');
           const input = { ...fin, trainees: finReady, entries: faiData?.trainees || {}, startDate: appreciation.startDate, endDate: appreciation.endDate, legal };
-          parts.push(await m.buildAttestationsPdf(input));
+          if (attReady.length) parts.push(await m.buildAttestationsPdf({ ...input, trainees: attReady }));
           parts.push(await m.buildCompetencesPdf(input));
         }
       }
       if (arSession && arTotal) {
         const { buildReussitePdf } = await import('@/lib/pdf-reussite');
-        parts.push(await buildReussitePdf(reussiteInputs(arSession, arData)));
+        const ar = reussiteInputs(arSession, arData, undefined, titleMissing.map((t) => t.id));
+        if (ar.length) parts.push(await buildReussitePdf(ar));
       }
       for (const d of documents) {
         const url = res.files[d.id];
@@ -371,8 +388,11 @@ export function DossierPanel({
             : []),
           ...(tdt ? [{ title: `Tour de table · ${title}`, detail: tdt.completed ? `Terminé le ${tdt.completedAt || ''}` : 'En cours', done: tdt.completed }] : []),
           ...(faiOn ? [{ title: 'Fiches d’appréciation individuelle', detail: `${faiCount}/${trainees.length} avis donnés`, done: faiDone }] : []),
+          ...(titleOn
+            ? [{ title: 'Titres d’habilitation', detail: `${trainees.length - titleMissing.length}/${trainees.length} fournis`, done: titleMissing.length === 0 }]
+            : []),
           ...(faiOn && fin
-            ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${finReady.length}/${trainees.length} générées`, done: faiDone }]
+            ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${attReady.length}/${trainees.length} attestations générées`, done: faiDone && !titleMissing.length }]
             : []),
           ...(arSession
             ? [{ title: `Attestations de réussite · ${arLabels}`, detail: `${arCount}/${arTotal} avis donnés${arData?.signature ? ' · signées' : ''}`, done: arDone }]
@@ -585,6 +605,58 @@ export function DossierPanel({
           </div>
         </div>
       )}
+      {titleOn && trainees.length > 0 && (
+        <div className="fin-docs titles-docs">
+          <div className="fin-docs-head">
+            <span className="doc-item-main">
+              <strong><IdCard size={15} aria-hidden style={{ verticalAlign: '-2px' }} /> Titres d’habilitation</strong>
+              <small className="hint">
+                Déposés par les stagiaires (QR code) ou scannés par le formateur. À télécharger pour Digiforma. Sans titre, l’attestation du stagiaire n’est pas remise.
+              </small>
+            </span>
+            <span className={`badge ${titleMissing.length ? 'en_attente' : 'validee'}`}>
+              {trainees.length - titleMissing.length}/{trainees.length} fournis
+            </span>
+          </div>
+          <div className="row-actions" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
+            {canFill && <TitleQrButton sessionId={sessionId} title={title} />}
+            <button
+              className="small primary"
+              disabled={!titles.length || busy === 'titles'}
+              onClick={async () => {
+                setBusy('titles');
+                setError(await downloadAllTitles(titles, Object.fromEntries(trainees.map((t) => [t.id, t.name]))));
+                setBusy(null);
+              }}
+            >
+              {busy === 'titles' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Télécharger tous les titres ({titles.length})
+            </button>
+          </div>
+          <details open={titleMissing.length > 0}>
+            <summary>Par stagiaire</summary>
+            <div className="fin-list">
+              {trainees.map((t) => {
+                const files = titles.filter((f) => f.trainee_id === t.id);
+                return (
+                  <div key={t.id} className="fin-row">
+                    <span>
+                      <strong>{t.name}</strong>
+                      <small className="hint">
+                        {files.length
+                          ? `${files.length} fichier${files.length > 1 ? 's' : ''}`
+                          : hasTitle(t.id)
+                            ? 'Fourni (case cochée), pas de fichier déposé'
+                            : 'Titre manquant'}
+                      </small>
+                    </span>
+                    <TitleFiles sessionId={sessionId} traineeId={t.id} traineeName={t.name} files={titles} canUpload={canFill} onFiles={setTitles} />
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        </div>
+      )}
       {appreciation && (faiOn || (canManage && appreciation.templateFlag)) && (
         <div className="doc-list" style={{ marginBottom: 6 }}>
           <div className={`doc-item${faiOn ? '' : ' doc-off'}`}>
@@ -647,6 +719,7 @@ export function DossierPanel({
               <small className="hint">
                 {arSession.series.length > 1 ? 'Une attestation par stagiaire et par module' : 'Une attestation par stagiaire'}, remplie et signée par le formateur · {arCount}/{arTotal} avis donnés
                 {arData?.signature ? ' · signées' : ''}
+                {titleMissing.length > 0 && <><br /><span className="fin-warn-inline">Titre d’habilitation manquant : {titleMissing.length} attestation{titleMissing.length > 1 ? 's' : ''} bloquée{titleMissing.length > 1 ? 's' : ''}</span></>}
               </small>
             </span>
             {arDone ? (
@@ -692,8 +765,13 @@ export function DossierPanel({
             </p>
           )}
           {!fin.cachet && <p className="hint fin-warn">Cachet et signature non ajoutés : Administration › Paramètres.</p>}
+          {titleMissing.length > 0 && (
+            <p className="hint fin-warn">
+              Titre d’habilitation manquant pour {titleMissing.map((t) => t.name).join(', ')} : leur attestation n’est pas générée tant que le titre n’est pas fourni (tour de table).
+            </p>
+          )}
           <div className="row-actions" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
-            <button className="small primary" disabled={!finReady.length || !!busy} onClick={() => downloadFin('attestation')}>
+            <button className="small primary" disabled={!attReady.length || !!busy} onClick={() => downloadFin('attestation')}>
               {busy === 'attestation-all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les attestations
             </button>
             <button className="small primary" disabled={!finReady.length || !!busy} onClick={() => downloadFin('competences')}>
@@ -714,8 +792,8 @@ export function DossierPanel({
                       </small>
                     </span>
                     <span className="row-actions">
-                      <button className="small" disabled={!e?.avis || !!busy} onClick={() => downloadFin('attestation', t.id)}>
-                        <Download size={13} aria-hidden /> Attestation
+                      <button className="small" disabled={!e?.avis || !hasTitle(t.id) || !!busy} onClick={() => downloadFin('attestation', t.id)} title={hasTitle(t.id) ? undefined : 'Titre d’habilitation manquant'}>
+                        <Download size={13} aria-hidden /> {hasTitle(t.id) ? 'Attestation' : 'Attestation (titre manquant)'}
                       </button>
                       <button className="small" disabled={!e?.avis || !!busy} onClick={() => downloadFin('competences', t.id)}>
                         <Download size={13} aria-hidden /> Appréciation des compétences
@@ -797,6 +875,7 @@ export function DossierPanel({
             session={arSession}
             initialData={arData}
             canEdit={canFill}
+            blocked={titleMissing.map((t) => t.id)}
             onClose={() => arRef.current?.close()}
             onSaved={(data) => setArData(data)}
           />
@@ -812,6 +891,9 @@ export function DossierPanel({
             initialCompleted={tdt.completed}
             completedAt={tdt.completedAt}
             canEdit={canFill}
+            canExempt={canManage}
+            titleFiles={titleFiles === null ? undefined : titles}
+            onTitleFiles={setTitles}
             onClose={() => tdtRef.current?.close()}
             onSaved={(data, completed) =>
               setTdt((x) => (x ? { ...x, data, completed, completedAt: completed ? x.completedAt || new Date().toLocaleDateString('fr-FR') : null } : x))

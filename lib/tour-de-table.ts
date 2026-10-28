@@ -1,7 +1,7 @@
 'use client';
 
 import { PDFDocument, type PDFPage } from 'pdf-lib';
-import { TDT_COLUMNS, type TdtData } from '@/lib/tdt';
+import { TDT_COLUMNS, TDT_TITLE_COL, type TdtData } from '@/lib/tdt';
 import { C, PAGE, brandFooters, brandPage, drawFaitA, drawPlace, headerRow, legalLine, loadBrand, wrap, type Legal } from '@/lib/pdf-brand';
 export { TDT_COLUMNS } from '@/lib/tdt';
 export type { TdtData, TdtKey, TdtRow } from '@/lib/tdt';
@@ -20,6 +20,8 @@ export type TdtInput = {
   legal?: Legal | null;
   /** Dernier jour de la session (JJ/MM/AAAA), date du « Fait à » si pas encore terminé. */
   lastDay?: string | null;
+  /** Stagiaires ayant déposé un fichier de titre d'habilitation. */
+  titleFiles?: string[];
 };
 
 /**
@@ -37,7 +39,7 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
   const PAD = 6;
   const BOTTOM = 58;
   const nameCol = { key: 'name', label: 'Nom Prénom', width: 98 };
-  const cols = [{ key: 'num', label: 'N°', width: 26 }, nameCol, ...TDT_COLUMNS];
+  const cols = [{ key: 'num', label: 'N°', width: 26 }, nameCol, ...TDT_COLUMNS.slice(0, 4), TDT_TITLE_COL, ...TDT_COLUMNS.slice(4)];
   const tableW = cols.reduce((n, c) => n + c.width, 0);
   const x0 = (PAGE.W - tableW) / 2;
   const pages: PDFPage[] = [];
@@ -62,6 +64,8 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
       const v = c.key === 'company' ? row.company ?? t.company ?? '' : row[c.key] ?? '';
       cells[c.key] = wrap(b.regular, v, SIZE, c.width - 2 * PAD);
     }
+    const hasTitle = Boolean(input.data.titles?.[t.id]) || Boolean(input.titleFiles?.includes(t.id));
+    cells.titre = [input.data.noTitle ? 'Non exigé' : hasTitle ? 'Oui' : 'Non'].flatMap((x) => wrap(b.regular, x, SIZE, TDT_TITLE_COL.width - 2 * PAD));
     const maxLines = Math.floor((maxRowH - 2 * PAD - 2) / LINE);
     for (const k of Object.keys(cells)) if (cells[k].length > maxLines) cells[k] = cells[k].slice(0, maxLines);
     const lines = Math.max(...Object.values(cells).map((l) => l.length), 1);

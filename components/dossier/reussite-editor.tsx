@@ -32,11 +32,12 @@ function normalize(data: ReussiteData | null, series: ReussiteSeries[]): Reussit
 }
 
 /** Données d'impression de toutes les séries (ou d'une seule attestation). */
-export function reussiteInputs(session: ReussiteSession, data: ReussiteData | null, only?: { key: string; traineeId: string }) {
+export function reussiteInputs(session: ReussiteSession, data: ReussiteData | null, only?: { key: string; traineeId: string }, blocked: string[] = []) {
   return session.series
     .map((s, i) => ({
       ...s,
-      trainees: only ? s.trainees.filter((t) => s.model.key === only.key && t.id === only.traineeId) : s.trainees,
+      // Titre d'habilitation manquant : attestation non remise.
+      trainees: (only ? s.trainees.filter((t) => s.model.key === only.key && t.id === only.traineeId) : s.trainees).filter((t) => !blocked.includes(t.id)),
       entries: reussiteEntries(data, s.model.key, i === 0),
       lieu: session.lieu,
       trainerName: session.trainerName,
@@ -58,12 +59,15 @@ export function ReussiteEditor({
   session,
   initialData,
   canEdit,
+  blocked = [],
   onClose,
   onSaved,
 }: {
   session: ReussiteSession;
   initialData: ReussiteData | null;
   canEdit: boolean;
+  /** Stagiaires sans titre d'habilitation : attestation non téléchargeable. */
+  blocked?: string[];
   onClose: () => void;
   onSaved?: (data: ReussiteData, completed: boolean) => void;
 }) {
@@ -132,7 +136,8 @@ export function ReussiteEditor({
     try {
       const { buildReussitePdf } = await import('@/lib/pdf-reussite');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
-      const inputs = reussiteInputs(session, data, only);
+      const inputs = reussiteInputs(session, data, only, blocked);
+      if (!inputs.length) throw new Error('Titre d’habilitation manquant : attestation bloquée (tour de table).');
       const bytes = await buildReussitePdf(inputs);
       const name = only
         ? `Attestation de réussite ${inputs[0]?.model.label} - ${inputs[0]?.trainees[0]?.name}`
@@ -262,8 +267,8 @@ export function ReussiteEditor({
               <button type="button" className="small" disabled={index <= 0} onClick={() => setCurrent(items[index - 1].id)}>
                 <ArrowLeft size={14} aria-hidden /> Précédent
               </button>
-              <button type="button" className="small" onClick={() => download({ key, traineeId: tid })} disabled={!!busy}>
-                {busy === current ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} PDF de cette attestation
+              <button type="button" className="small" onClick={() => download({ key, traineeId: tid })} disabled={!!busy || blocked.includes(tid)} title={blocked.includes(tid) ? 'Titre d’habilitation manquant (tour de table)' : undefined}>
+                {busy === current ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} {blocked.includes(tid) ? 'Titre d’habilitation manquant' : 'PDF de cette attestation'}
               </button>
               <span style={{ flex: 1 }} />
               <button type="button" className="small primary" disabled={index >= items.length - 1} onClick={() => setCurrent(items[index + 1].id)}>
