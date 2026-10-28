@@ -478,7 +478,14 @@ export function DossierPanel({
         ) : pedagogyComplete && billingDone === false ? (
           <span className="badge planifiee dossier-badge"><CircleDashed size={13} aria-hidden /> Reste la facturation</span>
         ) : (
-          <span className="badge brouillon dossier-badge"><CircleDashed size={13} aria-hidden /> {remaining} élément{remaining > 1 ? 's' : ''} à compléter</span>
+          <span className="badge brouillon dossier-badge" title={billingDone === false ? 'La facturation compte aussi dans le dossier complet' : undefined}>
+            <CircleDashed size={13} aria-hidden /> {(() => {
+              // Détail : documents (et signatures) d'un côté, facturation de l'autre.
+              const docs = remaining - (billingDone === false ? 1 : 0);
+              const parts = [docs > 0 ? `${docs} document${docs > 1 ? 's' : ''} à compléter` : null, billingDone === false ? 'facturation à faire' : null].filter(Boolean);
+              return parts.join(' · ');
+            })()}
+          </span>
         )}
       </div>
       <p className="panel-intro">
