@@ -387,6 +387,8 @@ export default async function SessionDetailPage({
               canManage={editable}
               tourDeTable={tourDeTable}
               titleFiles={titleError ? null : ((titleRows as any) || [])}
+              titleRequired={Boolean((tplOpt as any)?.titre_habilitation)}
+              me={profile ? { id: profile.id, name: profile.full_name } : null}
               digiforma={digiformaDocs}
               reussite={
                 arSeries.length

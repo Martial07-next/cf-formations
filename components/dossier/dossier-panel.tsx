@@ -82,6 +82,8 @@ export function DossierPanel({
   digiforma = null,
   reussite = null,
   titleFiles = null,
+  titleRequired = false,
+  me = null,
 }: {
   sessionId: string;
   title: string;
@@ -112,6 +114,10 @@ export function DossierPanel({
   reussite?: { session: Omit<ReussiteSession, 'sessionId' | 'title' | 'legal'>; data: ReussiteData | null } | null;
   /** Titres d'habilitation déposés (null si la migration 46 manque). */
   titleFiles?: TitleFile[] | null;
+  /** Titre d'habilitation exigé par la formation (migration 47). */
+  titleRequired?: boolean;
+  /** Personne connectée : présence sur les fiches remplies à plusieurs. */
+  me?: { id: string; name: string } | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
   appreciation?: {
     required: boolean;
@@ -166,7 +172,7 @@ export function DossierPanel({
   // Titres d'habilitation (migration 46) : sans titre, pas d'attestation remise.
   const [titles, setTitles] = useState<TitleFile[]>(titleFiles || []);
   useEffect(() => setTitles(titleFiles || []), [titleFiles]);
-  const titleOn = Boolean(tdt) && titleFiles !== null && !tdt?.data?.noTitle;
+  const titleOn = titleRequired && Boolean(tdt) && titleFiles !== null && !tdt?.data?.noTitle;
   const hasTitle = (id: string) => !titleOn || titleOk(id, tdt, titles);
   const titleMissing = trainees.filter((t) => !hasTitle(t.id));
   // Stagiaires dont la fiche d'appréciation a un avis : documents de fin de formation prêts.
@@ -351,6 +357,8 @@ export function DossierPanel({
             title, period, room, trainerName, trainees, place, legal, lastDay,
             data: tdt.data || {},
             completedAt: tdt.completed ? tdt.completedAt : null,
+            titleRequired,
+            titleFiles: titles.map((f) => f.trainee_id),
           })
         );
       }
@@ -427,6 +435,8 @@ export function DossierPanel({
         title, period, room, trainerName, trainees, place, legal, lastDay,
         data: tdt.data || {},
         completedAt: tdt.completed ? tdt.completedAt : null,
+        titleRequired,
+        titleFiles: titles.map((f) => f.trainee_id),
       });
       downloadPdf(bytes, `Tour de table - ${title}.pdf`);
     } catch (e: any) {
@@ -862,6 +872,7 @@ export function DossierPanel({
             session={faiSession}
             initialData={faiData}
             canEdit={canFill}
+            me={me}
             onClose={() => faiRef.current?.close()}
             onSaved={(data) => setFaiData(data)}
           />
@@ -876,6 +887,7 @@ export function DossierPanel({
             initialData={arData}
             canEdit={canFill}
             blocked={titleMissing.map((t) => t.id)}
+            me={me}
             onClose={() => arRef.current?.close()}
             onSaved={(data) => setArData(data)}
           />
@@ -892,6 +904,8 @@ export function DossierPanel({
             completedAt={tdt.completedAt}
             canEdit={canFill}
             canExempt={canManage}
+            titleRequired={titleRequired && titleFiles !== null}
+            me={me}
             titleFiles={titleFiles === null ? undefined : titles}
             onTitleFiles={setTitles}
             onClose={() => tdtRef.current?.close()}

@@ -90,7 +90,7 @@ export async function setNewPassword(formData: FormData) {
   if (password.length < 8) redirect('/mot-de-passe?error=' + encodeURIComponent('8 caractères minimum.'));
   if (password !== confirm) redirect('/mot-de-passe?error=' + encodeURIComponent('Les deux mots de passe ne correspondent pas.'));
   const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({ password });
+  const { error } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
   if (error) redirect('/mot-de-passe?error=' + encodeURIComponent('Lien expiré : refais une demande de mot de passe oublié.'));
   revalidatePath('/', 'layout');
   redirect('/');
@@ -159,7 +159,7 @@ export async function resolvePasswordRequest(id: string): Promise<DecisionResult
   }
   if (user.id === me.id) return { ok: false, error: 'Change ton propre mot de passe depuis « Mon profil ».' };
   const password = generatePassword();
-  const { error } = await admin.auth.admin.updateUserById(user.id, { password });
+  const { error } = await admin.auth.admin.updateUserById(user.id, { password, user_metadata: { must_change_password: true } });
   if (error) return { ok: false, error: error.message };
   await close(supabase, id, me.id, 'traitee', null);
   return { ok: true, email: req.email, password };

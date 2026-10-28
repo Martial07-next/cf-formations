@@ -1,11 +1,12 @@
 'use client';
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AlertTriangle, CheckCircle2, Download, Loader2, RotateCcw, X } from 'lucide-react';
 import { saveTourDeTable } from '@/app/dossier/actions';
 import { TDT_COLUMNS, type TdtData, type TdtKey } from '@/lib/tdt';
 import { titleOk, type TitleFile } from '@/lib/titres';
 import { TitleFiles, TitleQrButton } from '@/components/dossier/titles';
+import { LivePeers, peerOn, useLiveForm } from '@/components/dossier/use-live-form';
 
 /** Zone de texte qui grandit avec son contenu. */
 export function AutoText({
@@ -15,6 +16,9 @@ export function AutoText({
   label,
   placeholder,
   minRows = 1,
+  onFocus,
+  onBlur,
+  peer,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -22,6 +26,10 @@ export function AutoText({
   label: string;
   placeholder?: string;
   minRows?: number;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  /** Quelqu'un d'autre modifie cette case (édition à plusieurs). */
+  peer?: { name: string; color: string } | null;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -30,7 +38,7 @@ export function AutoText({
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight + 2}px`;
   }, [value]);
-  return (
+  const area = (
     <textarea
       ref={ref}
       className="tdt-input"
@@ -40,7 +48,15 @@ export function AutoText({
       readOnly={readOnly}
       placeholder={readOnly ? '' : placeholder}
       onChange={(e) => onChange(e.target.value)}
+      onFocus={onFocus}
+      onBlur={onBlur}
     />
+  );
+  if (!peer) return area;
+  return (
+    <span className="live-field" style={{ ['--peer' as any]: peer.color }} data-name={peer.name.split(' ')[0]}>
+      {area}
+    </span>
   );
 }
 
@@ -68,6 +84,8 @@ export function TourDeTable({
   completedAt,
   canEdit,
   canExempt = false,
+  titleRequired = true,
+  me = null,
   titleFiles = [],
   onTitleFiles,
   onClose,
@@ -80,6 +98,10 @@ export function TourDeTable({
   canEdit: boolean;
   /** Bureau : peut indiquer que le titre n'est pas exigé pour cette session. */
   canExempt?: boolean;
+  /** Titre d'habilitation exigé par la formation (sinon ni colonne ni bandeau). */
+  titleRequired?: boolean;
+  /** Personne connectée (présence sur la fiche). */
+  me?: { id: string; name: string } | null;
   /** Titres d'habilitation déposés (migration 46). */
   titleFiles?: TitleFile[];
   onTitleFiles?: (files: TitleFile[]) => void;
@@ -89,35 +111,30 @@ export function TourDeTable({
   const [data, setData] = useState<TdtData>(initialData || {});
   const [completed, setCompleted] = useState(initialCompleted);
   const [doneAt, setDoneAt] = useState<string | null>(completedAt);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const firstRun = useRef(true);
   const editable = canEdit && !completed;
-
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    if (!canEdit) return;
-    setSaveState('saving');
-    const t = setTimeout(async () => {
-      const res = await saveTourDeTable(session.sessionId, data);
-      if (res.ok) {
-        setSaveState('saved');
-        setSavedAt(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-        onSaved?.(data, completed);
-      } else {
-        setSaveState('error');
-        setError(res.error);
-      }
-    }, 900);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  const completedRef = useRef(completed);
+  completedRef.current = completed;
+  // À plusieurs sur la fiche : modifications fusionnées et reçues en direct.
+  const live = useLiveForm<TdtData>({
+    sessionId: session.sessionId,
+    kind: 'tour_de_table',
+    data,
+    setData,
+    canEdit,
+    me,
+    legacySave: (d, comp) => saveTourDeTable(session.sessionId, d, comp),
+    onSynced: (d) => onSaved?.(d, completedRef.current),
+    onRow: (row) => {
+      setCompleted(row.completed);
+      setDoneAt(row.completed ? (row.completed_at ? new Date(row.completed_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : new Date().toLocaleDateString('fr-FR')) : null);
+    },
+  });
+  const saveState = live.status;
+  const savedAt = live.savedAt;
+  const error = localError || live.error;
 
   const setCell = (traineeId: string, key: TdtKey, value: string) =>
     setData((d) => ({ ...d, rows: { ...(d.rows || {}), [traineeId]: { ...(d.rows?.[traineeId] || {}), [key]: value } } }));
@@ -128,12 +145,13 @@ export function TourDeTable({
   );
 
   const setTitle = (traineeId: string, value: boolean) => setData((d) => ({ ...d, titles: { ...(d.titles || {}), [traineeId]: value } }));
-  const titlesMissing = session.trainees.filter((t) => !titleOk(t.id, { data }, titleFiles));
+  const titleOn = titleRequired && !data.noTitle;
+  const titlesMissing = titleRequired ? session.trainees.filter((t) => !titleOk(t.id, { data }, titleFiles)) : [];
 
   function setDone(value: boolean) {
     startTransition(async () => {
-      const res = await saveTourDeTable(session.sessionId, data, value);
-      if (!res.ok) return setError(res.error);
+      const ok = await live.flush(value);
+      if (!ok) return;
       setCompleted(value);
       setDoneAt(value ? new Date().toLocaleDateString('fr-FR') : null);
       onSaved?.(data, value);
@@ -146,7 +164,7 @@ export function TourDeTable({
     try {
       const { buildTourDeTablePdf } = await import('@/lib/tour-de-table');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
-      const bytes = await buildTourDeTablePdf({ ...session, data, completedAt: completed ? doneAt : null, titleFiles: titleFiles.map((f) => f.trainee_id) });
+      const bytes = await buildTourDeTablePdf({ ...session, data: titleRequired ? data : { ...data, noTitle: undefined }, titleRequired, completedAt: completed ? doneAt : null, titleFiles: titleFiles.map((f) => f.trainee_id) });
       downloadPdf(bytes, `Tour de table - ${session.title}.pdf`);
     } catch (e: any) {
       setError(e?.message || 'PDF impossible.');
@@ -177,6 +195,7 @@ export function TourDeTable({
           </span>
         </div>
         <div className="row-actions">
+          <LivePeers peers={live.peers} live={live.live} />
           <button type="button" className={`small${completed ? ' primary' : ''}`} onClick={download} disabled={busy}>
             {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} {completed ? 'Télécharger' : 'Aperçu PDF'}
           </button>
@@ -202,7 +221,8 @@ export function TourDeTable({
           <span className="hint">{filled}/{session.trainees.length} stagiaire{session.trainees.length > 1 ? 's' : ''} renseigné{filled > 1 ? 's' : ''}</span>
         </div>
 
-        {/* Titre d'habilitation : sans titre, les attestations du stagiaire ne sont pas remises. */}
+        {/* Titre d'habilitation (si la formation l'exige) : sans titre, les attestations du stagiaire ne sont pas remises. */}
+        {titleRequired && (
         <div className={`tdt-titles${titlesMissing.length && !data.noTitle ? ' missing' : ''}`}>
           <span className="tdt-titles-text">
             {data.noTitle ? (
@@ -223,6 +243,7 @@ export function TourDeTable({
             )}
           </span>
         </div>
+        )}
 
         {session.trainees.length === 0 ? (
           <p className="empty">Aucun stagiaire validé sur cette session : ajoute-les d’abord, ils apparaîtront ici automatiquement.</p>
@@ -236,7 +257,7 @@ export function TourDeTable({
                   {TDT_COLUMNS.map((c) => (
                     <Fragment key={c.key}>
                       <th style={{ minWidth: c.width * 1.6 }}>{c.label}</th>
-                      {c.key === 'habilitations' && !data.noTitle && <th className="tdt-title-col">Titre d’habilitation</th>}
+                      {c.key === 'habilitations' && titleOn && <th className="tdt-title-col">Titre d’habilitation</th>}
                     </Fragment>
                   ))}
                 </tr>
@@ -257,9 +278,12 @@ export function TourDeTable({
                               readOnly={!editable}
                               value={c.key === 'company' ? row.company ?? t.company ?? '' : row[c.key] ?? ''}
                               onChange={(v) => setCell(t.id, c.key, v)}
+                              onFocus={() => live.focus(`${t.id}.${c.key}`)}
+                              onBlur={() => live.focus(null)}
+                              peer={peerOn(live.peers, `${t.id}.${c.key}`)}
                             />
                           </td>
-                          {c.key === 'habilitations' && !data.noTitle && (
+                          {c.key === 'habilitations' && titleOn && (
                             <td className={`tdt-title-col${titleOk(t.id, { data }, titleFiles) ? ' ok' : ' ko'}`}>
                               {(() => {
                                 const hasFile = titleFiles.some((f) => f.trainee_id === t.id);
@@ -305,6 +329,9 @@ export function TourDeTable({
             minRows={3}
             value={data.general || ''}
             onChange={(v) => setData((d) => ({ ...d, general: v }))}
+            onFocus={() => live.focus('general')}
+            onBlur={() => live.focus(null)}
+            peer={peerOn(live.peers, 'general')}
           />
         </label>
       </div>

@@ -1,10 +1,11 @@
 'use client';
 
 import { codificationFor } from '@/lib/appreciation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { saveAppreciation } from '@/app/dossier/actions';
 import { AutoText } from '@/components/dossier/tour-de-table';
+import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
 import { appreciationDone, type AppreciationData, type AppreciationEntry, type Avis } from '@/lib/appreciation';
 import type { Legal } from '@/lib/pdf-brand';
 
@@ -31,47 +32,40 @@ export function AppreciationEditor({
   session,
   initialData,
   canEdit,
+  me = null,
   onClose,
   onSaved,
 }: {
   session: AppreciationSession;
   initialData: AppreciationData | null;
   canEdit: boolean;
+  /** Personne connectée (présence sur la fiche). */
+  me?: { id: string; name: string } | null;
   onClose: () => void;
   onSaved?: (data: AppreciationData, completed: boolean) => void;
 }) {
   const [data, setData] = useState<AppreciationData>(initialData || {});
   const [current, setCurrent] = useState(session.trainees[0]?.id || '');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const firstRun = useRef(true);
   const ids = session.trainees.map((t) => t.id);
   const done = useMemo(() => session.trainees.filter((t) => data.trainees?.[t.id]?.avis).length, [data, session.trainees]);
   const allDone = appreciationDone(data, ids);
-
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    if (!canEdit) return;
-    setSaveState('saving');
-    const t = setTimeout(async () => {
-      const res = await saveAppreciation(session.sessionId, data, allDone);
-      if (res.ok) {
-        setSaveState('saved');
-        setSavedAt(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-        onSaved?.(data, allDone);
-      } else {
-        setSaveState('error');
-        setError(res.error);
-      }
-    }, 800);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  // À plusieurs sur la fiche : modifications fusionnées et reçues en direct.
+  const live = useLiveForm<AppreciationData>({
+    sessionId: session.sessionId,
+    kind: 'appreciation',
+    data,
+    setData,
+    canEdit,
+    me,
+    completedOf: (d) => appreciationDone(d, ids),
+    legacySave: (d, comp) => saveAppreciation(session.sessionId, d, Boolean(comp)),
+    onSynced: (d) => onSaved?.(d, appreciationDone(d, ids)),
+  });
+  const saveState = live.status;
+  const savedAt = live.savedAt;
+  const error = localError || live.error;
 
   const index = session.trainees.findIndex((t) => t.id === current);
   const trainee = session.trainees[index];
@@ -120,6 +114,7 @@ export function AppreciationEditor({
           </span>
         </div>
         <div className="row-actions">
+          <LivePeers peers={live.peers} live={live.live} />
           <button type="button" className={`small${allDone ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy || !session.trainees.length}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les fiches (PDF)
           </button>

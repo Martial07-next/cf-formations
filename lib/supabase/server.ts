@@ -54,6 +54,8 @@ export const getCurrentProfile = cache(async function getCurrentProfile() {
     trainer_id: (trainer?.id as string | undefined) ?? null,
     can_invoice: Boolean((billing as any)?.can_invoice),
     can_dev: Boolean((dev as any)?.can_dev),
+    /** Mot de passe temporaire donné par l'administrateur : à changer avant d'utiliser la plateforme. */
+    must_change_password: Boolean(user.user_metadata?.must_change_password),
   };
 });
 

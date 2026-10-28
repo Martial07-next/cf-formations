@@ -47,8 +47,28 @@ export async function updateOwnPassword(formData: FormData): Promise<ActionResul
   });
   if (verifyError) return { ok: false, error: 'Mot de passe actuel incorrect.' };
 
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  const { error } = await supabase.auth.updateUser({ password: newPassword, data: { must_change_password: false } });
   if (error) return { ok: false, error: error.message };
 
+  return { ok: true };
+}
+
+/**
+ * Première connexion avec le mot de passe temporaire donné par
+ * l'administrateur : nouveau mot de passe choisi tout de suite, puis accès
+ * direct à la plateforme (sans redemander le mot de passe actuel).
+ */
+export async function setFirstPassword(password: string, confirm: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Session expirée : reconnecte-toi.' };
+  if (!user.user_metadata?.must_change_password) return { ok: true };
+  if (password.length < 8) return { ok: false, error: '8 caractères minimum.' };
+  if (!/[A-Za-zÀ-ÿ]/.test(password) || !/\d/.test(password)) return { ok: false, error: 'Mets au moins une lettre et un chiffre.' };
+  if (password !== confirm) return { ok: false, error: 'Les deux mots de passe ne correspondent pas.' };
+  const { error } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
+  if (error) {
+    return { ok: false, error: /different|same/i.test(error.message) ? 'Choisis un mot de passe différent du mot de passe temporaire.' : error.message };
+  }
   return { ok: true };
 }

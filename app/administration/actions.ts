@@ -93,7 +93,7 @@ export async function resetUserPassword(userId: string): Promise<{ ok: true; pas
   const admin = serviceClient();
   if (!admin) return { ok: false, error: NO_SERVICE_KEY };
   const password = generatePassword();
-  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  const { error } = await admin.auth.admin.updateUserById(userId, { password, user_metadata: { must_change_password: true } });
   if (error) return { ok: false, error: error.message };
   return { ok: true, password };
 }
@@ -135,7 +135,7 @@ export async function updateUserAccess(
   const { error } = await admin.auth.admin.updateUserById(userId, {
     email,
     email_confirm: true,
-    user_metadata: { full_name: fullName },
+    user_metadata: { full_name: fullName, ...(password ? { must_change_password: true } : {}) },
     ...(password ? { password } : {}),
   });
   if (error) return { ok: false, error: /already|registered|exists/i.test(error.message) ? 'Un autre compte utilise déjà cet e-mail.' : error.message };

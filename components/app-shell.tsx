@@ -5,8 +5,9 @@ import { DevLayer } from '@/components/dev/dev-layer';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { NavProgress } from '@/components/nav-progress';
+import { FirstPasswordGate } from '@/components/first-password';
 
-type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number } | null;
+type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number; must_change_password?: boolean } | null;
 
 /** Pages ouvertes sans compte (connexion, liens QR / signatures). */
 const PUBLIC = ['/login', '/emargement/', '/convention/', '/france-travail/', '/autorisations/', '/salarie/', '/titre/', '/auth/', '/mot-de-passe'];
@@ -27,6 +28,8 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <Sidebar profile={profile} />
       <div className="app-main">{children}</div>
       <NavProgress />
+      {/* Mot de passe temporaire : à remplacer avant d'utiliser la plateforme. */}
+      {profile.must_change_password && <FirstPasswordGate name={profile.full_name} />}
       {/* Remarques d'amélioration : comptes avec l'accès dev et administrateur. */}
       {profile.id && (profile.role === 'admin' || profile.can_dev) && (
         <Suspense fallback={null}>

@@ -18,6 +18,8 @@ function readTemplate(formData: FormData) {
     description: get('description') || null,
     // Tour de table dans le dossier (migration 17) : seulement si le formulaire le propose.
     ...(formData.has('tdt_present') ? { tour_de_table: formData.get('tour_de_table') === 'on' } : {}),
+    // Titre d'habilitation exigé (migration 47) : case au tour de table, attestation bloquée sans titre.
+    ...(formData.has('titre_present') ? { titre_habilitation: formData.get('titre_habilitation') === 'on' } : {}),
     // Fiche d'appréciation individuelle et codification SERECT (migration 21).
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
@@ -50,7 +52,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

@@ -58,6 +58,7 @@ export default async function RootLayout({ children }: Readonly<{children: React
         can_dev: profile.can_dev,
         pending_requests: pendingRequests,
         dev_open: devOpen,
+        must_change_password: profile.must_change_password,
       }
     : null;
   return (

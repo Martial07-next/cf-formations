@@ -57,7 +57,8 @@ export async function createAccount(
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName },
+    // Mot de passe donné par l'administrateur : à changer à la première connexion.
+    user_metadata: { full_name: fullName, must_change_password: true },
   });
   if (error || !data.user) {
     const msg = error?.message || 'Création impossible.';

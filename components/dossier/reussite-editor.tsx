@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Loader2, PenLine, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { saveReussite } from '@/app/dossier/actions';
 import { AutoText } from '@/components/dossier/tour-de-table';
+import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { reussiteCount, reussiteDone, reussiteEntries, type ReussiteAvis, type ReussiteData, type ReussiteEntry, type ReussiteModel } from '@/lib/reussite';
 import type { Legal } from '@/lib/pdf-brand';
@@ -60,6 +61,7 @@ export function ReussiteEditor({
   initialData,
   canEdit,
   blocked = [],
+  me = null,
   onClose,
   onSaved,
 }: {
@@ -68,6 +70,8 @@ export function ReussiteEditor({
   canEdit: boolean;
   /** Stagiaires sans titre d'habilitation : attestation non téléchargeable. */
   blocked?: string[];
+  /** Personne connectée (présence sur la fiche). */
+  me?: { id: string; name: string } | null;
   onClose: () => void;
   onSaved?: (data: ReussiteData, completed: boolean) => void;
 }) {
@@ -78,39 +82,30 @@ export function ReussiteEditor({
     [session.series]
   );
   const [current, setCurrent] = useState(items[0]?.id || '');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [signing, setSigning] = useState(!initialData?.signature);
   const [padEmpty, setPadEmpty] = useState(true);
   const pad = useRef<SignaturePadHandle>(null);
-  const firstRun = useRef(true);
   const groups = session.series.map((s) => ({ key: s.model.key, traineeIds: s.trainees.map((t) => t.id) }));
   const { done, total } = reussiteCount(data, groups);
   const allDone = reussiteDone(data, groups);
 
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    if (!canEdit) return;
-    setSaveState('saving');
-    const t = setTimeout(async () => {
-      const res = await saveReussite(session.sessionId, data, allDone);
-      if (res.ok) {
-        setSaveState('saved');
-        setSavedAt(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-        onSaved?.(data, allDone);
-      } else {
-        setSaveState('error');
-        setError(res.error);
-      }
-    }, 800);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  // À plusieurs sur la fiche : modifications fusionnées et reçues en direct.
+  const live = useLiveForm<ReussiteData>({
+    sessionId: session.sessionId,
+    kind: 'reussite',
+    data,
+    setData,
+    canEdit,
+    me,
+    completedOf: (d) => reussiteDone(d, groups),
+    legacySave: (d, comp) => saveReussite(session.sessionId, d, Boolean(comp)),
+    onSynced: (d) => onSaved?.(d, reussiteDone(d, groups)),
+  });
+  const saveState = live.status;
+  const savedAt = live.savedAt;
+  const error = localError || live.error;
 
   const index = items.findIndex((x) => x.id === current);
   const item = items[index];
@@ -180,6 +175,7 @@ export function ReussiteEditor({
           </span>
         </div>
         <div className="row-actions">
+          <LivePeers peers={live.peers} live={live.live} />
           <button type="button" className={`small${allDone ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy || !items.length}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les attestations (PDF)
           </button>

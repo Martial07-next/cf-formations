@@ -458,3 +458,57 @@ export async function setDigiformaDone(sessionId: string, done: boolean): Promis
   refresh(sessionId);
   return { ok: true };
 }
+
+// ---- Fiches à plusieurs, en direct (migration 47) ----------------------------
+
+type FormKind = 'tour_de_table' | 'appreciation' | 'reussite';
+const FORM_KINDS: FormKind[] = ['tour_de_table', 'appreciation', 'reussite'];
+export type FormPatch = { path: string[]; value: unknown };
+
+/**
+ * Applique des modifications ciblées (une case, un texte) à une fiche : la
+ * fusion se fait dans la base, ce que les autres saisissent en même temps
+ * n'est jamais écrasé. Renvoie la fiche à jour. `legacy` : migration 47 absente.
+ */
+export async function patchSessionForm(
+  sessionId: string,
+  kind: FormKind,
+  patches: FormPatch[],
+  completed?: boolean
+): Promise<Result<{ data: any }> | { ok: false; error: string; legacy: true }> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  if (!FORM_KINDS.includes(kind)) return { ok: false, error: 'Fiche inconnue.' };
+  const clean = (Array.isArray(patches) ? patches : [])
+    .filter((p) => Array.isArray(p?.path) && p.path.length > 0 && p.path.length <= 6 && p.path.every((k) => typeof k === 'string' && k.length <= 80))
+    .slice(0, 500);
+  if (JSON.stringify(clean).length > 800_000) return { ok: false, error: 'Modification trop longue.' };
+  const { data, error } = await r.supabase.rpc('patch_session_form', {
+    p_session: sessionId,
+    p_kind: kind,
+    p_patches: clean,
+    p_completed: completed ?? null,
+  });
+  if (error) {
+    if (/patch_session_form|function|schema cache/i.test(error.message)) return { ok: false, error: 'Migration 47 à exécuter.', legacy: true };
+    return { ok: false, error: error.message };
+  }
+  if (kind === 'tour_de_table' && clean.some((p) => p.path[0] === 'rows' && p.path[2] === 'company')) {
+    const updated = await syncCompanies(sessionId, (data as any)?.rows || {});
+    if (updated) {
+      revalidatePath('/stagiaires');
+      revalidatePath('/sessions');
+    }
+  }
+  if (completed !== undefined) refresh(sessionId);
+  return { ok: true, data: data || {} };
+}
+
+/** Fiche à jour (rattrapage si la diffusion en direct est coupée). */
+export async function getSessionForm(sessionId: string, kind: FormKind): Promise<Result<{ data: any; completed: boolean }>> {
+  if (!FORM_KINDS.includes(kind) || !(await canReadDossier(sessionId))) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('session_forms').select('data, completed').eq('session_id', sessionId).eq('kind', kind).maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: (data as any)?.data || {}, completed: Boolean((data as any)?.completed) };
+}

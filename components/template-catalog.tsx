@@ -39,6 +39,7 @@ type Template = {
   links: { id: string; label: string; url: string }[];
   documents: DossierDocument[];
   tour_de_table?: boolean;
+  titre_habilitation?: boolean;
   fiche_appreciation?: boolean;
   attestation_reussite?: string | null;
   authorizations?: string[] | null;
@@ -228,6 +229,11 @@ function TemplateFields({
         <label className="check-line">
           <input type="checkbox" name="tour_de_table" defaultChecked={t?.tour_de_table !== false} />
           Tour de table à remplir par le formateur dans le dossier de chaque session
+        </label>
+        <input type="hidden" name="titre_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="titre_habilitation" defaultChecked={Boolean(t?.titre_habilitation)} />
+          Titre d’habilitation exigé : case au tour de table, dépôt par QR code, attestation bloquée tant que le titre n’est pas fourni
         </label>
         <input type="hidden" name="recyclage_present" value="1" />
         <label className="check-line">
@@ -487,6 +493,7 @@ export function TemplateCatalog({
                         <strong>{t.title}</strong>
                         <div className="tpl-flags">
                           {t.tour_de_table !== false && <span className="tpl-flag">Tour de table</span>}
+                          {t.titre_habilitation && <span className="tpl-flag">Titre d’habilitation</span>}
                           {t.fiche_appreciation && <span className="tpl-flag">Fiche d’appréciation</span>}
                           {reussiteModels(t.attestation_reussite).length > 0 && (
                             <span className="tpl-flag">Attestations {reussiteModels(t.attestation_reussite).map((m) => m.label.replace(/^IRVE\s+/, '')).join(' · ')}</span>

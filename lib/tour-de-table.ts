@@ -22,6 +22,8 @@ export type TdtInput = {
   lastDay?: string | null;
   /** Stagiaires ayant déposé un fichier de titre d'habilitation. */
   titleFiles?: string[];
+  /** Titre d'habilitation exigé par la formation : colonne « Titre hab. » (sinon absente). */
+  titleRequired?: boolean;
 };
 
 /**
@@ -39,7 +41,10 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
   const PAD = 6;
   const BOTTOM = 58;
   const nameCol = { key: 'name', label: 'Nom Prénom', width: 98 };
-  const cols = [{ key: 'num', label: 'N°', width: 26 }, nameCol, ...TDT_COLUMNS.slice(0, 4), TDT_TITLE_COL, ...TDT_COLUMNS.slice(4)];
+  // Sans titre exigé, la place de la colonne « Titre hab. » revient aux attentes et incidents.
+  const wide = input.titleRequired ? 0 : TDT_TITLE_COL.width / 2;
+  const tail = TDT_COLUMNS.slice(4).map((c) => (c.key === 'attentes' || c.key === 'incidents' ? { ...c, width: c.width + wide } : c));
+  const cols = [{ key: 'num', label: 'N°', width: 26 }, nameCol, ...TDT_COLUMNS.slice(0, 4), ...(input.titleRequired ? [TDT_TITLE_COL] : []), ...tail];
   const tableW = cols.reduce((n, c) => n + c.width, 0);
   const x0 = (PAGE.W - tableW) / 2;
   const pages: PDFPage[] = [];
@@ -60,7 +65,7 @@ export async function buildTourDeTablePdf(input: TdtInput): Promise<Uint8Array> 
       num: [String(i + 1)],
       name: wrap(b.bold, t.name, SIZE, nameCol.width - 2 * PAD),
     };
-    for (const c of TDT_COLUMNS) {
+    for (const c of tail.length ? [...TDT_COLUMNS.slice(0, 4), ...tail] : TDT_COLUMNS) {
       const v = c.key === 'company' ? row.company ?? t.company ?? '' : row[c.key] ?? '';
       cells[c.key] = wrap(b.regular, v, SIZE, c.width - 2 * PAD);
     }
