@@ -272,12 +272,14 @@ export function DossierPanel({
     emargOk &&
     progress.documents.done === progress.documents.needed &&
     (EMARGEMENT_ENABLED || progress.documents.needed > 0);
-  // Le dossier n'est complet qu'une fois la facturation faite.
-  const complete = pedagogyComplete && billingDone !== false;
+  // Le dossier n'est complet qu'une fois la facturation faite (suivi du bureau
+  // uniquement : le formateur ne voit que ses documents).
+  const billingPending = canManage && billingDone === false;
+  const complete = pedagogyComplete && !billingPending;
   const remaining =
     (EMARGEMENT_ENABLED ? emargement.needed - emargement.done : 0) +
     (progress.documents.needed - progress.documents.done) +
-    (billingDone === false ? 1 : 0);
+    (billingPending ? 1 : 0);
   const now = currentSlot(slots);
   const lastDay = slots.length ? slots[slots.length - 1].day.split('-').reverse().join('/') : null;
 
@@ -475,14 +477,14 @@ export function DossierPanel({
         <h2><FolderCheck size={18} aria-hidden /> Dossier de formation</h2>
         {complete ? (
           <span className="badge validee dossier-badge"><CheckCircle2 size={13} aria-hidden /> Dossier complet</span>
-        ) : pedagogyComplete && billingDone === false ? (
+        ) : pedagogyComplete && billingPending ? (
           <span className="badge planifiee dossier-badge"><CircleDashed size={13} aria-hidden /> Reste la facturation</span>
         ) : (
-          <span className="badge brouillon dossier-badge" title={billingDone === false ? 'La facturation compte aussi dans le dossier complet' : undefined}>
+          <span className="badge brouillon dossier-badge" title={billingPending ? 'La facturation compte aussi dans le dossier complet' : undefined}>
             <CircleDashed size={13} aria-hidden /> {(() => {
               // Détail : documents (et signatures) d'un côté, facturation de l'autre.
-              const docs = remaining - (billingDone === false ? 1 : 0);
-              const parts = [docs > 0 ? `${docs} document${docs > 1 ? 's' : ''} à compléter` : null, billingDone === false ? 'facturation à faire' : null].filter(Boolean);
+              const docs = remaining - (billingPending ? 1 : 0);
+              const parts = [docs > 0 ? `${docs} document${docs > 1 ? 's' : ''} à compléter` : null, billingPending ? 'facturation à faire' : null].filter(Boolean);
               return parts.join(' · ');
             })()}
           </span>
