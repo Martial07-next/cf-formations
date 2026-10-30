@@ -20,7 +20,14 @@ function readEvent(formData: FormData) {
     location: get('location') || null,
     participants: get('participants') || null,
     notes: get('notes') || null,
+    // Évènement d'un parcours (migration 49) : seulement si le formulaire le propose.
+    ...(formData.has('poec_id') && /^[0-9a-f-]{36}$/i.test(get('poec_id')) ? { poec_id: get('poec_id') } : {}),
   };
+}
+
+/** Parcours concerné : sa page « Semaine par semaine » est mise à jour. */
+function refreshProgram(e: { poec_id?: string }) {
+  if (e.poec_id) revalidatePath(`/poec/${e.poec_id}`);
 }
 
 function validate(e: ReturnType<typeof readEvent>): string | null {
@@ -67,7 +74,8 @@ export async function createEvent(formData: FormData): Promise<Result> {
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
   const { data, error } = await supabase.from('planning_events').insert({ ...e, created_by: profile.id }).select('id').single();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: /poec_id/.test(error.message) ? 'Exécute d’abord la migration 49 (supabase/migration_phase49.sql) dans Supabase.' : error.message };
+  refreshProgram(e);
   const trainerError = await saveTrainers(supabase, data.id, formData);
   const employeeError = await saveEmployees(supabase, data.id, formData);
   revalidatePath('/');
@@ -83,6 +91,7 @@ export async function updateEvent(id: string, formData: FormData): Promise<Resul
   const supabase = await createClient();
   const { error } = await supabase.from('planning_events').update(e).eq('id', id);
   if (error) return { ok: false, error: error.message };
+  refreshProgram(e);
   const trainerError = await saveTrainers(supabase, id, formData);
   const employeeError = await saveEmployees(supabase, id, formData);
   revalidatePath('/');
@@ -92,8 +101,10 @@ export async function updateEvent(id: string, formData: FormData): Promise<Resul
 export async function deleteEvent(id: string): Promise<Result> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
+  const { data: before } = await supabase.from('planning_events').select('poec_id').eq('id', id).maybeSingle();
   const { error } = await supabase.from('planning_events').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
+  refreshProgram({ poec_id: (before as any)?.poec_id || undefined });
   revalidatePath('/');
   return { ok: true };
 }

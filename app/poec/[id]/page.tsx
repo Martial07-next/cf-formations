@@ -7,6 +7,7 @@ import { conventionStatus, frShort, isCustomProgram } from '@/lib/poec';
 import { compareRooms } from '@/lib/buildings';
 import { formatHours } from '@/lib/week';
 import { ProgramTimeline } from '@/components/poec/program-timeline';
+import { ProgramEventButton } from '@/components/poec/program-events';
 import { ProgrammePdfButton } from '@/components/poec/programme-pdf-button';
 import { ProgramHeaderActions, GroupPanel, ProgramPlanningActions, ConventionsPanel, FranceTravailLink } from '@/components/poec/program-manager';
 
@@ -54,6 +55,15 @@ export default async function PoecProgramPage({
         .limit(200),
     ]);
 
+  // Évènements rattachés au parcours (migration 49) : vide si la migration manque.
+  const { data: eventRows } = await supabase
+    .from('planning_events')
+    .select('id, kind, title, start_date, end_date, start_time, end_time, location, participants, notes, planning_event_trainers(trainer_id)')
+    .eq('poec_id', program.id)
+    .order('start_date');
+  const programEvents = ((eventRows as any[]) || []).map((e) => ({ ...e, trainer_ids: (e.planning_event_trainers || []).map((x: any) => x.trainer_id) }));
+  const today = new Date().toISOString().slice(0, 10);
+  const eventDay = today >= program.start_date && today <= program.end_date ? today : program.start_date;
   const s = (settings as any) || {};
   const director = { name: s.director_name || 'Madame Aurélie Lancelle', title: s.director_title || 'Directrice de CF Réseaux' };
   const legal = { siret: s.siret || null, nda: s.nda || null, city: s.signature_city || 'Cuincy' };
@@ -143,8 +153,11 @@ export default async function PoecProgramPage({
             absences={(absences as any) || []}
             memberCount={members.length}
           />
-          <h3 className="sub-heading">Semaine par semaine</h3>
-          <ProgramTimeline start={program.start_date} end={program.end_date} sessions={sessions} periods={periods} linkSessions />
+          <h3 className="sub-heading program-week-head">
+            Semaine par semaine
+            {custom && <ProgramEventButton programId={program.id} trainers={(trainers as any) || []} defaultDay={eventDay} />}
+          </h3>
+          <ProgramTimeline start={program.start_date} end={program.end_date} sessions={sessions} periods={periods} linkSessions events={programEvents} programId={program.id} trainers={(trainers as any) || []} />
         </section>
 
         {(!custom || periods.length > 0) && (

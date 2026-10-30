@@ -548,7 +548,10 @@ export function SessionDetailView({
           const { [traineeId]: _, ...rest } = a;
           return rest;
         });
-      } else router.refresh();
+      } else {
+        if (result.notice) setNotice(result.notice);
+        router.refresh();
+      }
     });
   }
 

@@ -1,5 +1,7 @@
 'use server';
 
+import { graftOnCatalogHours } from '@/lib/graft';
+
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { traineesLockError } from '@/lib/session-lock';
@@ -259,6 +261,9 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
       const { error } = await supabase.from('session_trainees').update({ cursus: enrollCursus }).eq('session_id', session.id).in('trainee_id', ok);
       if (error) errors.push('Initial / recyclage non enregistré (migration 29 à exécuter).');
     }
+    // Session de parcours plus longue que le catalogue : les personnes greffées suivent les heures du catalogue.
+    const graft = await graftOnCatalogHours(supabase, session.id, ok).catch(() => null);
+    if (graft) errors.push(graft);
   }
 
   revalidatePath('/stagiaires');

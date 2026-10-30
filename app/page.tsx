@@ -189,7 +189,7 @@ export default async function Page({
         ])
       : Promise.resolve([{ data: [] as any[] }, { data: [] as any[] }] as const),
     poec: sessionIdsEarly.length
-      ? start(supabase.from('sessions').select('id, poec_programs(title)').in('id', sessionIdsEarly).not('poec_id', 'is', null))
+      ? start(supabase.from('sessions').select('id, poec_programs(title, kind)').in('id', sessionIdsEarly).not('poec_id', 'is', null))
       : Promise.resolve({ data: [] as any[] }),
     by: sessionIdsEarly.length
       ? start(supabase.from('sessions').select('id, created_by, profiles!sessions_created_by_fkey(full_name)').in('id', sessionIdsEarly))
@@ -299,10 +299,14 @@ export default async function Page({
   // Sessions rattachées à un parcours POEC (migration 23) : badge sur le planning.
   const poecTitles: Record<string, string> = {};
   if (sessionIds.length) {
-    const { data: poecRows } = await per.poec;
+    const first: any = await per.poec;
+    let poecRows: any[] | null = first.data;
+    // Sans la migration 43 (type de parcours) : titres seuls.
+    if (first.error) poecRows = (await supabase.from('sessions').select('id, poec_programs(title)').in('id', sessionIds).not('poec_id', 'is', null)).data;
     for (const r of (poecRows as any[]) || []) {
       const prog = Array.isArray(r.poec_programs) ? r.poec_programs[0] : r.poec_programs;
-      if (prog?.title) poecTitles[r.id] = prog.title;
+      // Parcours personnalisé : son titre seul (il ne s'agit pas forcément d'une POEC).
+      if (prog?.title) poecTitles[r.id] = prog.kind === 'personnalise' ? prog.title : `POEC · ${prog.title}`;
     }
   }
 

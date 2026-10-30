@@ -66,6 +66,11 @@ function validatedCount(s: SessionRow): number {
   return (s.session_trainees || []).filter((t) => t.status === 'validee').length;
 }
 
+/** Stagiaires en attente de validation : la session n'est pas encore confirmée pour eux. */
+function waitingCount(s: SessionRow): number {
+  return (s.session_trainees || []).filter((t) => t.status === 'en_attente').length;
+}
+
 function colorOf(s: SessionRow): string {
   return one(s.trainers)?.color || DEFAULT_TRAINER_COLOR;
 }
@@ -129,8 +134,13 @@ function SessionCard({
         <span className="sc-count" title={`Stagiaires validés${reserved ? ` + ${reserved} place${reserved > 1 ? 's' : ''} réservée${reserved > 1 ? 's' : ''} sans nom` : ''} / places`}>
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
+        {waitingCount(s) > 0 && (
+          <span className="sc-waiting" title={`${waitingCount(s)} stagiaire${waitingCount(s) > 1 ? 's' : ''} en attente de validation`}>
+            <Hourglass size={10} aria-hidden /> {waitingCount(s)} en attente
+          </span>
+        )}
       </span>
-      {poec && <span className="sc-poec" title={`Parcours POEC : ${poec}`}>POEC · {poec}</span>}
+      {poec && <span className="sc-poec" title={`Parcours : ${poec}`}>{poec}</span>}
       <span className="sc-title">
         {!isStart && <CornerDownRight size={12} aria-label="suite" style={{ verticalAlign: '-2px', marginRight: 3 }} />}
         {s.title}
@@ -883,13 +893,13 @@ export function Planning({
                           href={`/sessions/${s.id}`}
                           className={`month-chip${phaseOf(s, dIso) === 'terminee' ? ' ended' : ''}`}
                           style={{ ['--c' as any]: repl ? repl.color || DEFAULT_TRAINER_COLOR : colorOf(s), ['--i' as any]: Math.min(animIndex.current++, 24) }}
-                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · POEC ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
+                          title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${poecTitles[s.id] ? ` · ${poecTitles[s.id]}` : ''}${createdBy[s.id] ? ` · session créée par ${createdBy[s.id]}` : ''}`}
                         >
                           <span className="chip-top">
                             <span className={`dot ${phaseOf(s, dIso) || s.status}`} aria-label={phaseOf(s, dIso) ? PHASE_LABEL[phaseOf(s, dIso)!] : SESSION_STATUS_LABEL[s.status]} />
                             <span className="chip-room">{s.title}</span>
                             {phaseOf(s, dIso) && <span className={`chip-phase ${phaseOf(s, dIso)}`}>{PHASE_LABEL[phaseOf(s, dIso)!]}</span>}
-                            {poecTitles[s.id] && <span className="chip-poec" title={`Parcours POEC : ${poecTitles[s.id]}`}>POEC</span>}
+                            {poecTitles[s.id] && <span className="chip-poec" title={`Parcours : ${poecTitles[s.id]}`}>{poecTitles[s.id].startsWith('POEC · ') ? 'POEC' : poecTitles[s.id].length > 14 ? `${poecTitles[s.id].slice(0, 13)}…` : poecTitles[s.id]}</span>}
                             {dossierBadge[s.id] && (
                               <span className={`chip-dossier ${dossierBadge[s.id].kind}`} title={dossierBadgeLabel(dossierBadge[s.id])}>
                                 <DossierIcon badge={dossierBadge[s.id]} label={dossierBadgeLabel(dossierBadge[s.id])} />
@@ -899,6 +909,7 @@ export function Planning({
                           </span>
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
+                            {waitingCount(s) > 0 && <b className="chip-waiting" title="Stagiaires en attente de validation"> · {waitingCount(s)} en attente</b>}
                           </span>
                           {createdBy[s.id] && <span className="chip-by">Créée par {createdBy[s.id]}</span>}
                         </Link>

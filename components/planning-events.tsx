@@ -202,6 +202,7 @@ export function EventForm({
   employees = [],
   roomNames = [],
   intra = null,
+  poecId = null,
   onDone,
   onCancel,
 }: {
@@ -213,6 +214,8 @@ export function EventForm({
   roomNames?: string[];
   /** Formation extérieure (INTRA) : de quoi créer la session (bureau / admin). */
   intra?: { trainers: FormTrainer[]; templates: FormTemplate[]; absences: Absence[]; companies?: { name: string; trainees: number }[] } | null;
+  /** Évènement d'un parcours : visible aussi dans « Semaine par semaine » (migration 49). */
+  poecId?: string | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -302,9 +305,12 @@ export function EventForm({
         })}
       >
         {switcher}
+        {poecId && <input type="hidden" name="poec_id" value={poecId} />}
         {error && <div role="alert" className="alert alert-error">{error}</div>}
         <p className="hint" style={{ marginTop: 0 }}>
-          Information affichée en aperçu sur le planning : elle ne bloque aucune session de formation.
+          {poecId
+            ? 'Affiché dans « Semaine par semaine » du parcours et sur le planning : il ne bloque aucune session de formation.'
+            : 'Information affichée en aperçu sur le planning : elle ne bloque aucune session de formation.'}
         </p>
         <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
           <div className="field">

@@ -4,6 +4,8 @@ import { mondaysBetween, frShort, type PoecPeriod } from '@/lib/poec';
 import type { ProgramSession } from '@/lib/poec-data';
 import { formatHours } from '@/lib/week';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
+import type { PlanningEvent } from '@/lib/events';
+import { ProgramEventItem } from '@/components/poec/program-events';
 
 const plus = (iso: string, n: number) => new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -18,12 +20,19 @@ export function ProgramTimeline({
   sessions,
   periods,
   linkSessions = false,
+  events = [],
+  programId,
+  trainers = [],
 }: {
   start: string;
   end: string;
   sessions: ProgramSession[];
   periods: PoecPeriod[];
   linkSessions?: boolean;
+  /** Évènements du parcours (migration 49), modifiables ici. */
+  events?: PlanningEvent[];
+  programId?: string;
+  trainers?: { id: string; full_name: string; color: string | null; status?: string | null }[];
 }) {
   const weeks = mondaysBetween(start, end);
   let total = 0;
@@ -33,10 +42,11 @@ export function ProgramTimeline({
         const friday = plus(monday, 4);
         const ws = sessions.filter((s) => s.start_at.slice(0, 10) <= friday && s.end_at.slice(0, 10) >= monday);
         const wp = periods.filter((p) => p.start_date <= friday && p.end_date >= monday);
+        const we = events.filter((e) => e.start_date <= plus(monday, 6) && e.end_date >= monday);
         const hours = ws.filter((s) => s.start_at.slice(0, 10) >= monday).reduce((n, s) => n + s.hours, 0);
         total += hours;
         return (
-          <li key={monday} className={!ws.length && !wp.length ? 'is-empty' : ''}>
+          <li key={monday} className={!ws.length && !wp.length && !we.length ? 'is-empty' : ''}>
             <div className="poec-week-head">
               <strong>Semaine {i + 1}</strong>
               <span>{dm(monday)} → {dm(friday)}</span>
@@ -75,7 +85,8 @@ export function ProgramTimeline({
                   </div>
                 );
               })}
-              {!ws.length && !wp.length && <span className="hint">Rien de prévu pour l’instant.</span>}
+              {programId && we.map((e) => <ProgramEventItem key={e.id} event={e} programId={programId} trainers={trainers} />)}
+              {!ws.length && !wp.length && !we.length && <span className="hint">Rien de prévu pour l’instant.</span>}
             </div>
           </li>
         );

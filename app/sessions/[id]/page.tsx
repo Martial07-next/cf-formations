@@ -102,7 +102,7 @@ export default async function SessionDetailPage({
         .lte('start_date', session.end_at.slice(0, 10))
         .gte('end_date', session.start_at.slice(0, 10))
     ),
-    poec: start(supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle()),
+    poec: start(supabase.from('sessions').select('poec_id, poec_programs(id, title, kind)').eq('id', id).maybeSingle()),
     // Lien Digiforma des autres documents (migration 36).
     digiforma: start(supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle()),
     digiformaDone: start(supabase.from('session_forms').select('completed').eq('session_id', id).eq('kind', 'digiforma').maybeSingle()),
@@ -274,8 +274,12 @@ export default async function SessionDetailPage({
     };
   });
   // Parcours POEC (migration 23) : erreur ignorée si la migration manque.
-  const { data: poecRow } = await early.poec;
-  const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string } | null;
+  const poecRes: any = await early.poec;
+  // Sans la migration 43 (type de parcours) : titre seul.
+  const poecRow = poecRes.error ? (await supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle()).data : poecRes.data;
+  const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string; kind?: string | null } | null;
+  // Parcours personnalisé : titre d'habilitation jamais demandé (le réglage du catalogue ne change pas).
+  const customProgram = poec?.kind === 'personnalise';
 
   // Organisation interne (migration 24) : créée par, gestionnaire, suivi des inscriptions, historique.
   const [{ data: trackRow, error: trackError }, { data: trackLinks }, { data: activity }, staff] = await early.track;
@@ -391,7 +395,7 @@ export default async function SessionDetailPage({
               canManage={editable}
               tourDeTable={tourDeTable}
               titleFiles={titleError ? null : ((titleRows as any) || [])}
-              titleRequired={Boolean((tplOpt as any)?.titre_habilitation)}
+              titleRequired={Boolean((tplOpt as any)?.titre_habilitation) && !customProgram}
               me={profile ? { id: profile.id, name: profile.full_name } : null}
               digiforma={digiformaDocs}
               reussite={
@@ -530,7 +534,7 @@ export default async function SessionDetailPage({
 
         {poec && (
           <div role="status" className="alert alert-success poec-banner">
-            Formation du parcours POEC <strong>{poec.title}</strong> : le groupe est inscrit automatiquement.{' '}
+            Formation du parcours {customProgram ? '' : 'POEC '}<strong>{poec.title}</strong> : le groupe est inscrit automatiquement.{' '}
             {canManage(profile?.role) && <Link href={`/poec/${poec.id}`}>Ouvrir le parcours</Link>}
           </div>
         )}

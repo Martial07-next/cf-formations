@@ -9,7 +9,9 @@ import { traineesLockError } from '@/lib/session-lock';
 import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTraineeConflictsBulk, sessionLinks, upsertSessionLinks } from '@/lib/trainee-conflict';
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+import { graftOnCatalogHours } from '@/lib/graft';
+
+export type ActionResult = { ok: true; notice?: string } | { ok: false; error: string };
 
 /**
  * Formateur habilité pour la formation de la session (fiche du catalogue,
@@ -99,8 +101,10 @@ export async function addTraineeToSession(
     if (error.code === '23505') return { ok: false, error: 'Ce stagiaire est déjà inscrit à cette session.' };
     return { ok: false, error: error.message };
   }
+  // Session de parcours plus longue que le catalogue : la personne greffée suit les heures du catalogue.
+  const notice = await graftOnCatalogHours(supabase, sessionId, [traineeId]).catch(() => null);
   revalidatePath(`/sessions/${sessionId}`);
-  return { ok: true };
+  return notice ? { ok: true, notice } : { ok: true };
 }
 
 export async function removeTraineeFromSession(sessionId: string, traineeId: string): Promise<ActionResult> {

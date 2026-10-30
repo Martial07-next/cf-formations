@@ -1907,3 +1907,16 @@ td.tdt-title-col.ko{background:#fff4e5}
 .month-cell.holiday{background:#fbf3f2}
 .month-cell .holiday-tag{margin:0 0 0 4px}
 .holiday-banner{display:flex;gap:8px;align-items:flex-start}
+
+/* ---- Stagiaires en attente (planning) ---- */
+.session-card .sc-waiting{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:999px;background:var(--wait-bg);color:var(--wait-ink);font-size:10.5px;font-weight:800;white-space:nowrap}
+.month-chip .chip-waiting{color:var(--wait-ink);font-weight:800}
+.session-card .sc-top{flex-wrap:wrap}
+
+/* ---- Évènements d'un parcours (semaine par semaine) ---- */
+.program-week-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.poec-item.event{display:flex;align-items:flex-start;gap:8px;border-left-color:var(--c)}
+.poec-item.event > svg{color:var(--c);flex:none;margin-top:2px}
+.poec-event-open{flex:1;background:none;border:0;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;font:inherit;color:inherit;min-height:0}
+.poec-event-open small{color:var(--muted)}
+.poec-event-open:hover strong{text-decoration:underline}
