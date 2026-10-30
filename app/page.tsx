@@ -197,6 +197,10 @@ export default async function Page({
     billing: sessionIdsEarly.length
       ? start(supabase.from('sessions').select('id, billing_done').in('id', sessionIdsEarly))
       : Promise.resolve({ data: [] as any[], error: null }),
+    // Lien Digiforma des autres documents (migration 36) : session 100 % dématérialisée.
+    dfLink: sessionIdsEarly.length
+      ? start(supabase.from('sessions').select('id, digiforma_docs_url').in('id', sessionIdsEarly))
+      : Promise.resolve({ data: [] as any[], error: null }),
     // Factures nommées (lecture réservée à l'équipe et au compte Facturation).
     invoices: sessionIdsEarly.length
       ? start(supabase.from('session_invoices').select('session_id').in('session_id', sessionIdsEarly))
@@ -325,7 +329,8 @@ export default async function Page({
   const dossierBadge: Record<string, DossierBadge> = {};
   const staffView = canManage(profile?.role) || Boolean(profile?.can_invoice);
   {
-    const [{ data: billRows, error: billError }, { data: invRows }] = await Promise.all([per.billing, per.invoices]);
+    const [{ data: billRows, error: billError }, { data: invRows }, { data: dfRows, error: dfError }] = await Promise.all([per.billing, per.invoices, per.dfLink]);
+    const noDigiforma = new Set(dfError ? [] : ((dfRows as any[]) || []).filter((r) => !String(r.digiforma_docs_url || '').trim()).map((r) => r.id as string));
     const billed = new Map<string, boolean>(((billRows as any[]) || []).map((r) => [r.id, Boolean(r.billing_done)]));
     const invCount: Record<string, number> = {};
     for (const r of (invRows as any[]) || []) invCount[r.session_id] = (invCount[r.session_id] || 0) + 1;
@@ -342,6 +347,9 @@ export default async function Page({
         // Formateur : ce qu'il lui reste à remplir, puis « rempli ».
         if (trainerDone[s.id]) dossierBadge[s.id] = { kind: 'formateur' };
         else if (left?.trainer) dossierBadge[s.id] = { kind: 'a-remplir', n: left.trainer };
+      } else if (s.status !== 'brouillon' && noDigiforma.has(s.id)) {
+        // Équipe : d'abord le lien Digiforma, pour que la session soit 100 % dématérialisée.
+        dossierBadge[s.id] = { kind: 'digiforma' };
       } else if (s.status !== 'brouillon' && left) {
         // Équipe : formateur, puis bureau, puis facturation.
         if (left.trainer) dossierBadge[s.id] = { kind: 'attente-formateur', n: left.trainer };
@@ -359,13 +367,16 @@ export default async function Page({
   // Places réservées par entreprise encore sans nom (migration 20).
   const reservations = await per.reservations;
   const reservedSeats: Record<string, number> = {};
+  // Places d'entreprise en attente (migration 50) : hors capacité, ajoutées aux « en attente ».
+  const reservedPending: Record<string, number> = {};
   for (const s of (sessions as any[]) || []) {
     if (!reservations[s.id]) continue;
     const companies = (s.session_trainees || [])
       .filter((t: any) => t.status === 'validee')
       .map((t: any) => (Array.isArray(t.trainees) ? t.trainees[0] : t.trainees)?.company);
-    const n = reservationStatus(reservations[s.id], companies).unnamed;
-    if (n) reservedSeats[s.id] = n;
+    const st = reservationStatus(reservations[s.id], companies);
+    if (st.unnamed) reservedSeats[s.id] = st.unnamed;
+    if (st.pending) reservedPending[s.id] = st.pending;
   }
 
   const dayOverrides: Record<string, { day: string; start_time: string; end_time: string }[]> = {};
@@ -406,6 +417,7 @@ export default async function Page({
         dossierBadge={dossierBadge}
         dayTrainers={dayTrainers}
         reservedSeats={reservedSeats}
+        reservedPending={reservedPending}
         poecTitles={poecTitles}
         createdBy={createdBy}
         renderedAt={Date.now()}

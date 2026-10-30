@@ -41,7 +41,7 @@ export function companiesSummary(companies: (string | null | undefined)[]) {
  * - en-attente / a-facturer / en-cours : facturation ;
  * - complet : dossier rempli et facturation faite.
  */
-export type DossierBadgeKind = 'complet' | 'formateur' | 'a-remplir' | 'attente-formateur' | 'bureau' | 'a-facturer' | 'en-cours' | 'en-attente';
+export type DossierBadgeKind = 'complet' | 'formateur' | 'a-remplir' | 'digiforma' | 'attente-formateur' | 'bureau' | 'a-facturer' | 'en-cours' | 'en-attente';
 export type DossierBadge = { kind: DossierBadgeKind; n?: number };
 
 const docs = (n = 0) => `${n} document${n > 1 ? 's' : ''}`;
@@ -51,6 +51,7 @@ export function dossierBadgeLabel(b: DossierBadge): string {
     case 'complet': return 'Dossier complet';
     case 'formateur': return 'Dossier rempli par le formateur';
     case 'a-remplir': return `${docs(b.n)} à remplir`;
+    case 'digiforma': return 'Lien Digiforma manquant';
     case 'attente-formateur': return `${docs(b.n)} en attente du formateur`;
     case 'bureau': return `${docs(b.n)} à compléter (bureau)`;
     case 'a-facturer': return 'Facturation à faire';

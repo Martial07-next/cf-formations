@@ -576,15 +576,22 @@ export async function addReservation(sessionId: string, formData: FormData): Pro
   const company = String(formData.get('company') || '').trim().slice(0, 120);
   const seats = Number.parseInt(String(formData.get('seats') || ''), 10);
   const note = String(formData.get('note') || '').trim().slice(0, 200) || null;
+  const pending = formData.get('status') === 'en_attente';
   if (!company) return { ok: false, error: 'Indique l’entreprise.' };
   if (!(seats > 0 && seats <= 200)) return { ok: false, error: 'Nombre de places invalide.' };
   const supabase = await createClient();
   // Même entreprise déjà réservée : on ajoute les places à la réservation existante.
-  const { data: existing } = await supabase.from('session_reservations').select('id, seats, company').eq('session_id', sessionId);
-  const same = (existing || []).find((r: any) => r.company.trim().toLowerCase() === company.toLowerCase());
+  // (Places en attente et places validées restent séparées.)
+  const first = await supabase.from('session_reservations').select('id, seats, company, status').eq('session_id', sessionId);
+  let existing: any[] | null = first.data;
+  if (first.error) {
+    if (pending) return { ok: false, error: 'Exécute d’abord la migration 50 (supabase/migration_phase50.sql) dans Supabase.' };
+    existing = (await supabase.from('session_reservations').select('id, seats, company').eq('session_id', sessionId)).data;
+  }
+  const same = (existing || []).find((r: any) => r.company.trim().toLowerCase() === company.toLowerCase() && (r.status === 'en_attente') === pending);
   const { error } = same
     ? await supabase.from('session_reservations').update({ seats: Math.min(200, same.seats + seats), ...(note ? { note } : {}) }).eq('id', same.id)
-    : await supabase.from('session_reservations').insert({ session_id: sessionId, company, seats, note });
+    : await supabase.from('session_reservations').insert({ session_id: sessionId, company, seats, note, ...(pending ? { status: 'en_attente' } : {}) });
   if (error) return { ok: false, error: reservationError(error.message) };
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath('/');
@@ -601,6 +608,29 @@ export async function updateReservationSeats(sessionId: string, id: string, seat
     seats > 0
       ? await supabase.from('session_reservations').update({ seats: Math.min(200, Math.floor(seats)) }).eq('id', id).eq('session_id', sessionId)
       : await supabase.from('session_reservations').delete().eq('id', id).eq('session_id', sessionId);
+  if (error) return { ok: false, error: reservationError(error.message) };
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/** Places d'entreprise confirmées (validées) ou remises en attente. */
+export async function setReservationStatus(sessionId: string, id: string, status: 'validee' | 'en_attente'): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  if (status !== 'validee' && status !== 'en_attente') return { ok: false, error: 'Statut inconnu.' };
+  const locked = await traineesLockError(sessionId);
+  if (locked) return { ok: false, error: locked };
+  const supabase = await createClient();
+  const { data: rows, error: readError } = await supabase.from('session_reservations').select('id, company, seats, status').eq('session_id', sessionId);
+  if (readError) return { ok: false, error: 'Exécute d’abord la migration 50 (supabase/migration_phase50.sql) dans Supabase.' };
+  const row = (rows || []).find((r: any) => r.id === id) as any;
+  if (!row) return { ok: false, error: 'Réservation introuvable.' };
+  // Même entreprise déjà dans l'autre état : les places sont regroupées.
+  const twin = (rows || []).find((r: any) => r.id !== id && r.company.trim().toLowerCase() === row.company.trim().toLowerCase() && r.status === status) as any;
+  const { error } = twin
+    ? await supabase.from('session_reservations').update({ seats: Math.min(200, twin.seats + row.seats) }).eq('id', twin.id)
+    : await supabase.from('session_reservations').update({ status }).eq('id', id);
+  if (!error && twin) await supabase.from('session_reservations').delete().eq('id', id);
   if (error) return { ok: false, error: reservationError(error.message) };
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath('/');

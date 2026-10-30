@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2, Link2 } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
@@ -89,6 +89,7 @@ function SessionCard({
   dossier = null,
   replacement = null,
   reserved = 0,
+  pendingSeats = 0,
   poec = null,
   by = null,
   mine = false,
@@ -111,6 +112,8 @@ function SessionCard({
   replacement?: { full_name: string; color: string | null } | null;
   /** Places réservées par entreprise, sans nom. */
   reserved?: number;
+  /** Places d'entreprise en attente : ajoutées aux stagiaires en attente. */
+  pendingSeats?: number;
   /** Parcours POEC auquel appartient la session. */
   poec?: string | null;
   /** Créée par (compte de l'équipe). */
@@ -134,9 +137,9 @@ function SessionCard({
         <span className="sc-count" title={`Stagiaires validés${reserved ? ` + ${reserved} place${reserved > 1 ? 's' : ''} réservée${reserved > 1 ? 's' : ''} sans nom` : ''} / places`}>
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
-        {waitingCount(s) > 0 && (
-          <span className="sc-waiting" title={`${waitingCount(s)} stagiaire${waitingCount(s) > 1 ? 's' : ''} en attente de validation`}>
-            <Hourglass size={10} aria-hidden /> {waitingCount(s)} en attente
+        {waitingCount(s) + pendingSeats > 0 && (
+          <span className="sc-waiting" title={`${waitingCount(s)} stagiaire${waitingCount(s) > 1 ? 's' : ''} en attente de validation${pendingSeats ? ` + ${pendingSeats} place${pendingSeats > 1 ? 's' : ''} d’entreprise en attente` : ''}`}>
+            <Hourglass size={10} aria-hidden /> {waitingCount(s) + pendingSeats} en attente
           </span>
         )}
       </span>
@@ -192,6 +195,7 @@ export function Planning({
   dossierBadge = {},
   dayTrainers = {},
   reservedSeats = {},
+  reservedPending = {},
   poecTitles = {},
   createdBy = {},
   alerts = null,
@@ -228,6 +232,8 @@ export function Planning({
   dayTrainers?: DayTrainerMap;
   /** Places réservées par entreprise encore sans nom, par session. */
   reservedSeats?: Record<string, number>;
+  /** Places d'entreprise en attente (hors capacité), par session. */
+  reservedPending?: Record<string, number>;
   poecTitles?: Record<string, string>;
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
@@ -568,6 +574,7 @@ export function Planning({
         info={dayInfo[s.id]?.[dIso]}
         dossier={dossierBadge[s.id] || null}
         reserved={reservedSeats[s.id] || 0}
+        pendingSeats={reservedPending[s.id] || 0}
         poec={poecTitles[s.id] || null}
         by={createdBy[s.id] || null}
         replacement={dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
@@ -909,7 +916,7 @@ export function Planning({
                           </span>
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
-                            {waitingCount(s) > 0 && <b className="chip-waiting" title="Stagiaires en attente de validation"> · {waitingCount(s)} en attente</b>}
+                            {waitingCount(s) + (reservedPending[s.id] || 0) > 0 && <b className="chip-waiting" title="Stagiaires et places d’entreprise en attente"> · {waitingCount(s) + (reservedPending[s.id] || 0)} en attente</b>}
                           </span>
                           {createdBy[s.id] && <span className="chip-by">Créée par {createdBy[s.id]}</span>}
                         </Link>
@@ -1028,6 +1035,7 @@ function DossierIcon({ badge, label }: { badge: DossierBadge; label?: string }) 
   const k = badge.kind;
   if (k === 'complet') return <FolderCheck {...props} />;
   if (k === 'formateur') return <ClipboardCheck {...props} />;
+  if (k === 'digiforma') return <Link2 {...props} />;
   if (k === 'a-remplir' || k === 'attente-formateur' || k === 'bureau') return <FileClock {...props} />;
   if (k === 'en-attente') return <Hourglass {...props} />;
   return <Receipt {...props} />;

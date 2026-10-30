@@ -2,9 +2,9 @@
 
 import { submitWith } from '@/lib/form-submit';
 import { useState, useTransition } from 'react';
-import { Building2, Minus, Plus, Trash2 } from 'lucide-react';
-import { addReservation, updateReservationSeats } from '@/app/sessions/[id]/actions';
-import type { Reservation } from '@/lib/reservations';
+import { Building2, CheckCircle2, Hourglass, Minus, Plus, Trash2 } from 'lucide-react';
+import { addReservation, setReservationStatus, updateReservationSeats } from '@/app/sessions/[id]/actions';
+import { isPendingReservation, type Reservation } from '@/lib/reservations';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 type Row = Reservation & { named: number; unnamed: number };
@@ -54,7 +54,8 @@ export function ReservationsBox({
       </div>
       <p className="hint" style={{ marginTop: 0 }}>
         Pour un groupe dont on ne connaît pas encore les noms (ex. 3 personnes de telle entreprise). Dès qu’un stagiaire de
-        cette entreprise est validé, il prend une des places.
+        cette entreprise est validé, il prend une des places validées. Les places <strong>en attente</strong> (pas encore confirmées
+        par l’entreprise) ne prennent ni les places validées ni la capacité : elles s’ajoutent aux stagiaires en attente.
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
@@ -68,6 +69,10 @@ export function ReservationsBox({
           </datalist>
           <input className="input" name="company" required placeholder="Entreprise" list={`companies-${sessionId}`} aria-label="Entreprise" autoFocus />
           <input className="input" name="seats" type="number" min={1} max={200} required defaultValue={1} aria-label="Nombre de places" style={{ width: 90 }} />
+          <select className="input" name="status" defaultValue="validee" aria-label="Statut des places" style={{ width: 'auto' }}>
+            <option value="validee">Validées (gagnées)</option>
+            <option value="en_attente">En attente</option>
+          </select>
           <input className="input" name="note" placeholder="Remarque (facultatif)" aria-label="Remarque" />
           <button type="submit" className="primary small" disabled={isPending}>Réserver</button>
           <button type="button" className="small" onClick={() => setOpen(false)}>Annuler</button>
@@ -77,20 +82,32 @@ export function ReservationsBox({
       {rows.length > 0 && (
         <div className="reservation-list">
           {rows.map((r) => (
-            <div key={r.id} className="reservation-item">
+            <div key={r.id} className={`reservation-item${isPendingReservation(r) ? ' pending' : ''}`}>
               <span className="reservation-main">
                 <strong>{r.company}</strong>
                 <small className="hint">
                   {r.seats} place{r.seats > 1 ? 's' : ''}
-                  {r.named > 0 && ` · ${r.named} nommée${r.named > 1 ? 's' : ''}`}
+                  {isPendingReservation(r) ? ' en attente · hors capacité' : r.named > 0 ? ` · ${r.named} nommée${r.named > 1 ? 's' : ''}` : ''}
                   {r.note ? ` · ${r.note}` : ''}
                 </small>
               </span>
-              <span className={`badge ${r.unnamed ? 'en_attente' : 'validee'}`}>
-                {r.unnamed ? `${r.unnamed} sans nom` : 'Tous nommés'}
-              </span>
+              {isPendingReservation(r) ? (
+                <span className="badge en_attente"><Hourglass size={11} aria-hidden /> En attente</span>
+              ) : (
+                <span className={`badge ${r.unnamed ? 'planifiee' : 'validee'}`}>
+                  {r.unnamed ? `Validées · ${r.unnamed} sans nom` : 'Validées · tous nommés'}
+                </span>
+              )}
               {canEdit && (
                 <span className="row-actions">
+                  <button
+                    className="small"
+                    disabled={isPending}
+                    onClick={() => run(() => setReservationStatus(sessionId, r.id, isPendingReservation(r) ? 'validee' : 'en_attente'))}
+                    title={isPendingReservation(r) ? 'L’entreprise confirme : les places passent en validées' : 'Remettre ces places en attente'}
+                  >
+                    {isPendingReservation(r) ? <><CheckCircle2 size={13} aria-hidden /> Valider</> : <><Hourglass size={13} aria-hidden /> En attente</>}
+                  </button>
                   <button className="small icon ghost" aria-label={`Une place de moins pour ${r.company}`} disabled={isPending} onClick={() => run(() => updateReservationSeats(sessionId, r.id, r.seats - 1))}>
                     <Minus size={14} />
                   </button>

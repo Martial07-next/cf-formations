@@ -253,9 +253,9 @@ export function SessionDetailView({
             </div>
           )}
           {!locked && (
-            <div className="counter-chip">
-              <strong>{waiting.length}</strong>
-              <span>en attente</span>
+            <div className="counter-chip" title={resa.pending ? `${waiting.length} stagiaire(s) + ${resa.pending} place(s) d’entreprise en attente` : undefined}>
+              <strong>{waiting.length + resa.pending}</strong>
+              <span>en attente{resa.pending ? ` (dont ${resa.pending} place${resa.pending > 1 ? 's' : ''} entreprise)` : ''}</span>
             </div>
           )}
           {cursus && validated.some((t) => cursus[t.id]) && (

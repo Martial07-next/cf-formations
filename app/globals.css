@@ -1920,3 +1920,6 @@ td.tdt-title-col.ko{background:#fff4e5}
 .poec-event-open{flex:1;background:none;border:0;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;font:inherit;color:inherit;min-height:0}
 .poec-event-open small{color:var(--muted)}
 .poec-event-open:hover strong{text-decoration:underline}
+.sc-dossier.digiforma{color:#1d4f91;background:#e8f0fd}
+.chip-dossier.digiforma{color:#1d4f91}
+.reservation-item.pending{border-style:dashed;background:#fffcf2}
