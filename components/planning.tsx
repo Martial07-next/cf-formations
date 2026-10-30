@@ -16,6 +16,7 @@ import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
 import { UsefulLinksButton, type TemplateLinks } from '@/components/useful-links';
 import type { UsefulLink } from '@/lib/links';
 import { trainersOf, trainerOn, type DayTrainerMap } from '@/lib/day-trainers';
+import { holidayOn, isClosedHoliday } from '@/lib/holidays';
 import {
   addDays,
   mondayOf,
@@ -754,15 +755,16 @@ export function Planning({
                 const isToday = d.iso === todayIso;
                 return (
                   <div key={d.iso} style={{ display: 'contents' }}>
-                    <div className={`plan-day-label${isToday ? ' today' : ''}`}>
+                    <div className={`plan-day-label${isToday ? ' today' : ''}${isClosedHoliday(d.iso) ? ' holiday' : ''}`}>
                       {view === 'day' ? weekdayName(d.iso) : d.full}
                       <small>{view === 'day' ? `${d.iso.split('-').reverse().join('/')}${isToday ? ' · aujourd’hui' : ''}` : d.dateLabel}</small>
+                      <HolidayTag day={d.iso} />
                       <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                     </div>
                     {gridRooms.map((r) => (
-                      <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}${isExternal(r) ? ' external' : ''}`} key={r.id}>
+                      <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}${isExternal(r) ? ' external' : ''}${isClosedHoliday(d.iso) ? ' holiday' : ''}`} key={r.id}>
                         {cellSessions(d.iso, r.id).map((s) => card(s, d.iso))}
-                        {canEdit && !r.is_holding && !isExternal(r) && (() => {
+                        {canEdit && !r.is_holding && !isExternal(r) && !isClosedHoliday(d.iso) && (() => {
                           const after = freeFrom(d.iso, r.id);
                           return (
                             <button
@@ -821,6 +823,7 @@ export function Planning({
                     <span>
                       <strong>{view === 'day' ? fullDateLabel(dayAnchor) : `${d.full} ${d.dateLabel}`}</strong>
                       {isToday && <span className="agenda-today">Aujourd’hui</span>}
+                      <HolidayTag day={d.iso} />
                     </span>
                     <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                   </header>
@@ -861,11 +864,12 @@ export function Planning({
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
                   <div
-                    className={`month-cell${muted ? ' muted' : ''}${dIso === todayIso ? ' today' : ''}${daySessions.length === 0 && !eventsOn(dIso).length && !absentOn(dIso).length ? ' empty-day' : ''}`}
+                    className={`month-cell${muted ? ' muted' : ''}${dIso === todayIso ? ' today' : ''}${isClosedHoliday(dIso) ? ' holiday' : ''}${daySessions.length === 0 && !eventsOn(dIso).length && !absentOn(dIso).length ? ' empty-day' : ''}`}
                     key={dIso}
                   >
                     <span className="month-cell-head">
                       <span className="date-num">{fullDateLabel(day).split(' ').slice(0, 2).join(' ')}</span>
+                      <HolidayTag day={dIso} compact />
                       <DayChips compact events={eventsOn(dIso)} absentCount={absentOn(dIso).length} onOpen={() => openDay(dIso)} />
                     </span>
                     {daySessions.map((s) => {
@@ -1141,4 +1145,17 @@ function ShortcutsHelp({ open, setOpen, items }: { open: boolean; setOpen: (v: b
 function weekdayName(iso: string) {
   const n = new Date(iso + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', timeZone: 'UTC' });
   return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+/** Jour férié sur le planning (CF Congés) : non travaillé, ou travaillé sur décision de la direction. */
+function HolidayTag({ day, compact = false }: { day: string; compact?: boolean }) {
+  const h = holidayOn(day);
+  if (!h) return null;
+  const w = new Date(day + 'T00:00:00Z').getUTCDay();
+  if (w === 0 || w === 6) return null;
+  return (
+    <span className={`holiday-tag${h.worked ? ' worked' : ''}`} title={h.worked ? `${h.label} : jour férié travaillé (décision de la direction dans CF Congés)` : `${h.label} : jour férié, pas de formation (sessions décalées au jour ouvré suivant)`}>
+      {compact ? (h.worked ? 'Férié travaillé' : 'Férié') : h.worked ? `${h.label} · travaillé` : `Férié · ${h.label}`}
+    </span>
+  );
 }

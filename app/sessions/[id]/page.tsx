@@ -18,13 +18,14 @@ import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/l
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
+import { isClosedHoliday } from '@/lib/holidays';
 import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
 import { JumpButton } from '@/components/jump-button';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pencil, UserPlus } from 'lucide-react';
+import { ArrowLeft, CalendarOff, Pencil, UserPlus } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations } from '@/lib/reservations';
@@ -187,6 +188,9 @@ export default async function SessionDetailPage({
   const { data: arRow } = arModels.length
     ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
     : { data: null };
+  // Jours fériés de la période (migration 48) : décalage automatique ou à replanifier.
+  const { data: shiftRows } = await supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday');
+  const holidayShifts = ((shiftRows as any[]) || []).filter((h) => isClosedHoliday(String(h.holiday).slice(0, 10)));
   // Titres d'habilitation déposés (migration 46) : null si la migration manque.
   const { data: titleRows, error: titleError } = await supabase
     .from('habilitation_titles')
@@ -530,6 +534,28 @@ export default async function SessionDetailPage({
             {canManage(profile?.role) && <Link href={`/poec/${poec.id}`}>Ouvrir le parcours</Link>}
           </div>
         )}
+
+        {holidayShifts.map((h: any) => (
+          <div key={h.holiday} role="status" className={`alert ${h.status === 'conflit' ? 'alert-error' : 'alert-warning'} holiday-banner`}>
+            <CalendarOff size={16} aria-hidden style={{ flex: 'none', marginTop: 2 }} />
+            <span>
+              {h.status === 'conflit' ? (
+                <>
+                  <strong>Jour férié le {String(h.holiday).slice(0, 10).split('-').reverse().join('/')} ({h.label})</strong> : pas de formation ce jour-là, mais le décalage automatique est impossible ({h.detail || 'conflit de planning'}). Replanifie la session.
+                </>
+              ) : h.status === 'decale' ? (
+                <>
+                  <strong>Jour férié le {String(h.holiday).slice(0, 10).split('-').reverse().join('/')} ({h.label})</strong> : pas de formation ce jour-là, la session a été décalée automatiquement d’un jour ouvré.
+                  {' '}Si la direction le passe en « travaillé » dans CF Congés, le décalage sera annulé.
+                </>
+              ) : (
+                <>
+                  <strong>Jour férié le {String(h.holiday).slice(0, 10).split('-').reverse().join('/')} ({h.label})</strong> : pas de formation ce jour-là (déjà pris en compte dans les dates).
+                </>
+              )}
+            </span>
+          </div>
+        ))}
 
         {room?.is_holding && (
           <div role="status" className="alert alert-warning">

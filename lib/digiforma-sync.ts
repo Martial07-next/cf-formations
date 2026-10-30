@@ -1,3 +1,4 @@
+import { markHolidaysAccounted } from '@/lib/holiday-shifts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { digiformaListTrainingSessions } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
@@ -77,6 +78,8 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
 
     if (error || !newSession) continue;
     created++;
+    // Dates venues de Digiforma : les fériés de la période y sont déjà pris en compte.
+    await markHolidaysAccounted(supabase, newSession.id).catch(() => null);
 
     for (const t of s.trainees) {
       const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);

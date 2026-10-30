@@ -1,4 +1,5 @@
 import { trainingMinutes } from '@/lib/schedule';
+import { isClosedHoliday } from '@/lib/holidays';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -119,7 +120,8 @@ function timeOf(iso: string): string {
 export function dayIsInRange(dayIso: string, startAt: string, endAt: string): boolean {
   const startDay = startAt.slice(0, 10);
   const endDay = endAt.slice(0, 10);
-  return dayIso >= startDay && dayIso <= endDay;
+  // Jour férié non travaillé : pas de formation ce jour-là (session décalée).
+  return dayIso >= startDay && dayIso <= endDay && !isClosedHoliday(dayIso);
 }
 
 /** true si la session dure plus d'une journée civile. */
@@ -173,11 +175,14 @@ export function daysBetween(startAt: string, endAt: string): string[] {
   return days;
 }
 
-/** Comme daysBetween, mais sans les samedis/dimanches (semaine de travail lundi→vendredi). */
+/**
+ * Jours de formation d'une session : comme daysBetween, sans les samedis/dimanches
+ * ni les jours fériés non travaillés (décision de la direction dans CF Congés).
+ */
 export function weekdaysBetween(startAt: string, endAt: string): string[] {
   return daysBetween(startAt, endAt).filter((iso) => {
     const weekday = new Date(iso + 'T00:00:00Z').getUTCDay();
-    return weekday !== 0 && weekday !== 6;
+    return weekday !== 0 && weekday !== 6 && !isClosedHoliday(iso);
   });
 }
 

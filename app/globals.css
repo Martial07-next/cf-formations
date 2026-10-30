@@ -1898,3 +1898,12 @@ td.tdt-title-col.ko{background:#fff4e5}
 .live-field::after{content:attr(data-name);position:absolute;top:-9px;right:6px;background:var(--peer);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;pointer-events:none}
 @media (max-width:640px){.live-peers small{display:none}}
 .first-pw-card input{padding:10px 12px;border:1px solid var(--line-strong);border-radius:10px;font:inherit;font-size:14px;background:#fff;width:100%}
+
+/* ---- Jours fériés (CF Congés) ---- */
+.holiday-tag{display:inline-flex;align-items:center;gap:4px;margin-top:3px;padding:1px 7px;border-radius:999px;background:#fdecea;color:#8a1518;font-size:10.5px;font-weight:700;white-space:nowrap;width:max-content}
+.holiday-tag.worked{background:#e3f8eb;color:#0b3a21}
+.plan-day-label.holiday{background:#fdf2f1}
+.plan-cell.holiday{background:#fbf3f2}
+.month-cell.holiday{background:#fbf3f2}
+.month-cell .holiday-tag{margin:0 0 0 4px}
+.holiday-banner{display:flex;gap:8px;align-items:flex-start}

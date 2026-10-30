@@ -49,8 +49,19 @@ export async function updateSessionDetails(sessionId: string, formData: FormData
 
   // template_id n'est pas modifiable depuis la fiche : on ne l'écrase pas.
   const { template_id: _ignored, ...fields } = parsed.value;
+  const { data: before } = await supabase.from('sessions').select('start_at, end_at').eq('id', sessionId).maybeSingle();
   const { error } = await supabase.from('sessions').update(fields).eq('id', sessionId);
   if (error) return { ok: false, error: error.message };
+  // Dates changées à la main : les fériés de la nouvelle période sont pris en compte (pas de décalage auto).
+  if (before && (String(before.start_at).slice(0, 10) !== String(fields.start_at).slice(0, 10) || String(before.end_at).slice(0, 10) !== String(fields.end_at).slice(0, 10))) {
+    try {
+      const { createAdminClient } = await import('@/lib/supabase/admin');
+      const { markHolidaysAccounted } = await import('@/lib/holiday-shifts');
+      await markHolidaysAccounted(createAdminClient(), sessionId);
+    } catch {
+      /* migration 48 absente */
+    }
+  }
 
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath('/');

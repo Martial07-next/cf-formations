@@ -4,6 +4,7 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { logout } from '@/app/login/actions';
 import { MobileTables } from '@/components/mobile-tables';
 import { AppShell } from '@/components/app-shell';
+import { workedHolidays } from '@/lib/holidays';
 
 export const metadata: Metadata = {
   title: 'CF PLANNING',
@@ -59,6 +60,7 @@ export default async function RootLayout({ children }: Readonly<{children: React
         pending_requests: pendingRequests,
         dev_open: devOpen,
         must_change_password: profile.must_change_password,
+        worked_holidays: workedHolidays(),
       }
     : null;
   return (

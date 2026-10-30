@@ -85,6 +85,52 @@ async function readConges(): Promise<Row[]> {
   }
 }
 
+/**
+ * Fériés « travaillés » : décision « Oui » de la direction dans CF Congés
+ * (table JourFerieOuverture). null : lecture impossible (droit manquant).
+ */
+async function readWorkedHolidays(): Promise<{ day: string }[] | null> {
+  const sql = postgres(process.env.CONGES_DATABASE_URL!, { ssl: 'require', max: 1, prepare: false, connect_timeout: 10, idle_timeout: 5 });
+  try {
+    return await sql<{ day: string }[]>`
+      select to_char(o."date", 'YYYY-MM-DD') as day
+      from "JourFerieOuverture" o
+      where o.ouvert = true and o."date" >= now() - interval '400 days'
+    `;
+  } catch {
+    return null;
+  } finally {
+    await sql.end({ timeout: 2 });
+  }
+}
+
+/** Fériés travaillés → worked_holidays, puis décalage des sessions tombant sur un férié. */
+export async function syncHolidays(supabase: SupabaseClient): Promise<string> {
+  const { holidayOn } = await import('@/lib/holidays');
+  const { applyHolidayShifts } = await import('@/lib/holiday-shifts');
+  let note = '';
+  if (congesConfigured()) {
+    const rows = await readWorkedHolidays();
+    if (rows === null) {
+      note = 'fériés travaillés non lus (droit de lecture sur JourFerieOuverture à ajouter : script SQL)';
+    } else {
+      const days = rows.map((r) => r.day).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      const { data: cur, error } = await supabase.from('worked_holidays').select('day');
+      if (!error) {
+        const have = new Set(((cur as any[]) || []).map((r) => String(r.day).slice(0, 10)));
+        const add = days.filter((d) => !have.has(d));
+        const del = [...have].filter((d) => !days.includes(d));
+        if (add.length) await supabase.from('worked_holidays').upsert(add.map((d) => ({ day: d, label: holidayOn(d)?.label || null, synced_at: new Date().toISOString() })));
+        if (del.length) await supabase.from('worked_holidays').delete().in('day', del);
+        note = `${days.length} férié(s) travaillé(s)`;
+      }
+    }
+  }
+  const r = await applyHolidayShifts(supabase);
+  const parts = [note, r.shifted ? `${r.shifted} session(s) décalée(s) (férié)` : '', r.undone ? `${r.undone} décalage(s) annulé(s)` : '', r.conflicts ? `${r.conflicts} session(s) à replanifier (férié)` : ''].filter(Boolean);
+  return parts.join(' · ');
+}
+
 export async function syncConges(supabase: SupabaseClient): Promise<CongesSyncResult> {
   if (!congesConfigured()) return { ok: false, detail: 'CONGES_DATABASE_URL non configurée (voir Administration › Intégrations).' };
   let rows: Row[];
@@ -182,6 +228,13 @@ export async function syncConges(supabase: SupabaseClient): Promise<CongesSyncRe
 /** Synchronise et note le résultat dans les paramètres (journal visible dans Intégrations). */
 export async function syncCongesAndLog(supabase: SupabaseClient) {
   const result = await syncConges(supabase);
+  // Jours fériés : décisions de CF Congés et décalage des sessions.
+  try {
+    const h = await syncHolidays(supabase);
+    if (h) result.detail = `${result.detail} · ${h}`;
+  } catch {
+    /* sans effet sur les congés */
+  }
   await supabase
     .from('app_settings')
     .update({ absences_last_sync: new Date().toISOString(), absences_last_log: `${result.ok ? 'OK' : 'ERREUR'} : ${result.detail}` })

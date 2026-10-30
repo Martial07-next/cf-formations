@@ -3,6 +3,7 @@ import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { companyKey } from '@/lib/company';
 import { congesConfigured, syncCongesIfStale } from '@/lib/conges-sync';
+import { applyHolidayShiftsIfStale } from '@/lib/holiday-shifts';
 import { Planning } from '@/components/planning';
 import { compareRooms } from '@/lib/buildings';
 import { loadDayTrainers } from '@/lib/day-trainers';
@@ -31,15 +32,15 @@ export default async function Page({
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   // Congés de la plateforme de congés : mis à jour en arrière-plan (au plus toutes les 10 min).
-  if (congesConfigured()) {
-    after(async () => {
-      try {
-        await syncCongesIfStale(createAdminClient());
-      } catch {
-        // Sans effet sur l'affichage : l'erreur est visible dans Intégrations.
-      }
-    });
-  }
+  // Jours fériés (décisions de CF Congés) : sessions décalées avec la même synchronisation.
+  after(async () => {
+    try {
+      if (congesConfigured()) await syncCongesIfStale(createAdminClient());
+      else await applyHolidayShiftsIfStale(createAdminClient());
+    } catch {
+      // Sans effet sur l'affichage : l'erreur est visible dans Intégrations.
+    }
+  });
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
   const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([

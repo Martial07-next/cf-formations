@@ -1,3 +1,4 @@
+import { ensureWorkedHolidays } from '@/lib/holidays-server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
@@ -48,6 +49,8 @@ export const getCurrentProfile = cache(async function getCurrentProfile() {
     supabase.from('profiles').select('can_dev').eq('id', user.id).maybeSingle(),
   ]);
   if (!profile) return null;
+  // Fériés travaillés (CF Congés) : connus avant tout calcul de jours de formation.
+  await ensureWorkedHolidays(supabase).catch(() => null);
   return {
     ...profile,
     email: user.email,

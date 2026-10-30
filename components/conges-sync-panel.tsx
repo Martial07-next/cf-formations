@@ -16,7 +16,10 @@ grant select (id, nom, prenom, email) on public."User" to planning_lecture;
 grant select (id, code, libelle) on public."LeaveType" to planning_lecture;
 grant select (id, "userId", "leaveTypeId", "dateDebut", "dateFin", "demiJournee",
               "demiJourneePeriode", statut, "supprimeParAdmin")
-  on public."LeaveRequest" to planning_lecture;`;
+  on public."LeaveRequest" to planning_lecture;
+-- Jours fériés travaillés (décision de la direction) : à exécuter aussi si le
+-- compte existe déjà.
+grant select ("date", ouvert) on public."JourFerieOuverture" to planning_lecture;`;
 
 export function CongesSyncPanel({ configured, manualCount }: { configured: boolean; manualCount: number }) {
   const router = useRouter();

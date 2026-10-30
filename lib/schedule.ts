@@ -1,3 +1,4 @@
+import { isWorkingDay } from '@/lib/holidays';
 /**
  * Calcul « intelligent » des horaires de formation.
  *
@@ -43,9 +44,9 @@ export function endTimeFor(start: string, minutes: number): string {
 
 export type DayPlan = { day: string; start: string; end: string; minutes: number };
 
+/** Pas de formation : samedi, dimanche ou jour férié non travaillé. */
 function isWeekend(iso: string) {
-  const w = new Date(iso + 'T00:00:00Z').getUTCDay();
-  return w === 0 || w === 6;
+  return !isWorkingDay(iso);
 }
 
 function nextDay(iso: string) {

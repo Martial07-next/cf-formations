@@ -1,5 +1,7 @@
 'use server';
 
+import { markHolidaysAccounted } from '@/lib/holiday-shifts';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -88,6 +90,12 @@ export async function createSession(formData: FormData): Promise<ActionResult> {
   // La fiche de la nouvelle session est ouverte par un chargement complet côté
   // navigateur : après une redirection d'action serveur, les ajouts de
   // stagiaires suivants ne s'affichaient qu'en quittant puis revenant.
+  // Fériés de la période déjà pris en compte à la création : pas de décalage automatique.
+  try {
+    await markHolidaysAccounted(createAdminClient(), data.id);
+  } catch {
+    /* migration 48 absente */
+  }
   return { ok: true, id: data.id };
 }
 

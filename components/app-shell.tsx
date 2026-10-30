@@ -6,8 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { NavProgress } from '@/components/nav-progress';
 import { FirstPasswordGate } from '@/components/first-password';
+import { setWorkedHolidays } from '@/lib/holidays';
 
-type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number; must_change_password?: boolean } | null;
+type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number; must_change_password?: boolean; worked_holidays?: string[] } | null;
 
 /** Pages ouvertes sans compte (connexion, liens QR / signatures). */
 const PUBLIC = ['/login', '/emargement/', '/convention/', '/france-travail/', '/autorisations/', '/salarie/', '/titre/', '/auth/', '/mot-de-passe'];
@@ -16,6 +17,8 @@ const PUBLIC = ['/login', '/emargement/', '/convention/', '/france-travail/', '/
 export function AppShell({ profile, children }: { profile: Profile; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  // Fériés travaillés (CF Congés) : utilisés par tous les calculs de jours de formation.
+  if (profile?.worked_holidays) setWorkedHolidays(profile.worked_holidays);
   const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : p + '/'));
   // Juste après la connexion, la mise en page peut dater d'avant : on la recharge une fois.
   useEffect(() => {
