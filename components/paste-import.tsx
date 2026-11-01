@@ -14,8 +14,11 @@ export function PasteImport({
   sessionId,
   recyclage = false,
   company = null,
+  onImported,
 }: {
   sessionId?: string;
+  /** Après import (ex. assistant de création : liste rechargée). */
+  onImported?: () => void;
   /** Formation disponible en recyclage : choix initial / recyclage. */
   recyclage?: boolean;
   /** Formation INTRA : les nouveaux stagiaires sont rattachés à cette entreprise. */
@@ -37,7 +40,8 @@ export function PasteImport({
       setResult(res);
       if (res.ok) {
         setText('');
-        router.refresh();
+        if (onImported) onImported();
+        else router.refresh();
       }
     });
   }

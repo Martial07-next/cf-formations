@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight,
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
-import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
+import { type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
+import { SessionWizard } from '@/components/session-wizard';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
@@ -493,10 +494,13 @@ export function Planning({
     },
   };
 
+  // Nouvelle session : assistant en étapes (informations, modules, stagiaires, finaliser).
+  const [wizardOpen, setWizardOpen] = useState(false);
   function openForm(defaults: SessionFormDefaults = {}) {
     setFormError(null);
     setFormDefaults(defaults);
     setFormKey((k) => k + 1);
+    setWizardOpen(true);
     dialogRef.current?.showModal();
   }
   // Lien « Nouvelle session » du tableau de bord (/?creer=1) : formulaire ouvert d'office.
@@ -510,21 +514,6 @@ export function Planning({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantsCreate]);
 
-
-  function handleCreate(formData: FormData) {
-    setFormError(null);
-    startTransition(async () => {
-      const result = await createSession(formData);
-      if (result.ok) {
-        // Ouverture de la fiche de la session (chargement complet, état neuf).
-        dialogRef.current?.close();
-        setMessage({ text: 'Session enregistrée, ouverture de sa fiche…', isError: false });
-        if (result.id) window.location.assign(`/sessions/${result.id}?nouvelle=1`);
-      } else {
-        setFormError(result.error);
-      }
-    });
-  }
 
   const dayRows =
     view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
@@ -942,30 +931,25 @@ export function Planning({
       </p>
 
       {canEdit && (
-        <dialog ref={dialogRef} className="modal" aria-labelledby="new-session-title" onClose={() => setFormError(null)}>
-          <div className="modal-head">
-            <h2 id="new-session-title">Nouvelle session</h2>
-            <button className="icon ghost" onClick={() => dialogRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
-          </div>
-          <div className="modal-body">
-            {formError && <div role="alert" className="alert alert-error">{formError}</div>}
-            <SessionForm
-              key={formKey}
-              formId="new-session-form"
-              rooms={rooms}
-              trainers={trainers}
-              templates={templates}
-              defaults={formDefaults}
-              absences={absences}
-              onSubmit={handleCreate}
-            />
-          </div>
-          <div className="modal-foot">
-            <button type="button" onClick={() => dialogRef.current?.close()}>Annuler</button>
-            <button type="submit" form="new-session-form" className="primary" disabled={isPending}>
-              {isPending ? 'Enregistrement…' : 'Enregistrer la session'}
-            </button>
-          </div>
+        <dialog
+          ref={dialogRef}
+          className="modal wiz-modal"
+          aria-labelledby="new-session-title"
+          onClose={() => {
+            setWizardOpen(false);
+            router.refresh();
+          }}
+        >
+          <SessionWizard
+            key={formKey}
+            open={wizardOpen}
+            rooms={rooms}
+            trainers={trainers}
+            templates={templates}
+            absences={absences}
+            defaults={formDefaults}
+            onClose={() => dialogRef.current?.close()}
+          />
         </dialog>
       )}
       <dialog ref={eventRef} className="modal" aria-label="Évènements" onClose={() => setEventPanel(null)}>

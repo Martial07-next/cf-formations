@@ -1923,3 +1923,77 @@ td.tdt-title-col.ko{background:#fff4e5}
 .sc-dossier.digiforma{color:#1d4f91;background:#e8f0fd}
 .chip-dossier.digiforma{color:#1d4f91}
 .reservation-item.pending{border-style:dashed;background:#fffcf2}
+
+/* ---- Assistant de création de session ---- */
+dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
+.wiz-head small{display:block;margin-top:2px}
+.wiz-steps{list-style:none;margin:0;padding:10px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.wiz-steps li{position:relative}
+.wiz-steps button{width:100%;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;border:1px solid transparent;background:none;cursor:pointer;text-align:left;color:var(--muted);font:inherit}
+.wiz-steps button:disabled{cursor:default;opacity:.55}
+.wiz-steps li.on button{background:var(--surface);border-color:var(--line-strong);color:var(--ink);box-shadow:var(--shadow-sm)}
+.wiz-steps li.done button{color:var(--ok-ink)}
+.wiz-num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--line);color:var(--ink-2);flex:none}
+.wiz-steps li.on .wiz-num{background:#17241b;color:#08fa64}
+.wiz-steps li.done:not(.on) .wiz-num{background:var(--ok-bg);color:var(--ok-ink)}
+.wiz-label{display:flex;flex-direction:column;font-weight:700;font-size:13px;line-height:1.2}
+.wiz-label small{font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;opacity:.75}
+.wiz-body{min-height:340px}
+.wiz-title{margin:2px 0 4px;font-size:16px}
+.wiz-step .hint{margin-top:0}
+.wiz-notice{display:flex;align-items:flex-start;gap:8px}
+.wiz-notice span{flex:1}
+.wiz-list{list-style:none;margin:10px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.wiz-list li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.wiz-list li > svg{color:var(--muted);flex:none}
+.wiz-list-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.wiz-list-main small{color:var(--muted);font-size:12px}
+.wiz-results li{border-color:var(--cf-mint-strong);background:#f6fdf8}
+.wiz-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}
+.wiz-choice{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px;border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);cursor:pointer;text-align:left;font:inherit;color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.wiz-choice:hover{border-color:#17241b;box-shadow:var(--shadow)}
+.wiz-choice svg{color:#0f7a4a}
+.wiz-choice small{color:var(--muted)}
+.wiz-module-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0;padding:10px;border:1px dashed var(--line-strong);border-radius:12px}
+.wiz-module-form input,.wiz-module-form select{padding:7px 9px;border:1px solid var(--line-strong);border-radius:9px;font:inherit;background:#fff}
+.wiz-module-form input[name=name],.wiz-module-form input[name=company]{flex:1;min-width:160px}
+.wiz-dur{display:inline-flex;gap:4px}
+.wiz-dur input{width:62px}
+.wiz-counters{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
+.wiz-counters span{padding:5px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:12.5px}
+.wiz-counters strong{font-size:14px;margin-right:2px}
+.wiz-search{width:100%}
+.wiz-tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.wiz-tools button.on{background:#17241b;color:#fffdf3;border-color:#17241b}
+.wiz-panel{margin-bottom:10px}
+.wiz-panel .panel{margin:0;box-shadow:none}
+.wiz-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--ok-dot)}
+.wiz-dot.en_attente{background:var(--wait-dot)}
+.wiz-empty{margin:14px 0}
+.wiz-card{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:var(--surface)}
+.wiz-field{display:flex;flex-direction:column;gap:6px}
+.wiz-field > span:first-child,.wiz-field-label{font-weight:700;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.wiz-inline{display:flex;gap:8px}
+.wiz-inline input{flex:1;padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;font:inherit}
+.wiz-status{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.wiz-status button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:12px;background:#fff;cursor:pointer;font:inherit;text-align:left;color:var(--ink)}
+.wiz-status button.on{border-color:#17241b;background:#17241b;color:#fffdf3}
+.wiz-status button.on small{color:#08fa64}
+.wiz-status small{color:var(--muted);font-size:11.5px}
+.wiz-checks{list-style:none;margin:12px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.wiz-checks li{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.wiz-checks li.ok svg{color:var(--ok-ink)}
+.wiz-checks li small{color:var(--muted)}
+.wiz-checks li.todo strong{color:#8a4b00}
+.wiz-todo{width:15px;height:15px;border-radius:50%;border:2px solid #d49b00;flex:none}
+.wiz-checks li.neutral .wiz-todo{border-color:var(--line-strong)}
+.wiz-foot{align-items:center}
+.wiz-foot button{display:inline-flex;align-items:center;gap:6px}
+@media (max-width:640px){
+  .wiz-steps{grid-template-columns:repeat(4,1fr);padding:8px}
+  .wiz-label small{display:none}
+  .wiz-label{font-size:11px}
+  .wiz-steps button{flex-direction:column;gap:3px;text-align:center;padding:6px 2px}
+  .wiz-status{grid-template-columns:1fr}
+}
+.search.wiz-search{width:100% !important;max-width:none !important;display:flex}.search.wiz-search input{flex:1;width:100%}
