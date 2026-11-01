@@ -341,7 +341,23 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
   // Modules : choisis à l'ajout (par défaut toute la session), modifiables ensuite.
   const mods = state.modules;
   const [pick, setPick] = useState<string[]>([]);
-  const togglePick = (id: string) => setPick((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const allIds = mods.map((m) => m.id);
+  /**
+   * Clic sur un module : depuis « toute la session », il devient le seul choisi ;
+   * sinon il s'ajoute ou se retire (jamais zéro module ; tous = toute la session).
+   */
+  const nextChoice = (current: string[], id: string) => {
+    const full = !current.length || current.length >= allIds.length;
+    if (full) return [id];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    if (!next.length) return current;
+    return next.length >= allIds.length ? [] : next;
+  };
+  const togglePick = (id: string) => setPick((p) => nextChoice(p, id));
+  // Modules d'un stagiaire : affichage immédiat, enregistrement en arrière-plan.
+  const [localMods, setLocalMods] = useState<Record<string, string[]>>({});
+  useEffect(() => setLocalMods({}), [state]);
+  const modsOf = (t: WizardState['trainees'][number]) => localMods[t.id] ?? t.modules;
   const add = (traineeId: string, status: 'validee' | 'en_attente') => {
     const chosen = pick.length && pick.length < mods.length ? [...pick] : null;
     run(async () => {
@@ -355,11 +371,13 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
     setQ('');
     inputRef.current?.focus();
   };
+  // Clics rapides : seul le dernier choix est enregistré (pas d'enregistrements qui se croisent).
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const toggleTraineeModule = (t: WizardState['trainees'][number], moduleId: string) => {
-    const current = t.modules.length ? t.modules : mods.map((m) => m.id);
-    const next = current.includes(moduleId) ? current.filter((x) => x !== moduleId) : [...current, moduleId];
-    if (!next.length) return;
-    run(() => setTraineeModules(state.id, t.id, next.length === mods.length ? mods.map((m) => m.id) : next));
+    const next = nextChoice(modsOf(t), moduleId);
+    setLocalMods((m) => ({ ...m, [t.id]: next }));
+    clearTimeout(saveTimers.current[t.id]);
+    saveTimers.current[t.id] = setTimeout(() => run(() => setTraineeModules(state.id, t.id, next.length ? next : allIds)), 450);
   };
 
   const validated = state.trainees.filter((t) => t.status === 'validee').length;
@@ -380,9 +398,9 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
         <div className="wiz-modpick">
           <span className="wiz-field-label">Modules suivis par les stagiaires ajoutés</span>
           <div className="wiz-chips" role="group" aria-label="Modules suivis">
-            <button type="button" className={!pick.length || pick.length === mods.length ? 'on' : ''} onClick={() => setPick([])}>Toute la session</button>
+            <button type="button" className={!pick.length ? 'on' : ''} aria-pressed={!pick.length} onClick={() => setPick([])}>Toute la session</button>
             {mods.map((m) => (
-              <button key={m.id} type="button" className={pick.includes(m.id) && pick.length < mods.length ? 'on' : ''} onClick={() => togglePick(m.id)}>
+              <button key={m.id} type="button" className={pick.includes(m.id) ? 'on' : ''} aria-pressed={pick.includes(m.id)} onClick={() => togglePick(m.id)}>
                 {m.name}
               </button>
             ))}
@@ -459,9 +477,10 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
                 {mods.length > 0 && (
                   <span className="wiz-chips small" role="group" aria-label={`Modules suivis par ${t.full_name}`}>
                     {mods.map((m) => {
-                      const on = !t.modules.length || t.modules.includes(m.id);
+                      const cur = modsOf(t);
+                      const on = !cur.length || cur.includes(m.id);
                       return (
-                        <button key={m.id} type="button" className={on ? 'on' : ''} disabled={pending} aria-pressed={on} onClick={() => toggleTraineeModule(t, m.id)}>
+                        <button key={m.id} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => toggleTraineeModule(t, m.id)}>
                           {m.name}
                         </button>
                       );
