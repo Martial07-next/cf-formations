@@ -32,6 +32,7 @@ import {
   deleteSessionModule,
   removeTraineeFromSession,
   setDigiformaDocsUrl,
+  setTraineeModules,
   setTraineeStatus,
   splitSessionByDay,
 } from '@/app/sessions/[id]/actions';
@@ -68,6 +69,7 @@ export function SessionWizard({
   absences,
   defaults,
   onClose,
+  onCreated,
 }: {
   open: boolean;
   rooms: any[];
@@ -76,6 +78,8 @@ export function SessionWizard({
   absences: Absence[];
   defaults: SessionFormDefaults;
   onClose: () => void;
+  /** Session créée (étape 1) : la fiche s'ouvre à la fermeture, quelle qu'elle soit. */
+  onCreated?: (id: string) => void;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>(0);
@@ -120,6 +124,7 @@ export function SessionWizard({
     start(async () => {
       const res = await createSession(fd);
       if (!res.ok) return setError(res.error);
+      if (res.id) onCreated?.(res.id);
       const st = await reload(res.id);
       // Modules déjà prévus par la formation du catalogue : on passe directement aux stagiaires.
       setStep(st && st.modules.length ? 2 : 1);
@@ -141,7 +146,14 @@ export function SessionWizard({
             </small>
           )}
         </div>
-        <button className="icon ghost" onClick={onClose} aria-label="Fermer"><X size={18} /></button>
+        <button
+          className="icon ghost"
+          onClick={() => (state ? window.location.assign(`/sessions/${state.id}?nouvelle=1`) : onClose())}
+          aria-label={state ? 'Fermer et ouvrir la fiche de la session' : 'Fermer'}
+          title={state ? 'Fermer et ouvrir la fiche de la session' : undefined}
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Étapes */}
@@ -209,9 +221,8 @@ export function SessionWizard({
               </button>
             ) : (
               <>
-                <button type="button" onClick={() => { onClose(); router.refresh(); }}>Terminer</button>
                 <button type="button" className="primary" onClick={() => state && window.location.assign(`/sessions/${state.id}?nouvelle=1`)}>
-                  Ouvrir la fiche <ExternalLink size={14} aria-hidden />
+                  Terminer et vérifier la fiche <ExternalLink size={14} aria-hidden />
                 </button>
               </>
             )}
@@ -327,6 +338,30 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, state.trainees.length]);
 
+  // Modules : choisis à l'ajout (par défaut toute la session), modifiables ensuite.
+  const mods = state.modules;
+  const [pick, setPick] = useState<string[]>([]);
+  const togglePick = (id: string) => setPick((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const add = (traineeId: string, status: 'validee' | 'en_attente') => {
+    const chosen = pick.length && pick.length < mods.length ? [...pick] : null;
+    run(async () => {
+      const r = await addTraineeToSession(state.id, traineeId, status);
+      if (r.ok && chosen) {
+        const m = await setTraineeModules(state.id, traineeId, chosen);
+        if (!m.ok) return m;
+      }
+      return r;
+    });
+    setQ('');
+    inputRef.current?.focus();
+  };
+  const toggleTraineeModule = (t: WizardState['trainees'][number], moduleId: string) => {
+    const current = t.modules.length ? t.modules : mods.map((m) => m.id);
+    const next = current.includes(moduleId) ? current.filter((x) => x !== moduleId) : [...current, moduleId];
+    if (!next.length) return;
+    run(() => setTraineeModules(state.id, t.id, next.length === mods.length ? mods.map((m) => m.id) : next));
+  };
+
   const validated = state.trainees.filter((t) => t.status === 'validee').length;
   const waiting = state.trainees.length - validated;
   const resaValid = state.reservations.filter((r) => r.status !== 'en_attente').reduce((n, r) => n + r.seats, 0);
@@ -341,6 +376,20 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
         {resaValid > 0 && <span><strong>{resaValid}</strong> place{resaValid > 1 ? 's' : ''} réservée{resaValid > 1 ? 's' : ''}</span>}
       </div>
 
+      {mods.length > 0 && (
+        <div className="wiz-modpick">
+          <span className="wiz-field-label">Modules suivis par les stagiaires ajoutés</span>
+          <div className="wiz-chips" role="group" aria-label="Modules suivis">
+            <button type="button" className={!pick.length || pick.length === mods.length ? 'on' : ''} onClick={() => setPick([])}>Toute la session</button>
+            {mods.map((m) => (
+              <button key={m.id} type="button" className={pick.includes(m.id) && pick.length < mods.length ? 'on' : ''} onClick={() => togglePick(m.id)}>
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <label className="search wiz-search">
         <Search size={15} aria-hidden />
         <span className="sr-only">Rechercher un stagiaire</span>
@@ -353,10 +402,10 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
             <li key={t.id}>
               <UserPlus size={15} aria-hidden />
               <span className="wiz-list-main"><strong>{t.full_name}</strong><small>{t.company || 'Sans entreprise'}</small></span>
-              <button type="button" className="small primary" disabled={pending} onClick={() => { run(() => addTraineeToSession(state.id, t.id, 'validee')); setQ(''); inputRef.current?.focus(); }}>
+              <button type="button" className="small primary" disabled={pending} onClick={() => add(t.id, 'validee')}>
                 <Plus size={13} aria-hidden /> Valider
               </button>
-              <button type="button" className="small" disabled={pending} onClick={() => { run(() => addTraineeToSession(state.id, t.id, 'en_attente')); setQ(''); inputRef.current?.focus(); }}>
+              <button type="button" className="small" disabled={pending} onClick={() => add(t.id, 'en_attente')}>
                 En attente
               </button>
             </li>
@@ -404,7 +453,22 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
           {state.trainees.map((t) => (
             <li key={t.id}>
               <span className={`wiz-dot ${t.status}`} aria-hidden />
-              <span className="wiz-list-main"><strong>{t.full_name}</strong><small>{t.company || 'Sans entreprise'}</small></span>
+              <span className="wiz-list-main">
+                <strong>{t.full_name}</strong>
+                <small>{t.company || 'Sans entreprise'}</small>
+                {mods.length > 0 && (
+                  <span className="wiz-chips small" role="group" aria-label={`Modules suivis par ${t.full_name}`}>
+                    {mods.map((m) => {
+                      const on = !t.modules.length || t.modules.includes(m.id);
+                      return (
+                        <button key={m.id} type="button" className={on ? 'on' : ''} disabled={pending} aria-pressed={on} onClick={() => toggleTraineeModule(t, m.id)}>
+                          {m.name}
+                        </button>
+                      );
+                    })}
+                  </span>
+                )}
+              </span>
               <button
                 type="button"
                 className={`small${t.status === 'validee' ? '' : ' primary'}`}

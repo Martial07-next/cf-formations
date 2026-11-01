@@ -496,11 +496,13 @@ export function Planning({
 
   // Nouvelle session : assistant en étapes (informations, modules, stagiaires, finaliser).
   const [wizardOpen, setWizardOpen] = useState(false);
+  const createdId = useRef<string | null>(null);
   function openForm(defaults: SessionFormDefaults = {}) {
     setFormError(null);
     setFormDefaults(defaults);
     setFormKey((k) => k + 1);
     setWizardOpen(true);
+    createdId.current = null;
     dialogRef.current?.showModal();
   }
   // Lien « Nouvelle session » du tableau de bord (/?creer=1) : formulaire ouvert d'office.
@@ -937,7 +939,9 @@ export function Planning({
           aria-labelledby="new-session-title"
           onClose={() => {
             setWizardOpen(false);
-            router.refresh();
+            // Session créée : sa fiche s'ouvre toujours pour vérifier.
+            if (createdId.current) window.location.assign(`/sessions/${createdId.current}?nouvelle=1`);
+            else router.refresh();
           }}
         >
           <SessionWizard
@@ -949,6 +953,7 @@ export function Planning({
             absences={absences}
             defaults={formDefaults}
             onClose={() => dialogRef.current?.close()}
+            onCreated={(id) => (createdId.current = id)}
           />
         </dialog>
       )}

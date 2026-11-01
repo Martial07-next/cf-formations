@@ -25,7 +25,8 @@ export type WizardState = {
   /** Modules prévus par la formation du catalogue (sinon l'étape propose d'en ajouter). */
   templateModules: number;
   modules: { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[];
-  trainees: { id: string; full_name: string; company: string | null; status: 'validee' | 'en_attente' }[];
+  /** modules : modules suivis (vide = toute la session). */
+  trainees: { id: string; full_name: string; company: string | null; status: 'validee' | 'en_attente'; modules: string[] }[];
   reservations: { company: string; seats: number; status: string }[];
 };
 
@@ -40,7 +41,7 @@ export async function wizardState(sessionId: string): Promise<{ ok: true; state:
     .eq('id', sessionId)
     .maybeSingle();
   if (error || !s) return { ok: false, error: 'Session introuvable.' };
-  const [{ data: mods }, { data: links }, resa, df, days, tplMods] = await Promise.all([
+  const [{ data: mods }, { data: links }, resa, df, days, tplMods, { data: tm }] = await Promise.all([
     supabase.from('session_modules').select('id, name, start_day, end_day, duration_hours, position').eq('session_id', sessionId).order('start_day').order('position'),
     supabase.from('session_trainees').select('trainee_id, status, trainees(full_name, company)').eq('session_id', sessionId),
     supabase.from('session_reservations').select('company, seats, status').eq('session_id', sessionId),
@@ -49,7 +50,10 @@ export async function wizardState(sessionId: string): Promise<{ ok: true; state:
     s.template_id
       ? supabase.from('template_modules').select('id', { count: 'exact', head: true }).eq('template_id', s.template_id)
       : Promise.resolve({ count: 0 }),
+    supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', sessionId),
   ]);
+  const followed: Record<string, string[]> = {};
+  for (const r of (tm as any[]) || []) (followed[r.trainee_id] ||= []).push(r.module_id);
   const perDay = dayHours(s.start_at, s.end_at, (days.data as any[]) || []);
   const room = one<any>((s as any).rooms);
   return {
@@ -71,7 +75,7 @@ export async function wizardState(sessionId: string): Promise<{ ok: true; state:
       trainees: ((links as any[]) || [])
         .map((l) => {
           const t = one<any>(l.trainees);
-          return { id: l.trainee_id, full_name: t?.full_name || '', company: t?.company || null, status: l.status };
+          return { id: l.trainee_id, full_name: t?.full_name || '', company: t?.company || null, status: l.status, modules: followed[l.trainee_id] || [] };
         })
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr')),
       reservations: resa.error ? [] : ((resa.data as any[]) || []).map((r) => ({ company: r.company, seats: r.seats, status: r.status || 'validee' })),
