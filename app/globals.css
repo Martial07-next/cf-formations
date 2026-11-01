@@ -2003,3 +2003,8 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .wiz-chips button.on{background:#17241b;border-color:#17241b;color:#08fa64}
 .wiz-chips.small{margin-top:5px}
 .wiz-chips.small button{padding:2px 9px;font-size:11.5px}
+.wiz-chips-hint{display:block;margin-top:2px;font-size:11.5px}
+.md-field{display:inline-flex}
+.md-dur{display:inline-flex;flex-direction:column;gap:2px}
+.md-auto{font-size:11.5px;margin:0}
+.md-auto .link{background:none;border:0;padding:0;color:#0f7a4a;text-decoration:underline;cursor:pointer;font:inherit}

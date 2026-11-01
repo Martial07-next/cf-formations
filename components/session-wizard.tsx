@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { SessionForm, type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { PasteImport } from '@/components/paste-import';
+import { ModuleDays } from '@/components/module-days';
 import { createSession, updateSessionStatus } from '@/app/sessions/actions';
 import {
   addReservation,
@@ -297,16 +298,13 @@ export function ModulesStep({ state, pending, run }: { state: WizardState; pendi
           }}
         >
           <input name="name" required placeholder={`Nom du module (ex. MA${state.modules.length + 1})`} aria-label="Nom du module" />
-          <select name="start_day" defaultValue={days[0]} aria-label="Premier jour">
-            {days.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
-          </select>
-          <select name="end_day" defaultValue={days[0]} aria-label="Dernier jour">
-            {days.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
-          </select>
-          <span className="wiz-dur">
-            <input name="duration_h" type="number" min={0} max={200} placeholder="h" aria-label="Durée en heures" />
-            <input name="duration_min" type="number" min={0} max={59} step={15} placeholder="min" aria-label="Minutes" />
-          </span>
+          <ModuleDays
+            key={state.modules.map((m) => m.id).join(',')}
+            compact
+            days={days}
+            dayMinutes={state.dayMinutes}
+            taken={state.modules.flatMap((m) => days.filter((d) => d >= m.start_day && d <= m.end_day))}
+          />
           <button type="submit" className="small primary" disabled={pending}><Plus size={14} aria-hidden /> Ajouter</button>
         </form>
       )}
@@ -343,17 +341,19 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
   const [pick, setPick] = useState<string[]>([]);
   const allIds = mods.map((m) => m.id);
   /**
-   * Clic sur un module : depuis « toute la session », il devient le seul choisi ;
-   * sinon il s'ajoute ou se retire (jamais zéro module ; tous = toute la session).
+   * Clic sur un module : il remplace le choix précédent (MA1 → MA2 directement).
+   * Ctrl / Cmd + clic : plusieurs modules (ajout ou retrait). Tous = toute la session.
    */
-  const nextChoice = (current: string[], id: string) => {
+  const nextChoice = (current: string[], id: string, multi = false) => {
     const full = !current.length || current.length >= allIds.length;
+    // Re-clic sur le seul module choisi : retour à toute la session.
+    if (!multi) return allIds.length === 1 || (!full && current.length === 1 && current[0] === id) ? [] : [id];
     if (full) return [id];
     const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
     if (!next.length) return current;
     return next.length >= allIds.length ? [] : next;
   };
-  const togglePick = (id: string) => setPick((p) => nextChoice(p, id));
+  const togglePick = (id: string, multi = false) => setPick((p) => nextChoice(p, id, multi));
   // Modules d'un stagiaire : affichage immédiat, enregistrement en arrière-plan.
   const [localMods, setLocalMods] = useState<Record<string, string[]>>({});
   useEffect(() => setLocalMods({}), [state]);
@@ -373,8 +373,8 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
   };
   // Clics rapides : seul le dernier choix est enregistré (pas d'enregistrements qui se croisent).
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const toggleTraineeModule = (t: WizardState['trainees'][number], moduleId: string) => {
-    const next = nextChoice(modsOf(t), moduleId);
+  const toggleTraineeModule = (t: WizardState['trainees'][number], moduleId: string, multi = false) => {
+    const next = nextChoice(modsOf(t), moduleId, multi);
     setLocalMods((m) => ({ ...m, [t.id]: next }));
     clearTimeout(saveTimers.current[t.id]);
     saveTimers.current[t.id] = setTimeout(() => run(() => setTraineeModules(state.id, t.id, next.length ? next : allIds)), 450);
@@ -397,10 +397,11 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
       {mods.length > 0 && (
         <div className="wiz-modpick">
           <span className="wiz-field-label">Modules suivis par les stagiaires ajoutés</span>
+          <small className="hint wiz-chips-hint">Un clic choisit le module (et remplace le précédent) · Ctrl + clic pour en cumuler plusieurs</small>
           <div className="wiz-chips" role="group" aria-label="Modules suivis">
             <button type="button" className={!pick.length ? 'on' : ''} aria-pressed={!pick.length} onClick={() => setPick([])}>Toute la session</button>
             {mods.map((m) => (
-              <button key={m.id} type="button" className={pick.includes(m.id) ? 'on' : ''} aria-pressed={pick.includes(m.id)} onClick={() => togglePick(m.id)}>
+              <button key={m.id} type="button" className={pick.includes(m.id) ? 'on' : ''} aria-pressed={pick.includes(m.id)} onClick={(e) => togglePick(m.id, e.ctrlKey || e.metaKey)}>
                 {m.name}
               </button>
             ))}
@@ -480,7 +481,7 @@ export function TraineesStep({ state, pending, run, reload }: { state: WizardSta
                       const cur = modsOf(t);
                       const on = !cur.length || cur.includes(m.id);
                       return (
-                        <button key={m.id} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => toggleTraineeModule(t, m.id)}>
+                        <button key={m.id} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={(e) => toggleTraineeModule(t, m.id, e.ctrlKey || e.metaKey)}>
                           {m.name}
                         </button>
                       );

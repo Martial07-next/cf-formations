@@ -1,7 +1,7 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layers, Plus, Pencil, Trash2, Scissors } from 'lucide-react';
 import {
@@ -12,40 +12,25 @@ import {
   setTraineeModules,
 } from '@/app/sessions/[id]/actions';
 import { frDay, type SessionModule } from '@/lib/modules';
-import { formatHours, weekdaysBetween } from '@/lib/week';
-import { splitHours } from '@/lib/schedule';
+import { dayHours, formatHours, weekdaysBetween, type DayOverride } from '@/lib/week';
+import { ModuleDays } from '@/components/module-days';
 import { askConfirm } from '@/lib/confirm-dialog';
 
-function ModuleFields({ m, days }: { m?: SessionModule; days: string[] }) {
-  const d = m?.duration_hours != null ? splitHours(Number(m.duration_hours)) : null;
+function ModuleFields({ m, days, dayMinutes, taken }: { m?: SessionModule; days: string[]; dayMinutes: Record<string, number>; taken: string[] }) {
   return (
     <div className="form-row">
       <label>
         Nom du module
         <input name="name" required defaultValue={m?.name || ''} placeholder="Ex. MA1" />
       </label>
-      <label>
-        Du
-        <select name="start_day" defaultValue={m?.start_day || days[0]}>
-          {days.map((day) => <option key={day} value={day}>{frDay(day)}</option>)}
-        </select>
-      </label>
-      <label>
-        Au
-        <select name="end_day" defaultValue={m?.end_day || days[0]}>
-          {days.map((day) => <option key={day} value={day}>{frDay(day)}</option>)}
-        </select>
-      </label>
-      <div className="field">
-        Durée (facultatif)
-        <span className="duration-input">
-          <input name="duration_h" type="number" min={0} aria-label="Heures" defaultValue={d?.h ?? ''} />
-          <span>h</span>
-          <select name="duration_min" aria-label="Minutes" defaultValue={String(d?.m ?? 0)}>
-            {['0', '15', '30', '45'].map((x) => <option key={x} value={x}>{x.padStart(2, '0')}</option>)}
-          </select>
-        </span>
-      </div>
+      <ModuleDays
+        days={days}
+        dayMinutes={dayMinutes}
+        taken={taken}
+        defaultStart={m?.start_day}
+        defaultEnd={m?.end_day}
+        defaultMinutes={m?.duration_hours != null ? Number(m.duration_hours) * 60 : null}
+      />
     </div>
   );
 }
@@ -59,10 +44,13 @@ export function SessionModulesPanel({
   traineeModules,
   validatedIds,
   canEdit,
+  overrides = [],
 }: {
   sessionId: string;
   startAt: string;
   endAt: string;
+  /** Horaires propres à certains jours : durée des modules calculée avec. */
+  overrides?: DayOverride[];
   modules: SessionModule[];
   traineeModules: Record<string, string[]>;
   validatedIds: string[];
@@ -74,6 +62,9 @@ export function SessionModulesPanel({
   const [isPending, startTransition] = useTransition();
   const weekdays = weekdaysBetween(startAt, endAt);
   const days = weekdays.length ? weekdays : [startAt.slice(0, 10)];
+  const dayMinutes = Object.fromEntries(dayHours(startAt, endAt, overrides).map((d) => [d.day, d.minutes]));
+  // Jours déjà pris par les autres modules (non proposés à nouveau).
+  const takenBy = (exceptId?: string) => modules.filter((x) => x.id !== exceptId).flatMap((x) => days.filter((d) => d >= x.start_day && d <= x.end_day));
 
   if (!canEdit && modules.length === 0) return null;
 
@@ -119,7 +110,7 @@ export function SessionModulesPanel({
         {modules.map((m) =>
           editing === m.id ? (
             <form key={m.id} className="workshop-card editing" onSubmit={submitWith((fd) => run(() => updateSessionModule(sessionId, m.id, fd), () => setEditing(null)))}>
-              <ModuleFields m={m} days={days} />
+              <ModuleFields m={m} days={days} dayMinutes={dayMinutes} taken={takenBy(m.id)} />
               <div className="row-actions">
                 <button type="submit" className="primary small" disabled={isPending}>Enregistrer</button>
                 <button type="button" className="small" onClick={() => setEditing(null)}>Annuler</button>
@@ -155,7 +146,7 @@ export function SessionModulesPanel({
 
       {canEdit && adding && (
         <form className="workshop-card editing" onSubmit={submitWith((fd) => run(() => addSessionModule(sessionId, fd), () => setAdding(false)))}>
-          <ModuleFields days={days} />
+          <ModuleFields days={days} dayMinutes={dayMinutes} taken={takenBy()} />
           <div className="row-actions">
             <button type="submit" className="primary small" disabled={isPending}>Ajouter le module</button>
             <button type="button" className="small" onClick={() => setAdding(false)}>Annuler</button>
@@ -191,17 +182,33 @@ export function TraineeModuleToggles({
   const effective = current.length ? current : modules.map((m) => m.id);
   const full = effective.length === modules.length;
 
-  function toggle(id: string) {
-    const next = effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
+  // Clics rapides : seul le dernier choix est enregistré.
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Clic : ce module seul (MA1 → MA2 directement) ; re-clic sur le module seul
+   * choisi = session complète. Ctrl / Cmd + clic : plusieurs modules.
+   */
+  function toggle(id: string, multi: boolean) {
+    const all = modules.map((m) => m.id);
+    let next: string[];
+    if (multi) {
+      next = full ? [id] : effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
+      if (!next.length) return;
+    } else {
+      next = !full && effective.length === 1 && effective[0] === id ? all : [id];
+    }
     setError(null);
     setLocal(next);
-    startTransition(async () => {
-      const res = await setTraineeModules(sessionId, traineeId, next);
-      if (!res.ok) {
-        setError(res.error);
-        setLocal(null);
-      } else router.refresh();
-    });
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      startTransition(async () => {
+        const res = await setTraineeModules(sessionId, traineeId, next);
+        if (!res.ok) {
+          setError(res.error);
+          setLocal(null);
+        } else router.refresh();
+      });
+    }, 400);
   }
 
   return (
@@ -213,8 +220,8 @@ export function TraineeModuleToggles({
             type="button"
             className={`module-toggle${effective.includes(m.id) ? ' on' : ''}`}
             aria-pressed={effective.includes(m.id)}
-            onClick={() => toggle(m.id)}
-            title={`${m.name} : ${frDay(m.start_day)}`}
+            onClick={(e) => toggle(m.id, e.ctrlKey || e.metaKey)}
+            title={`${m.name} : ${frDay(m.start_day)} · clic : ce module seul · Ctrl + clic : plusieurs`}
           >
             {m.name}
           </button>

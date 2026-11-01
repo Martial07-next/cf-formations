@@ -22,6 +22,8 @@ export type WizardState = {
   digiforma_docs_url: string | null;
   hours: number;
   days: string[];
+  /** Minutes de formation par jour (pause déduite). */
+  dayMinutes: Record<string, number>;
   /** Modules prévus par la formation du catalogue (sinon l'étape propose d'en ajouter). */
   templateModules: number;
   modules: { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[];
@@ -70,6 +72,7 @@ export async function wizardState(sessionId: string): Promise<{ ok: true; state:
       digiforma_docs_url: df.error ? null : ((df.data as any)?.digiforma_docs_url ?? null),
       hours: Math.round((perDay.reduce((n, d) => n + d.minutes, 0) / 60) * 10) / 10,
       days: perDay.map((d) => d.day),
+      dayMinutes: Object.fromEntries(perDay.map((d) => [d.day, d.minutes])),
       templateModules: (tplMods as any).count || 0,
       modules: ((mods as any[]) || []).map((m) => ({ ...m, start_day: String(m.start_day).slice(0, 10), end_day: String(m.end_day).slice(0, 10) })),
       trainees: ((links as any[]) || [])
