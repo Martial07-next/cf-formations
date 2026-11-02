@@ -207,6 +207,7 @@ function drawTexts(page: PDFPage, f: Fonts, input: AppreciationInput, t: { name:
   text('Document à joindre au RAPPORT DE L’INTERVENANT', 200.6, 10.4, 7.89, f.bold, CREAM);
   // Mentions légales : SIRET, N° de déclaration d'activité (NDA), TVA, contact.
   const right = [COMPANY.name, `SIRET ${input.legal?.siret || COMPANY.siret}`, ...(input.legal?.nda ? [`NDA ${input.legal.nda}`] : []), `TVA intra ${COMPANY.tva}`, COMPANY.email];
-  const footYs = right.length === 5 ? [50.6, 40.6, 30.6, 20.5, 10.4] : [42.0, 31.4, 20.9, 10.4];
+  // Colonne centrée verticalement dans le bandeau du bas (58 pt de haut).
+  const footYs = right.length === 5 ? [46.2, 36.6, 27.0, 17.4, 7.8] : [42.0, 31.4, 20.9, 10.4];
   footYs.forEach((y, i) => text(right[i], 468.2, y, right.length === 5 ? 7.4 : 7.89, f.bold, CREAM));
 }
