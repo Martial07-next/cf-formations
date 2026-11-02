@@ -8,7 +8,7 @@ import { HAB_SYMBOLS, parseSymbols } from '@/lib/habilitation';
  * possibles. Par défaut, ceux détectés dans l'intitulé de la formation.
  * Champs envoyés : hab_present, hab_on, hab_symbols[].
  */
-export function HabSymbolsField({ title, saved }: { title: string; saved: string | null | undefined }) {
+export function HabSymbolsField({ title, saved, objectifs }: { title: string; saved: string | null | undefined; objectifs?: string | null }) {
   const detected = useMemo(() => parseSymbols(title).symbols, [title]);
   const initial = saved != null ? saved.split(',').map((s) => s.trim()).filter(Boolean) : detected;
   const [on, setOn] = useState(initial.length > 0);
@@ -47,6 +47,16 @@ export function HabSymbolsField({ title, saved }: { title: string; saved: string
           </div>
           {/* Valeurs envoyées (champs cachés : aucun défilement de la fenêtre au clic). */}
           {chosen.map((s) => <input key={s} type="hidden" name="hab_symbols" value={s} />)}
+          <label className="hab-obj">
+            <span>Objectifs du certificat</span>
+            <textarea
+              name="objectifs_habilitation"
+              rows={5}
+              defaultValue={objectifs || ''}
+              placeholder={'Un objectif par ligne, ex. :\n- Réaliser et organiser des travaux d’ordre électrique en BT\n- Réaliser des consignations d’installations électriques en BT'}
+            />
+            <small className="hint">Imprimés sur le certificat. Vide : les objectifs de l’attestation de fin de formation sont repris.</small>
+          </label>
         </>
       )}
     </fieldset>

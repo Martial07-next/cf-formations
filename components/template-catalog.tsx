@@ -45,6 +45,7 @@ type Template = {
   fiche_appreciation?: boolean;
   attestation_reussite?: string | null;
   habilitation_symbols?: string | null;
+  objectifs_habilitation?: string | null;
   authorizations?: string[] | null;
   recyclage_available?: boolean;
   objectifs_recyclage?: string | null;
@@ -239,7 +240,7 @@ function TemplateFields({
           <input type="checkbox" name="titre_habilitation" defaultChecked={Boolean(t?.titre_habilitation)} />
           Titre d’habilitation exigé : case au tour de table, dépôt par QR code, attestation bloquée tant que le titre n’est pas fourni
         </label>
-        <HabSymbolsField title={titleNow} saved={t?.habilitation_symbols} />
+        <HabSymbolsField title={titleNow} saved={t?.habilitation_symbols} objectifs={t?.objectifs_habilitation} />
         <input type="hidden" name="recyclage_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="recyclage_available" checked={recyclage} onChange={(e) => setRecyclage(e.target.checked)} />

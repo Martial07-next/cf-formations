@@ -205,6 +205,8 @@ function drawTexts(page: PDFPage, f: Fonts, input: AppreciationInput, t: { name:
   gradientText(page, f.title, 'COMPTE RENDU', 242.9, 30.6, 10.08);
   text('D’ÉVALUATION INDIVIDUELLE', 203.7, 20.5, 9.97, f.title, CREAM);
   text('Document à joindre au RAPPORT DE L’INTERVENANT', 200.6, 10.4, 7.89, f.bold, CREAM);
-  const right = [COMPANY.name, `SIRET ${input.legal?.siret || COMPANY.siret}`, `TVA intra ${COMPANY.tva}`, COMPANY.email];
-  [42.0, 31.4, 20.9, 10.4].forEach((y, i) => text(right[i], 468.2, y, 7.89, f.bold, CREAM));
+  // Mentions légales : SIRET, N° de déclaration d'activité (NDA), TVA, contact.
+  const right = [COMPANY.name, `SIRET ${input.legal?.siret || COMPANY.siret}`, ...(input.legal?.nda ? [`NDA ${input.legal.nda}`] : []), `TVA intra ${COMPANY.tva}`, COMPANY.email];
+  const footYs = right.length === 5 ? [50.6, 40.6, 30.6, 20.5, 10.4] : [42.0, 31.4, 20.9, 10.4];
+  footYs.forEach((y, i) => text(right[i], 468.2, y, right.length === 5 ? 7.4 : 7.89, f.bold, CREAM));
 }

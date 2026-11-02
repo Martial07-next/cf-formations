@@ -418,12 +418,13 @@ export default async function SessionDetailPage({
                             : streetAddress(room)
                               ? `Centre CF RESEAUX - ${streetAddress(room)!.replace(',', '')}`
                               : null,
-                        objectifs: (tplOpt as any)?.objectifs ?? null,
+                        // Objectifs du certificat (migration 52), sinon ceux de fin de formation.
+                        objectifs: (tplOpt as any)?.objectifs_habilitation || (tplOpt as any)?.objectifs || null,
                         director: directorLine(((settings as any)?.director_name as string) || 'Madame Aurélie Lancelle'),
                         city: legal.city,
                         siret: legal.siret,
+                        nda: legal.nda,
                         cachet: ((settings as any)?.cachet_image as string) || null,
-                        agrement: ((settings as any)?.agrement as string) || null,
                         certNames: Object.fromEntries(
                           enrolled.map((t: any) => [t.id, t.last_name ? `${t.first_name || ''} ${String(t.last_name).toUpperCase()}`.trim() : t.full_name])
                         ),

@@ -24,6 +24,8 @@ function readTemplate(formData: FormData) {
     ...(formData.has('hab_present')
       ? { habilitation_symbols: formData.get('hab_on') === 'on' ? formData.getAll('hab_symbols').map(String).filter(Boolean).join(',') : '' }
       : {}),
+    // Objectifs propres au certificat (migration 52) ; vide = objectifs de fin de formation.
+    ...(formData.has('objectifs_habilitation') ? { objectifs_habilitation: get('objectifs_habilitation') || null } : {}),
     // Fiche d'appréciation individuelle et codification SERECT (migration 21).
     ...(formData.has('fai_present')
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
@@ -56,7 +58,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

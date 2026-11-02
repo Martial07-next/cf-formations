@@ -191,6 +191,10 @@ export async function buildAuthorizationsPdf(items: AuthPdfItem[], cachetDataUrl
     return r.arrayBuffer();
   });
   const ctx: Ctx = { doc, value: await doc.embedFont(fontBytes, { subset: true }), cachet: await embedDataUrl(doc, cachetDataUrl) };
+  // Mentions légales (SIRET, N° de déclaration d'activité) en bas de chaque page.
+  const { legalMentions } = await import('@/app/legal-actions');
+  const legal = await legalMentions().catch(() => ({ siret: null, nda: null }));
+  const legalText = ['CF RÉSEAUX SAS', `SIRET ${legal.siret || '900 991 944 00027'}`, legal.nda ? `Déclaration d’activité N° ${legal.nda}` : null].filter(Boolean).join(' · ');
   const templates = new Map<string, PDFDocument>();
   for (const item of items) {
     const path = templateOf(item.auth.kind);
@@ -208,6 +212,8 @@ export async function buildAuthorizationsPdf(items: AuthPdfItem[], cachetDataUrl
     const page = doc.addPage([width, height]);
     page.drawPage(bg, { x: 0, y: 0, width, height });
     await fill(page, ctx, item);
+    const lw = ctx.value.widthOfTextAtSize(legalText, 6.5);
+    page.drawText(legalText, { x: (width - lw) / 2, y: 7, size: 6.5, font: ctx.value, color: rgb(0.45, 0.48, 0.46) });
   }
   return doc.save();
 }

@@ -175,16 +175,20 @@ function checkbox(page: PDFPage | null, x: number, base: number, checked: boolea
   }
 }
 
-function footer(page: PDFPage, f: Fonts, line1: string, line2: string, line2x: number, input: FinFormationInput) {
+function footer(page: PDFPage, f: Fonts, line1: string, line2: string, line2x: number, input: Pick<FinFormationInput, 'agrement' | 'legal'>) {
   const w2 = f.title.widthOfTextAtSize(keep(f.title, line2), 10.1);
   const cx = line2x + w2 / 2;
   const l1 = keep(f.title, line1);
   gradientText(page, f.title, l1, cx - f.title.widthOfTextAtSize(l1, 10.1) / 2, 30.6, 10.1);
   text(page, line2, line2x, 20.5, 10.1, f.title, CREAM);
-  const ag = keep(f.bold, `Agrément N° ${input.agrement}`);
-  text(page, ag, cx - f.bold.widthOfTextAtSize(ag, 7.89) / 2, 10.4, 7.89, f.bold, CREAM);
-  const right = [COMPANY.name, `SIRET ${input.legal?.siret || COMPANY.siret}`, `TVA intra ${COMPANY.tva}`, COMPANY.email];
-  [42.0, 31.4, 20.9, 10.4].forEach((y, i) => text(page, right[i], 468.2, y, 7.89, f.bold, CREAM));
+  // Agrément (CTST…) seulement s'il est donné ; sinon le N° de déclaration d'activité.
+  const mid = input.agrement ? `Agrément N° ${input.agrement}` : input.legal?.nda ? `Déclaration d’activité N° ${input.legal.nda}` : '';
+  const ag = keep(f.bold, mid);
+  if (ag) text(page, ag, cx - f.bold.widthOfTextAtSize(ag, 7.89) / 2, 10.4, 7.89, f.bold, CREAM);
+  // Mentions légales : SIRET, N° de déclaration d'activité (NDA), TVA, contact.
+  const right = [COMPANY.name, `SIRET ${input.legal?.siret || COMPANY.siret}`, ...(input.legal?.nda ? [`NDA ${input.legal.nda}`] : []), `TVA intra ${COMPANY.tva}`, COMPANY.email];
+  const ys = right.length === 5 ? [50.6, 40.6, 30.6, 20.5, 10.4] : [42.0, 31.4, 20.9, 10.4];
+  ys.forEach((y, i) => text(page, right[i], 468.2, y, right.length === 5 ? 7.4 : 7.89, f.bold, CREAM));
 }
 
 function stamp(page: PDFPage, img: PDFImage | null, box: { x: number; y: number; w: number; h: number }) {
@@ -460,7 +464,7 @@ export type HabilitationPdfInput = {
   director: string;
   city: string;
   siret: string | null;
-  agrement?: string | null;
+  nda?: string | null;
   cachet: string | null;
 };
 
@@ -537,7 +541,8 @@ export async function buildHabilitationAttestationsPdf(input: HabilitationPdfInp
   ctx.cachet = await embedCachet(ctx.doc, input.cachet);
   const [bg] = await ctx.doc.embedPdf(tpl, [0]);
   const { f } = ctx;
-  const footerInput = { agrement: input.agrement || 'CTST-2026-27/1/P', legal: { siret: input.siret, city: input.city } } as FinFormationInput;
+  // Pas d'agrément sur le certificat : N° de déclaration d'activité à la place.
+  const footerInput = { agrement: '', legal: { siret: input.siret, nda: input.nda || null, city: input.city } };
   for (const t of input.trainees) {
     const e = input.entries[t.id] || {};
     let k = 1;

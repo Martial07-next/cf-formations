@@ -2026,3 +2026,4 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .hab-avis button.on.ko{background:#fdeceb;border-color:var(--cf-red);color:var(--cf-red-ink)}
 .hab-line{grid-column:1 / -2;color:var(--muted);font-size:12px}
 @media (max-width:760px){.hab-row{grid-template-columns:1fr}.hab-line{grid-column:auto}}
+.hab-obj{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-weight:600;font-size:13px}.hab-obj textarea{font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;resize:vertical}
