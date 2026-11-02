@@ -181,8 +181,8 @@ function footer(page: PDFPage, f: Fonts, line1: string, line2: string, line2x: n
   const l1 = keep(f.title, line1);
   gradientText(page, f.title, l1, cx - f.title.widthOfTextAtSize(l1, 10.1) / 2, 30.6, 10.1);
   text(page, line2, line2x, 20.5, 10.1, f.title, CREAM);
-  // Agrément (CTST…) seulement s'il est donné ; sinon le N° de déclaration d'activité.
-  const mid = input.agrement ? `Agrément N° ${input.agrement}` : input.legal?.nda ? `Déclaration d’activité N° ${input.legal.nda}` : '';
+  // Agrément (CTST…) seulement s'il est donné ; le N° NDA est dans la colonne de droite.
+  const mid = input.agrement ? `Agrément N° ${input.agrement}` : '';
   const ag = keep(f.bold, mid);
   if (ag) text(page, ag, cx - f.bold.widthOfTextAtSize(ag, 7.89) / 2, 10.4, 7.89, f.bold, CREAM);
   // Mentions légales : SIRET, N° de déclaration d'activité (NDA), TVA, contact.
@@ -541,7 +541,7 @@ export async function buildHabilitationAttestationsPdf(input: HabilitationPdfInp
   ctx.cachet = await embedCachet(ctx.doc, input.cachet);
   const [bg] = await ctx.doc.embedPdf(tpl, [0]);
   const { f } = ctx;
-  // Pas d'agrément sur le certificat : N° de déclaration d'activité à la place.
+  // Pas d'agrément sur le certificat (N° NDA dans la colonne de droite).
   const footerInput = { agrement: '', legal: { siret: input.siret, nda: input.nda || null, city: input.city } };
   for (const t of input.trainees) {
     const e = input.entries[t.id] || {};
