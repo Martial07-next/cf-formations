@@ -1,3 +1,4 @@
+import { formationSymbols } from '@/lib/habilitation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { appreciationRequired } from '@/lib/appreciation';
@@ -70,6 +71,12 @@ export async function computeDossierTodo(
     supabase.from('session_forms').select('session_id, completed').eq('kind', 'reussite').in('session_id', sessionIds),
   ]);
   const arOn = new Set(arErr ? [] : ((arTpl as any[]) || []).filter((t) => reussiteModels(t.attestation_reussite).length).map((t) => t.id as string));
+  // Certificats d'habilitation (migration 51) : formations avec des symboles (réglage ou intitulé).
+  const [{ data: habTpl, error: habErr }, { data: habForms }] = await Promise.all([
+    templateIds.length ? supabase.from('templates').select('id, title, habilitation_symbols').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
+    supabase.from('session_forms').select('session_id, completed').eq('kind', 'habilitation').in('session_id', sessionIds),
+  ]);
+  const habOn = new Set(habErr ? [] : ((habTpl as any[]) || []).filter((t) => formationSymbols(t.habilitation_symbols, t.title || '').length).map((t) => t.id as string));
   for (const s of sessions) {
     const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
     if (!traineeIds.length) continue;
@@ -96,6 +103,7 @@ export async function computeDossierTodo(
           ? [{ completed: ((faiForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }]
           : []),
         ...(s.template_id && arOn.has(s.template_id) ? [{ completed: ((arForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
+        ...(s.template_id && habOn.has(s.template_id) ? [{ completed: ((habForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
         ...(dfOn.has(s.id) ? [{ completed: ((dfForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
       ],
     };

@@ -33,6 +33,8 @@ export default async function ModelesPage() {
   const { data: arOpts } = await supabase.from('templates').select('id, attestation_reussite');
   // Titre d'habilitation exigé (migration 47).
   const { data: titreOpts } = await supabase.from('templates').select('id, titre_habilitation');
+  // Certificats d'habilitation (migration 51) : null = symboles détectés dans l'intitulé.
+  const { data: habOpts } = await supabase.from('templates').select('id, habilitation_symbols');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -52,6 +54,7 @@ export default async function ModelesPage() {
     authorizations: ((authOpts as any[]) || []).find((x) => x.id === t.id)?.authorizations ?? null,
     attestation_reussite: ((arOpts as any[]) || []).find((x) => x.id === t.id)?.attestation_reussite ?? null,
     titre_habilitation: Boolean(((titreOpts as any[]) || []).find((x) => x.id === t.id)?.titre_habilitation),
+    habilitation_symbols: ((habOpts as any[]) || []).find((x) => x.id === t.id)?.habilitation_symbols ?? null,
     recyclage_available: Boolean(((recOpts as any[]) || []).find((x) => x.id === t.id)?.recyclage_available),
     objectifs_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs_recyclage ?? null,
     competences_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.competences_recyclage ?? null,

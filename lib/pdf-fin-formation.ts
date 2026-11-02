@@ -7,6 +7,7 @@ import { COMPANY, type Legal } from '@/lib/pdf-brand';
 import { CREAM, INK, RED, gradientText, keep, wrapText } from '@/lib/pdf-appreciation';
 import type { AppreciationEntry } from '@/lib/appreciation';
 import { formatDays } from '@/lib/schedule';
+import { certificateTitle } from '@/lib/habilitation';
 
 /**
  * Attestation de fin de formation et appréciation des compétences : reprise
@@ -436,6 +437,124 @@ export async function buildCompetencesPdf(input: FinFormationInput): Promise<Uin
     text(p2, 'PAGE 2', 546.7, 803.7, 7.89, f.bold);
     competencesPage2(p2, ctx, input, e);
     footer(p2, f, 'FICHE D’APPRÉCIATION DES', 'COMPÉTENCES PROFESSIONNELLES', 176.8, input);
+  }
+  return ctx.doc.save();
+}
+
+// ---------------------------------------------------------------------------
+// Certificat d'habilitation électrique (1 page par stagiaire), même identité
+// que l'attestation de fin de formation ; symboles attribués par le formateur.
+// ---------------------------------------------------------------------------
+
+export type HabilitationPdfInput = {
+  title: string; // intitulé de la formation (symboles détectés dedans)
+  symbols: string[]; // symboles possibles de la formation
+  trainees: { id: string; name: string }[];
+  entries: Record<string, { avis?: 'favorable' | 'defavorable' | null; symbols?: string[] }>;
+  startDate: string;
+  endDate: string;
+  hours: number;
+  days: number;
+  lieu: string | null;
+  objectifs: string | null;
+  director: string;
+  city: string;
+  siret: string | null;
+  agrement?: string | null;
+  cachet: string | null;
+};
+
+function habBody(page: PDFPage | null, ctx: Ctx, input: HabilitationPdfInput, name: string, e: HabilitationPdfInput['entries'][string], k: number) {
+  const { f } = ctx;
+  const B = 12.5 * k;
+  const step = 17.27 * k;
+  const chosen = e.symbols ? e.symbols.filter((s) => input.symbols.includes(s)) : input.symbols;
+  let y = 576.2;
+  text(page, `M./Mme → ${name}`, 23.1, y, 13.88, f.bold);
+  y = labelValue(page, { text: 'a réalisé la formation → ', font: f.semibold }, { text: certificateTitle(input.title, chosen), font: f.regular }, 12.88, y - 18, 18);
+
+  // Symboles attribués : mis en avant (pastilles).
+  y -= 30 * k;
+  heading(page, ctx, 'HABILITATION ÉLECTRIQUE · SYMBOLES ATTRIBUÉS', y);
+  y -= 30 * k;
+  let x = 23.1;
+  for (const s of chosen.length ? chosen : ['Aucun symbole attribué']) {
+    const w = f.bold.widthOfTextAtSize(keep(f.bold, s), 12.5) + 18;
+    if (x + w > 572) {
+      x = 23.1;
+      y -= 26 * k;
+    }
+    if (page) {
+      page.drawRectangle({ x, y: y - 6.5, width: w, height: 21, color: INK });
+      text(page, s, x + 9, y, 12.5, f.bold, CREAM);
+    }
+    x += w + 7;
+  }
+
+  // Objectifs
+  y -= 34 * k;
+  heading(page, ctx, 'OBJECTIFS DE LA FORMATION', y);
+  y -= 22.6 * Math.min(1, k + 0.1) - step;
+  const objs = objectiveLines(input.objectifs || '');
+  if (!objs.length) objs.push({ bullet: false, text: 'Objectifs de la formation à renseigner dans la fiche de la formation.' });
+  for (const o of objs) {
+    const bx = o.bullet || objs.length > 1 ? 44.4 : 23.1;
+    const lines = wrapText(f.regular, o.text, B, 572 - bx);
+    lines.forEach((l, i) => {
+      y -= step;
+      if (bx > 23.1 && i === 0 && page) page.drawCircle({ x: 32.6, y: y + B * 0.3, size: 2.1 * k, color: INK });
+      text(page, l, bx, y, B, f.regular);
+    });
+  }
+
+  // Déroulement
+  y -= 32.1 * k;
+  heading(page, ctx, 'DÉROULEMENT DE LA FORMATION', y);
+  y -= 18.1 * k;
+  text(page, `Date de réalisation →  ${longPeriod(input.startDate, input.endDate)}`, 23.1, y, B, f.bold);
+  y -= 17.25 * k;
+  text(page, `Durée → ${formatDays(input.days)} (${hoursText(input.hours)})`, 23.1, y, B, f.bold);
+  y -= 17.25 * k;
+  y = labelValue(page, { text: 'Lieu de réalisation → ', font: f.bold }, { text: input.lieu || 'CF Réseaux', font: f.regular }, B, y, step);
+  y -= 17.25 * k;
+  text(page, 'Nature de l’action → Action de formation', 23.1, y, B, f.bold);
+
+  // Avis
+  y -= 36 * k;
+  heading(page, ctx, 'AVIS DU FORMATEUR', y);
+  y -= 22 * k;
+  checkbox(page, 23.1, y, e.avis === 'favorable');
+  text(page, 'Favorable', 36, y, B, e.avis === 'favorable' ? f.bold : f.regular);
+  checkbox(page, 130, y, e.avis === 'defavorable');
+  text(page, 'Défavorable', 143, y, B, e.avis === 'defavorable' ? f.bold : f.regular);
+  return y;
+}
+
+export async function buildHabilitationAttestationsPdf(input: HabilitationPdfInput): Promise<Uint8Array> {
+  const { ctx, tpl } = await setup('/templates/attestation-fin-formation.pdf');
+  ctx.doc.setTitle(`Certificats d'habilitation - ${input.title}`);
+  ctx.doc.setAuthor('CF Réseaux');
+  ctx.cachet = await embedCachet(ctx.doc, input.cachet);
+  const [bg] = await ctx.doc.embedPdf(tpl, [0]);
+  const { f } = ctx;
+  const footerInput = { agrement: input.agrement || 'CTST-2026-27/1/P', legal: { siret: input.siret, city: input.city } } as FinFormationInput;
+  for (const t of input.trainees) {
+    const e = input.entries[t.id] || {};
+    let k = 1;
+    while (k > 0.72 && habBody(null, ctx, input, t.name, e, k) < 162) k -= 0.04;
+    const page = ctx.doc.addPage([W, H]);
+    page.drawPage(bg, { x: 0, y: -7.83, width: W, height: H });
+    text(page, 'ATTESTATION DE', 18.7, 726.3, 38.7, f.title);
+    text(page, 'FORMATION', 18.7, 685.9, 38.7, f.title);
+    text(page, `Je, soussigné(e) ${input.director}, représentant l’organisme de formation`, 23.1, 632.5, 14, f.regular);
+    text(page, 'CF Réseaux, atteste que :', 23.1, 612.7, 14, f.regular);
+    habBody(page, ctx, input, t.name, e, k);
+    stamp(page, ctx.cachet, { x: 376.5, y: 58, w: 150, h: 80 });
+    text(page, 'SIGNATURE ET CACHET', 395.6, 143.8, 13.65, f.semibold);
+    text(page, `Fait à ${input.city || 'Cuincy'}, le ${faitLe(input.endDate)}`, 23.1, 128.6, 13.88, f.bold);
+    text(page, `Par ${input.director}`, 23.1, 109.9, 13.88, f.bold);
+    text(page, 'Responsable de l’organisme de formation', 23.1, 91.9, 12.88, f.regular);
+    footer(page, f, 'ATTESTATION DE FORMATION', 'HABILITATION ÉLECTRIQUE', 206.8, footerInput);
   }
   return ctx.doc.save();
 }

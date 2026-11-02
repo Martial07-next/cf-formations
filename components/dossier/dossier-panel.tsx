@@ -38,6 +38,8 @@ import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
 import { ReussiteEditor, reussiteInputs, type ReussiteSession } from '@/components/dossier/reussite-editor';
 import { TitleFiles, TitleQrButton, downloadAllTitles } from '@/components/dossier/titles';
+import { HabilitationEditor, type HabSession } from '@/components/dossier/habilitation-editor';
+import { habDone, type HabData } from '@/lib/habilitation';
 import { titleOk, type TitleFile } from '@/lib/titres';
 import { reussiteCount, reussiteDone, type ReussiteData } from '@/lib/reussite';
 import { setSessionAppreciation } from '@/app/dossier/actions';
@@ -84,6 +86,7 @@ export function DossierPanel({
   titleFiles = null,
   titleRequired = false,
   me = null,
+  habilitation = null,
 }: {
   sessionId: string;
   title: string;
@@ -116,6 +119,8 @@ export function DossierPanel({
   titleFiles?: TitleFile[] | null;
   /** Titre d'habilitation exigé par la formation (migration 47). */
   titleRequired?: boolean;
+  /** Certificats d'habilitation électrique (migration 51) : symboles de la formation. */
+  habilitation?: { session: Omit<HabSession, 'sessionId' | 'trainees'>; data: HabData | null } | null;
   /** Personne connectée : présence sur les fiches remplies à plusieurs. */
   me?: { id: string; name: string } | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
@@ -220,6 +225,16 @@ export function DossierPanel({
   const { done: arCount, total: arTotal } = reussiteCount(arData, arGroups);
   const arLabels = (arSession?.series || []).map((s) => s.model.label).join(' · ');
 
+  // Certificats d'habilitation (symboles attribués par le formateur).
+  const habRef = useRef<HTMLDialogElement>(null);
+  const [habOpen, setHabOpen] = useState(false);
+  const [habData, setHabData] = useState<HabData | null>(habilitation?.data || null);
+  useEffect(() => setHabData(habilitation?.data || null), [habilitation]);
+  const habOn = Boolean(habilitation?.session.symbols.length);
+  const habSession: HabSession | null = habOn && habilitation ? { ...habilitation.session, sessionId, trainees } : null;
+  const habCount = trainees.filter((t) => habData?.trainees?.[t.id]?.avis).length;
+  const habIsDone = habOn && habDone(habData, trainees.map((t) => t.id));
+
   const faiSession = appreciation
     ? {
         sessionId,
@@ -249,8 +264,9 @@ export function DossierPanel({
     (tdt?.completed ? 1 : 0) +
     (faiDone ? 1 : 0) +
     (arDone ? 1 : 0) +
+    (habIsDone ? 1 : 0) +
     (dfOn && dfDone ? 1 : 0);
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (arOn ? 1 : 0) + (dfOn ? 1 : 0) } };
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (arOn ? 1 : 0) + (habOn ? 1 : 0) + (dfOn ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -379,6 +395,13 @@ export function DossierPanel({
         const ar = reussiteInputs(arSession, arData, undefined, titleMissing.map((t) => t.id));
         if (ar.length) parts.push(await buildReussitePdf(ar));
       }
+      if (habSession) {
+        const list = trainees.filter((t) => habData?.trainees?.[t.id]?.avis && hasTitle(t.id));
+        if (list.length) {
+          const { buildHabilitationPdf } = await import('@/lib/pdf-habilitation');
+          parts.push(await buildHabilitationPdf({ ...habSession, trainees: list.map((t) => ({ id: t.id, name: habSession.certNames?.[t.id] || t.name })), entries: habData?.trainees || {} }));
+        }
+      }
       for (const d of documents) {
         const url = res.files[d.id];
         if (!url) continue;
@@ -403,6 +426,9 @@ export function DossierPanel({
             : []),
           ...(faiOn && fin
             ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${attReady.length}/${trainees.length} attestations générées`, done: faiDone && !titleMissing.length }]
+            : []),
+          ...(habSession
+            ? [{ title: 'Certificats d’habilitation électrique', detail: `${habCount}/${trainees.length} avis donnés`, done: habIsDone }]
             : []),
           ...(arSession
             ? [{ title: `Attestations de réussite · ${arLabels}`, detail: `${arCount}/${arTotal} avis donnés${arData?.signature ? ' · signées' : ''}`, done: arDone }]
@@ -729,6 +755,37 @@ export function DossierPanel({
           </div>
         </div>
       )}
+      {habSession && (
+        <div className="doc-list" style={{ marginBottom: 6 }}>
+          <div className="doc-item">
+            <Award size={16} aria-hidden />
+            <span className="doc-item-main">
+              <strong>Certificats d’habilitation · {habSession.symbols.join(' ')}</strong>
+              <small className="hint">
+                Un certificat par stagiaire : le formateur donne son avis et choisit les symboles attribués · {habCount}/{trainees.length} avis donnés
+                {titleMissing.length > 0 && <><br /><span className="fin-warn-inline">Titre d’habilitation manquant : {titleMissing.length} certificat{titleMissing.length > 1 ? 's' : ''} bloqué{titleMissing.length > 1 ? 's' : ''}</span></>}
+              </small>
+            </span>
+            {habIsDone ? (
+              <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+            ) : habCount ? (
+              <span className="badge en_attente">En cours</span>
+            ) : (
+              <span className="badge brouillon">À remplir</span>
+            )}
+            <button
+              type="button"
+              className={`small${canFill && !habIsDone ? ' primary' : ''}`}
+              onClick={() => {
+                setHabOpen(true);
+                habRef.current?.showModal();
+              }}
+            >
+              {canFill && !habIsDone ? <><PenLine size={14} aria-hidden /> Remplir</> : 'Ouvrir'}
+            </button>
+          </div>
+        </div>
+      )}
       {arSession && (
         <div className="doc-list" style={{ marginBottom: 6 }}>
           <div className="doc-item">
@@ -884,6 +941,21 @@ export function DossierPanel({
             me={me}
             onClose={() => faiRef.current?.close()}
             onSaved={(data) => setFaiData(data)}
+          />
+        )}
+      </dialog>
+
+      {/* Certificats d'habilitation */}
+      <dialog ref={habRef} className="modal modal-full" aria-label="Certificats d’habilitation" onClose={() => { setHabOpen(false); router.refresh(); }}>
+        {habOpen && habSession && (
+          <HabilitationEditor
+            session={habSession}
+            initialData={habData}
+            canEdit={canFill}
+            blocked={titleMissing.map((t) => t.id)}
+            me={me}
+            onClose={() => habRef.current?.close()}
+            onSaved={(data) => setHabData(data)}
           />
         )}
       </dialog>

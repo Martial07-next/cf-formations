@@ -20,6 +20,8 @@ import {
 } from '@/app/modeles/actions';
 import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
+import { HabSymbolsField } from '@/components/hab-symbols-field';
+import { formationSymbols } from '@/lib/habilitation';
 import type { DossierDocument } from '@/lib/dossier';
 import { TemplateDossierButton } from '@/components/dossier/document-manager';
 import { askConfirm } from '@/lib/confirm-dialog';
@@ -42,6 +44,7 @@ type Template = {
   titre_habilitation?: boolean;
   fiche_appreciation?: boolean;
   attestation_reussite?: string | null;
+  habilitation_symbols?: string | null;
   authorizations?: string[] | null;
   recyclage_available?: boolean;
   objectifs_recyclage?: string | null;
@@ -68,6 +71,7 @@ function TemplateFields({
   folder?: string | null;
   trainers: TrainerOption[];
 }) {
+  const [titleNow, setTitleNow] = useState(t?.title || '');
   const [modules, setModules] = useState<ModuleRow[]>(
     (t?.modules || []).map((m) => ({ name: m.name, h: String(splitHours(m.duration_hours).h), m: String(splitHours(m.duration_hours).m) }))
   );
@@ -136,7 +140,7 @@ function TemplateFields({
         </label>
         <label style={{ gridColumn: 'span 2' }}>
           Nom de la formation
-          <input name="title" required defaultValue={t?.title || ''} />
+          <input name="title" required defaultValue={t?.title || ''} onChange={(e) => setTitleNow(e.target.value)} />
         </label>
       </div>
 
@@ -235,6 +239,7 @@ function TemplateFields({
           <input type="checkbox" name="titre_habilitation" defaultChecked={Boolean(t?.titre_habilitation)} />
           Titre d’habilitation exigé : case au tour de table, dépôt par QR code, attestation bloquée tant que le titre n’est pas fourni
         </label>
+        <HabSymbolsField title={titleNow} saved={t?.habilitation_symbols} />
         <input type="hidden" name="recyclage_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="recyclage_available" checked={recyclage} onChange={(e) => setRecyclage(e.target.checked)} />
@@ -494,6 +499,9 @@ export function TemplateCatalog({
                         <div className="tpl-flags">
                           {t.tour_de_table !== false && <span className="tpl-flag">Tour de table</span>}
                           {t.titre_habilitation && <span className="tpl-flag">Titre d’habilitation</span>}
+                          {formationSymbols(t.habilitation_symbols, t.title).length > 0 && (
+                            <span className="tpl-flag" title={`Certificat d’habilitation : ${formationSymbols(t.habilitation_symbols, t.title).join(' ')}`}>Certificat {formationSymbols(t.habilitation_symbols, t.title).join(' ')}</span>
+                          )}
                           {t.fiche_appreciation && <span className="tpl-flag">Fiche d’appréciation</span>}
                           {reussiteModels(t.attestation_reussite).length > 0 && (
                             <span className="tpl-flag">Attestations {reussiteModels(t.attestation_reussite).map((m) => m.label.replace(/^IRVE\s+/, '')).join(' · ')}</span>

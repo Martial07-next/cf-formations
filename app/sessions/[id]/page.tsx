@@ -19,6 +19,7 @@ import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
+import { formationSymbols } from '@/lib/habilitation';
 import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -187,6 +188,11 @@ export default async function SessionDetailPage({
   const arModels = reussiteModels((tplOpt as any)?.attestation_reussite);
   const { data: arRow } = arModels.length
     ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
+    : { data: null };
+  // Certificats d'habilitation (migration 51) : symboles de la formation (réglage, sinon intitulé).
+  const habSymbols = (tplOpt as any) ? formationSymbols((tplOpt as any).habilitation_symbols, (tplOpt as any).title || session.title) : [];
+  const { data: habRow } = habSymbols.length
+    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'habilitation').maybeSingle()
     : { data: null };
   // Jours fériés de la période (migration 48) : décalage automatique ou à replanifier.
   const { data: shiftRows } = await supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday');
@@ -395,6 +401,37 @@ export default async function SessionDetailPage({
               canManage={editable}
               tourDeTable={tourDeTable}
               titleFiles={titleError ? null : ((titleRows as any) || [])}
+              habilitation={
+                habSymbols.length
+                  ? {
+                      session: {
+                        title: (tplOpt as any)?.title || session.title,
+                        symbols: habSymbols,
+                        startDate: session.start_at.slice(0, 10),
+                        endDate: session.end_at.slice(0, 10),
+                        hours,
+                        days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
+                        lieu: room?.is_holding
+                          ? null
+                          : (room as any)?.status === 'exterieur'
+                            ? buildingAddress(room as any)
+                            : streetAddress(room)
+                              ? `Centre CF RESEAUX - ${streetAddress(room)!.replace(',', '')}`
+                              : null,
+                        objectifs: (tplOpt as any)?.objectifs ?? null,
+                        director: directorLine(((settings as any)?.director_name as string) || 'Madame Aurélie Lancelle'),
+                        city: legal.city,
+                        siret: legal.siret,
+                        cachet: ((settings as any)?.cachet_image as string) || null,
+                        agrement: ((settings as any)?.agrement as string) || null,
+                        certNames: Object.fromEntries(
+                          enrolled.map((t: any) => [t.id, t.last_name ? `${t.first_name || ''} ${String(t.last_name).toUpperCase()}`.trim() : t.full_name])
+                        ),
+                      },
+                      data: ((habRow as any)?.data as any) || null,
+                    }
+                  : null
+              }
               titleRequired={Boolean((tplOpt as any)?.titre_habilitation) && !customProgram}
               me={profile ? { id: profile.id, name: profile.full_name } : null}
               digiforma={digiformaDocs}
@@ -613,4 +650,11 @@ export default async function SessionDetailPage({
       </section>
     </main>
   );
+}
+
+/** « Madame Aurélie Lancelle » → « LANCELLE Aurélie » (formule du certificat). */
+function directorLine(name: string): string {
+  const words = name.replace(/^(madame|monsieur|mme|mlle|m\.)\s+/i, '').trim().split(/\s+/);
+  if (words.length < 2) return name;
+  return `${words[words.length - 1].toUpperCase()} ${words.slice(0, -1).join(' ')}`;
 }
