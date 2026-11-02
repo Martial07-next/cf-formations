@@ -38,14 +38,15 @@ export function HabSymbolsField({ title, saved }: { title: string; saved: string
           <p className="hint" style={{ margin: '4px 0 6px' }}>
             Symboles possibles pour cette formation{detected.length ? ` (détectés dans l’intitulé : ${detected.join(' ')})` : ''}. Le formateur coche ensuite ceux qu’il attribue à chaque stagiaire.
           </p>
-          <div className="hab-chips">
+          <div className="hab-chips" role="group" aria-label="Symboles possibles">
             {all.map((s) => (
-              <label key={s} className={`hab-chip${chosen.includes(s) ? ' on' : ''}`}>
-                <input type="checkbox" name="hab_symbols" value={s} checked={chosen.includes(s)} onChange={() => toggle(s)} />
+              <button key={s} type="button" className={`hab-chip${chosen.includes(s) ? ' on' : ''}`} aria-pressed={chosen.includes(s)} onClick={() => toggle(s)}>
                 {s}
-              </label>
+              </button>
             ))}
           </div>
+          {/* Valeurs envoyées (champs cachés : aucun défilement de la fenêtre au clic). */}
+          {chosen.map((s) => <input key={s} type="hidden" name="hab_symbols" value={s} />)}
         </>
       )}
     </fieldset>

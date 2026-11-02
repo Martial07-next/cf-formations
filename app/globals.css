@@ -2013,7 +2013,6 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .hab-symbols{margin-top:8px}
 .hab-chips{display:flex;flex-wrap:wrap;gap:5px}
 .hab-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;border:1px solid var(--line-strong);background:#fff;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink-2);font-family:inherit}
-.hab-chip input{position:absolute;opacity:0;pointer-events:none}
 .hab-chip.on{background:#17241b;border-color:#17241b;color:#08fa64}
 .hab-chip:disabled{cursor:default}
 .hab-list{display:flex;flex-direction:column;gap:8px}
