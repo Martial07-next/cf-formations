@@ -9,7 +9,8 @@ import { compareRooms } from '@/lib/buildings';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
 import { shortName } from '@/lib/tracking';
-import { billingStep, type DossierBadge } from '@/lib/billing';
+import { type DossierBadge } from '@/lib/billing';
+import { dossierBadges } from '@/lib/dossier-badges';
 import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { ALERT_DAYS, sessionAlerts, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
@@ -326,41 +327,20 @@ export default async function Page({
 
   // Pastille dossier (migration 30) : « Dossier complet » seulement une fois la facturation faite.
   // L'équipe voit où en est la facturation ; le formateur voit si sa partie est remplie.
-  const dossierBadge: Record<string, DossierBadge> = {};
   const staffView = canManage(profile?.role) || Boolean(profile?.can_invoice);
-  {
-    const [{ data: billRows, error: billError }, { data: invRows }, { data: dfRows, error: dfError }] = await Promise.all([per.billing, per.invoices, per.dfLink]);
-    const noDigiforma = new Set(dfError ? [] : ((dfRows as any[]) || []).filter((r) => !String(r.digiforma_docs_url || '').trim()).map((r) => r.id as string));
-    const billed = new Map<string, boolean>(((billRows as any[]) || []).map((r) => [r.id, Boolean(r.billing_done)]));
-    const invCount: Record<string, number> = {};
-    for (const r of (invRows as any[]) || []) invCount[r.session_id] = (invCount[r.session_id] || 0) + 1;
-    const nowKey = parisNowKey();
-    for (const s of (sessions as any[]) || []) {
-      const complete = Boolean(dossierComplete[s.id]);
-      const done = billError ? true : billed.get(s.id) ?? true;
-      const ended = s.end_at.slice(0, 16) <= nowKey;
-      const left = todo[s.id];
-      if (complete && done) dossierBadge[s.id] = { kind: 'complet' };
-      else if (!staffView) {
-        // Formateur : seulement ses propres sessions (les autres dossiers ne lui sont pas lisibles).
-        if (!profile?.trainer_id || s.trainer_id !== profile.trainer_id) continue;
-        // Formateur : ce qu'il lui reste à remplir, puis « rempli ».
-        if (trainerDone[s.id]) dossierBadge[s.id] = { kind: 'formateur' };
-        else if (left?.trainer) dossierBadge[s.id] = { kind: 'a-remplir', n: left.trainer };
-      } else if (s.status !== 'brouillon' && noDigiforma.has(s.id)) {
-        // Équipe : d'abord le lien Digiforma, pour que la session soit 100 % dématérialisée.
-        dossierBadge[s.id] = { kind: 'digiforma' };
-      } else if (s.status !== 'brouillon' && left) {
-        // Équipe : formateur, puis bureau, puis facturation.
-        if (left.trainer) dossierBadge[s.id] = { kind: 'attente-formateur', n: left.trainer };
-        else if (left.office) dossierBadge[s.id] = { kind: 'bureau', n: left.office };
-        else if (!billError && !done) {
-          const step = billingStep(invCount[s.id] || 0, complete, ended);
-          if (step) dossierBadge[s.id] = { kind: step };
-        }
-      }
-    }
-  }
+  const [{ data: billRows, error: billError }, { data: invRows }, { data: dfRows, error: dfError }] = await Promise.all([per.billing, per.invoices, per.dfLink]);
+  const dossierBadge: Record<string, DossierBadge> = dossierBadges({
+    sessions: (sessions as any[]) || [],
+    todo: { dossierComplete, trainerDone, todo },
+    billRows: billRows as any[],
+    billError,
+    invRows: invRows as any[],
+    dfRows: dfRows as any[],
+    dfError,
+    staffView,
+    trainerId: profile?.trainer_id || null,
+    nowKey: parisNowKey(),
+  });
 
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await per.dayTrainers;

@@ -5,7 +5,8 @@ import { SessionStatus } from '@/components/session-status';
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Pencil, Search, Trash2 } from 'lucide-react';
+import { ChevronRight, FileClock, FolderCheck, Link2, Pencil, Receipt, Search, Trash2 } from 'lucide-react';
+import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { updateSessionStatus, deleteSession } from '@/app/sessions/actions';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -49,6 +50,7 @@ export function SessionsTable({
   myTrainerId,
   nowKey = '',
   rows,
+  dossier = {},
 }: {
   /** Gestion complète (suppression) : administrateur et bureau administratif. */
   isAdmin: boolean;
@@ -58,32 +60,50 @@ export function SessionsTable({
   /** Heure de Paris (en cours / terminée). */
   nowKey?: string;
   rows: Row[];
+  /** Pastille dossier des sessions commencées (même calcul que le planning). */
+  dossier?: Record<string, DossierBadge>;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-  const [period, setPeriod] = useState<'upcoming' | 'past' | 'all'>('upcoming');
+  // En cours (commencée, pas finie), à venir, terminées, toutes (heure de Paris).
+  const phaseOf = (s: Row) => (s.start_at.slice(0, 16) > nowKey ? 'upcoming' : s.end_at.slice(0, 16) < nowKey ? 'past' : 'live');
+  const counts = useMemo(() => {
+    const c = { live: 0, upcoming: 0, past: 0, all: 0 };
+    for (const s of rows) {
+      c[phaseOf(s)]++;
+      c.all++;
+    }
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, nowKey]);
+  const [period, setPeriod] = useState<'live' | 'upcoming' | 'past' | 'all'>(() => (rows.some((s) => phaseOf(s) === 'live') ? 'live' : 'upcoming'));
+  const [incomplete, setIncomplete] = useState(false);
+  // Dossier incomplet : session commencée (hors brouillon) dont le dossier n'est pas « complet ».
+  const isIncomplete = (s: Row) => phaseOf(s) !== 'upcoming' && s.status !== 'brouillon' && Boolean(dossier[s.id]) && dossier[s.id].kind !== 'complet';
+  const incompleteCount = rows.filter(isIncomplete).length;
   const [mine, setMine] = useState(false);
   const router = useRouter();
   // Changements instantanés à l'écran (statut, suppression), confirmés ensuite par le serveur.
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
-  const now = new Date().toISOString();
   const filtered = useMemo(() => {
     const list = rows.filter((s) => {
       if (hidden.has(s.id)) return false;
-      if (period === 'upcoming' && s.end_at < now) return false;
-      if (period === 'past' && s.end_at >= now) return false;
+      if (period !== 'all' && phaseOf(s) !== period) return false;
+      if (incomplete && !isIncomplete(s)) return false;
       if (status && s.status !== status) return false;
       if (mine && s.trainer_id !== myTrainerId) return false;
       if (!query) return true;
       const hay = `${s.title} ${one(s.trainers)?.full_name ?? ''} ${one(s.rooms)?.name ?? ''}`.toLowerCase();
       return hay.includes(query.toLowerCase());
     });
-    return period === 'upcoming' ? [...list].reverse() : list;
-  }, [rows, query, status, period, mine, myTrainerId, now, hidden]);
+    // À venir et en cours : la plus proche d'abord ; terminées : la plus récente d'abord.
+    return period === 'upcoming' || period === 'live' ? [...list].reverse() : list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, query, status, period, mine, myTrainerId, nowKey, hidden, incomplete, dossier]);
 
   function handleStatus(id: string, value: string) {
     setError(null);
@@ -118,13 +138,28 @@ export function SessionsTable({
   return (
     <>
       <div className="toolbar">
-        <div className="toggle-group" role="group" aria-label="Période">
-          {(['upcoming', 'past', 'all'] as const).map((p) => (
-            <button key={p} className={period === p ? 'active' : ''} aria-pressed={period === p} onClick={() => setPeriod(p)}>
-              {p === 'upcoming' ? 'À venir' : p === 'past' ? 'Passées' : 'Toutes'}
+        <div className="toggle-group sessions-periods" role="group" aria-label="Période">
+          {(['live', 'upcoming', 'past', 'all'] as const).map((p) => (
+            <button key={p} className={`${period === p ? 'active' : ''}${p === 'live' ? ' live' : ''}`} aria-pressed={period === p} onClick={() => setPeriod(p)}>
+              {p === 'live' && <span className="live-dot" aria-hidden />}
+              {p === 'live' ? 'En cours' : p === 'upcoming' ? 'À venir' : p === 'past' ? 'Terminées' : 'Toutes'}
+              <span className="period-count">{counts[p]}</span>
             </button>
           ))}
         </div>
+        <label className={`incomplete-toggle${incomplete ? ' on' : ''}`} title="Sessions commencées dont le dossier n’est pas complet">
+          <input
+            type="checkbox"
+            checked={incomplete}
+            onChange={(e) => {
+              setIncomplete(e.target.checked);
+              // Toutes les sessions commencées : la liste correspond au compteur (affinable ensuite).
+              if (e.target.checked) setPeriod('all');
+            }}
+          />
+          Dossier incomplet
+          <span className="period-count">{incompleteCount}</span>
+        </label>
         <span className="spacer" />
         <label className="search">
           <Search size={15} aria-hidden />
@@ -147,7 +182,15 @@ export function SessionsTable({
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
       {filtered.length === 0 ? (
-        <p className="empty">Aucune session ne correspond.</p>
+        <p className="empty">
+          {incomplete
+            ? 'Aucun dossier incomplet dans cette sélection.'
+            : period === 'live'
+              ? 'Aucune session en cours en ce moment.'
+              : period === 'upcoming'
+                ? 'Aucune session à venir.'
+                : 'Aucune session ne correspond.'}
+        </p>
       ) : (
         <>
         <p className="hint" style={{ margin: '0 0 8px' }}>Clique sur une session (ou sur « {isAdmin ? 'Modifier' : 'Ouvrir'} ») pour voir sa fiche{isAdmin ? ', la modifier et ajouter les stagiaires' : ''}.</p>
@@ -161,6 +204,7 @@ export function SessionsTable({
                 <th>Salle</th>
                 <th>Dates</th>
                 <th className="num">Stag.</th>
+                <th>Dossier</th>
                 <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -172,7 +216,7 @@ export function SessionsTable({
                 return (
                   <tr
                     key={s.id}
-                    className="row-link"
+                    className={`row-link${phaseOf(s) === 'live' ? ' is-live' : ''}${phaseOf(s) === 'past' ? ' is-past' : ''}`}
                     onClick={(e) => {
                       // Toute la ligne ouvre la fiche, sauf les commandes (statut, boutons).
                       if ((e.target as HTMLElement).closest('a, button, select, input, label')) return;
@@ -210,6 +254,18 @@ export function SessionsTable({
                     <td>{room?.is_holding ? <span className="badge en_attente">À affecter</span> : room?.name || '-'}</td>
                     <td>{datesLabel(s.start_at, s.end_at)}</td>
                     <td className="num" title={(s as any).reserved ? `dont ${(s as any).reserved} place(s) réservée(s) sans nom` : undefined}>{validated}{s.max_trainees != null ? ` / ${s.max_trainees}` : ''}</td>
+                    <td className="col-dossier">
+                      {dossier[s.id] ? (
+                        <span className={`dossier-pill ${dossier[s.id].kind}`} title={dossierBadgeLabel(dossier[s.id])}>
+                          <DossierIcon kind={dossier[s.id].kind} />
+                          {dossierBadgeLabel(dossier[s.id])}
+                        </span>
+                      ) : phaseOf(s) === 'upcoming' ? (
+                        <span className="hint">À venir</span>
+                      ) : (
+                        <span className="hint">-</span>
+                      )}
+                    </td>
                     <td className="col-actions">
                       <span className="row-actions">
                       <Link href={`/sessions/${s.id}`} className="btn small">
@@ -238,4 +294,11 @@ export function SessionsTable({
       )}
     </>
   );
+}
+
+function DossierIcon({ kind }: { kind: DossierBadge['kind'] }) {
+  if (kind === 'complet') return <FolderCheck size={12} aria-hidden />;
+  if (kind === 'digiforma') return <Link2 size={12} aria-hidden />;
+  if (kind === 'a-facturer' || kind === 'en-cours' || kind === 'en-attente') return <Receipt size={12} aria-hidden />;
+  return <FileClock size={12} aria-hidden />;
 }

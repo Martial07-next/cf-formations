@@ -2027,3 +2027,24 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .hab-line{grid-column:1 / -2;color:var(--muted);font-size:12px}
 @media (max-width:760px){.hab-row{grid-template-columns:1fr}.hab-line{grid-column:auto}}
 .hab-obj{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-weight:600;font-size:13px}.hab-obj textarea{font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;resize:vertical}
+
+/* ---- Page Sessions : périodes, dossier incomplet ---- */
+.sessions-periods button{display:inline-flex;align-items:center;gap:6px}
+.period-count{display:inline-grid;place-items:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.toggle-group button.active .period-count{background:rgba(255,255,255,.16);color:#08fa64}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#08fa64;box-shadow:0 0 0 0 rgba(8,250,100,.6);animation:cityPulse 1.8s infinite}
+.incomplete-toggle{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;min-height:38px;border:1px solid var(--line-strong);border-radius:999px;background:#fff;font-size:13px;font-weight:700;cursor:pointer;user-select:none}
+.incomplete-toggle input{width:15px;height:15px;accent-color:#17241b;margin:0}
+.incomplete-toggle.on{background:#fff4e5;border-color:#d97706;color:#8a4b00}
+.incomplete-toggle.on .period-count{background:#d97706;color:#fff}
+table.data.sessions-list tr.is-live td:first-child{box-shadow:inset 3px 0 0 #08fa64}
+table.data.sessions-list tr.is-past td{color:var(--muted)}
+table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
+.dossier-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;background:var(--surface-2);color:var(--ink-2)}
+.dossier-pill.complet{background:var(--ok-bg);color:var(--ok-ink)}
+.dossier-pill.digiforma,.dossier-pill.formateur{background:#e8f0fd;color:#1d4f91}
+.dossier-pill.a-remplir{background:#fdeceb;color:var(--cf-red-ink)}
+.dossier-pill.attente-formateur,.dossier-pill.bureau{background:#efe9fb;color:#5b3a99}
+.dossier-pill.a-facturer,.dossier-pill.en-cours{background:#fff1d6;color:#8a4b00}
+.dossier-pill.en-attente{background:#eef0f3;color:var(--muted)}
+@media (max-width:760px){.sessions-periods{width:100%;overflow-x:auto}.sessions-periods button{padding:6px 10px}}
