@@ -142,6 +142,7 @@ export function DossierPanel({
       competences: string | null;
       objectifsRecyclage?: string | null;
       competencesRecyclage?: string | null;
+      hoursRecyclage?: number | null;
       days: number;
       hours: number;
       address: string | null;

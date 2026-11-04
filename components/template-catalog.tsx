@@ -50,6 +50,7 @@ type Template = {
   authorizations?: string[] | null;
   recyclage_available?: boolean;
   objectifs_recyclage?: string | null;
+  duration_hours_recyclage?: number | null;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -249,6 +250,32 @@ function TemplateFields({
           <input type="checkbox" name="recyclage_available" checked={recyclage} onChange={(e) => setRecyclage(e.target.checked)} />
           Formation disponible en recyclage (boutons Initial / Recyclage pour chaque stagiaire de la session)
         </label>
+        {recyclage && (
+          <div className="field recyc-duration">
+            <span style={{ fontWeight: 600 }}>
+              Durée du recyclage <span className="hint" style={{ fontWeight: 500 }}>(optionnel · vide = même durée que l’initiale)</span>
+            </span>
+            <span className="duration-input">
+              <input
+                name="duration_rec_h"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                aria-label="Heures du recyclage"
+                placeholder="—"
+                defaultValue={t?.duration_hours_recyclage ? splitHours(Number(t.duration_hours_recyclage)).h : ''}
+              />
+              <span>h</span>
+              <select name="duration_rec_min" aria-label="Minutes du recyclage" defaultValue={t?.duration_hours_recyclage ? String(splitHours(Number(t.duration_hours_recyclage)).m) : '0'}>
+                {['0', '15', '30', '45'].map((m) => (
+                  <option key={m} value={m}>{m.padStart(2, '0')}</option>
+                ))}
+              </select>
+              <span>min</span>
+            </span>
+            <span className="hint">Reprise sur les attestations des stagiaires inscrits en recyclage.</span>
+          </div>
+        )}
         <input type="hidden" name="reussite_present" value="1" />
         <fieldset className="ar-models">
           <legend>Attestations de réussite (remplies et signées par le formateur)</legend>

@@ -30,6 +30,8 @@ export type FinFormationInput = {
   endDate: string;
   days: number; // jours précis à la demi-journée (ex. 3.5)
   hours: number;
+  /** Durée des stagiaires en recyclage, si différente (heures). */
+  hoursRecyclage?: number | null;
   address: string | null; // ex. 20 rue du Champ de Tir, 59553 Cuincy
   legal?: Legal | null;
   signataire: string;
@@ -235,7 +237,10 @@ function attestationBody(page: PDFPage | null, ctx: Ctx, input: FinFormationInpu
   y -= 18.1 * k;
   text(page, `Date de réalisation →  ${longPeriod(input.startDate, input.endDate)}`, 23.1, y, B, f.bold);
   y -= 17.25 * k;
-  text(page, `Durée prévue → ${formatDays(input.days)} (${hoursText(input.hours)})`, 23.1, y, B, f.bold);
+  const recH = recyc && input.hoursRecyclage ? Number(input.hoursRecyclage) : null;
+  // Recyclage plus court : jours recalculés à la demi-journée (7 h par jour).
+  const recDays = recH ? Math.max(0.5, Math.round((recH / 7) * 2) / 2) : null;
+  text(page, `Durée prévue → ${formatDays(recDays ?? input.days)} (${hoursText(recH ?? input.hours)})`, 23.1, y, B, f.bold);
   y -= 17.25 * k;
   y = labelValue(page, { text: 'Lieu de réalisation → ', font: f.bold }, { text: input.address || 'CF Réseaux', font: f.regular }, B, y, step);
 

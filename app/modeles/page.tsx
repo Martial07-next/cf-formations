@@ -36,6 +36,8 @@ export default async function ModelesPage() {
   // Certificats d'habilitation (migration 51) : null = symboles détectés dans l'intitulé.
   const { data: habOpts } = await supabase.from('templates').select('id, habilitation_symbols');
   const { data: habObj } = await supabase.from('templates').select('id, objectifs_habilitation');
+  // Durée du recyclage (migration 54).
+  const { data: recDur } = await supabase.from('templates').select('id, duration_hours_recyclage');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -60,6 +62,7 @@ export default async function ModelesPage() {
     recyclage_available: Boolean(((recOpts as any[]) || []).find((x) => x.id === t.id)?.recyclage_available),
     objectifs_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs_recyclage ?? null,
     competences_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.competences_recyclage ?? null,
+    duration_hours_recyclage: ((recDur as any[]) || []).find((x) => x.id === t.id)?.duration_hours_recyclage ?? null,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

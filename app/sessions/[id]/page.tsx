@@ -479,6 +479,7 @@ export default async function SessionDetailPage({
                             // Jours précis : un jour de moins de 5 h compte pour une demi-journée.
                             days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
                             hours,
+                            hoursRecyclage: (tplOpt as any)?.duration_hours_recyclage ?? null,
                             address: room?.is_holding ? null : streetAddress(room),
                             signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
                             agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',

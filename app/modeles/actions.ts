@@ -42,6 +42,14 @@ function readTemplate(formData: FormData) {
     ...(formData.has('recyclage_present')
       ? {
           recyclage_available: formData.get('recyclage_available') === 'on',
+          ...(formData.has('duration_rec_h')
+            ? {
+                duration_hours_recyclage:
+                  String(formData.get('duration_rec_h') || '').trim() === ''
+                    ? null
+                    : ((Number(formData.get('duration_rec_h')) || 0) * 60 + (Number(formData.get('duration_rec_min')) || 0)) / 60 || null,
+              }
+            : {}),
           ...(formData.has('objectifs_recyclage')
             ? { objectifs_recyclage: get('objectifs_recyclage') || null, competences_recyclage: get('competences_recyclage') || null }
             : {}),
@@ -58,7 +66,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['duration_hours_recyclage'], ['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore
