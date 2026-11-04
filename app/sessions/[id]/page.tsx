@@ -1,4 +1,7 @@
 import { SessionStatus } from '@/components/session-status';
+import { PapersCarousel } from '@/components/papers-carousel';
+import { SessionDeparts } from '@/components/departs/session-departs';
+import { DEPART_SELECT, departureAllowed, type EarlyDeparture } from '@/lib/departs';
 import { readDfLinks, dfDoneMap, sameDfUrl } from '@/lib/digiforma-links';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadStaff } from '@/lib/tracking';
@@ -108,6 +111,8 @@ export default async function SessionDetailPage({
     // Lien Digiforma des autres documents (migration 36).
     // Plusieurs liens (migration 55), sinon le lien unique.
     digiforma: start(supabase.from('sessions').select('digiforma_docs_url, digiforma_links').eq('id', id).maybeSingle()),
+    // Départs anticipés (migration 56).
+    departs: start(supabase.from('early_departures').select(DEPART_SELECT).eq('session_id', id).order('departed_at')),
     digiformaDone: start(supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'digiforma').maybeSingle()),
     track: Promise.all([
       start(supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle()),
@@ -368,6 +373,11 @@ export default async function SessionDetailPage({
   const otherOpenLoans = allLoans.filter((l) => l.session_id !== id && ['prete', 'incomplet'].includes(loanStatus(l)));
   const addressOf = (tid: string) => ((addrRows as any[]) || []).find((r) => r.id === tid)?.address || null;
 
+  // Départs anticipés (migration 56) : possibles selon la formation (jamais pour l'IRVE).
+  const { data: departRows, error: departError } = await early.departs;
+  const departures = ((departRows as EarlyDeparture[]) || []);
+  const departOn = departureAllowed((tplOpt as any)?.early_departure, (tplOpt as any)?.title || session.title);
+
   // Session commencée / terminée : liste des stagiaires figée, fiche réorganisée.
   const started = sessionStarted(session.start_at);
   const ended = session.end_at.slice(0, 16) <= parisNowKey();
@@ -377,35 +387,83 @@ export default async function SessionDetailPage({
   // Blocs de travail (vêtements, autorisations, dossier) : juste après les stagiaires.
   const workPanels = (
       <>
-          {!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn) && (
-            <SessionLoans
-              sessionId={session.id}
-              trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
-              loans={sessionLoans}
-              otherOpen={otherOpenLoans}
-              canManage={editable}
-              cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
-            />
-          )}
-
-          {!trackError && (
-            <SessionAutorisations
-              sessionId={session.id}
-              title={session.title}
-              kinds={autorKinds}
-              overridden={(trackRow as any)?.authorizations != null}
-              canManage={editable}
-              canCollect={canEditStartTimes(profile?.role) || isOwn}
-              rows={validatedTrainees.map((t) => ({
-                id: t.id,
-                name: t.name,
-                auths: autorRows.filter((a) => a.trainee_id === t.id),
-                docSigs: docSigs.filter((x) => x.trainee_id === t.id),
-              }))}
-              customDocs={trainingDocs}
-              cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
-            />
-          )}
+          <PapersCarousel
+            slides={[
+              ...(!trackError
+                ? [{
+                    key: 'autorisations',
+                    label: 'Autorisations',
+                    node: (
+                      <SessionAutorisations
+                        sessionId={session.id}
+                        title={session.title}
+                        kinds={autorKinds}
+                        overridden={(trackRow as any)?.authorizations != null}
+                        canManage={editable}
+                        canCollect={canEditStartTimes(profile?.role) || isOwn}
+                        rows={validatedTrainees.map((t) => ({
+                          id: t.id,
+                          name: t.name,
+                          auths: autorRows.filter((a) => a.trainee_id === t.id),
+                          docSigs: docSigs.filter((x) => x.trainee_id === t.id),
+                        }))}
+                        customDocs={trainingDocs}
+                        cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+                      />
+                    ),
+                  }]
+                : []),
+              ...(!loanError && builtinActive(allDocs, 'vetements') && (canEditStartTimes(profile?.role) || isOwn)
+                ? [{
+                    key: 'vetements',
+                    label: 'Vêtements prêtés',
+                    badge: sessionLoans.length ? String(sessionLoans.length) : null,
+                    node: (
+                      <SessionLoans
+                        sessionId={session.id}
+                        trainees={validatedTrainees.map((t) => ({ id: t.id, name: t.name, address: addressOf(t.id) }))}
+                        loans={sessionLoans}
+                        otherOpen={otherOpenLoans}
+                        canManage={editable}
+                        cachet={editable ? ((settings as any)?.cachet_image as string) || null : null}
+                      />
+                    ),
+                  }]
+                : []),
+              ...(!departError && (departOn || departures.length)
+                ? [{
+                    key: 'departs',
+                    label: 'Départs anticipés',
+                    badge: departures.length ? String(departures.length) : null,
+                    node: (
+                      <SessionDeparts
+                        sessionId={session.id}
+                        departures={departures}
+                        trainees={validatedTrainees}
+                        canCollect={departOn && (canEditStartTimes(profile?.role) || isOwn)}
+                        canManage={editable}
+                        doc={
+                          editable
+                            ? {
+                                formationTitle: (tplOpt as any)?.title || session.title,
+                                sessionTitle: session.title,
+                                startDate: session.start_at.slice(0, 10),
+                                endDate: session.end_at.slice(0, 10),
+                                lieu: room?.is_holding ? null : (room as any)?.status === 'exterieur' ? buildingAddress(room as any) : streetAddress(room),
+                                director: directorLine(((settings as any)?.director_name as string) || 'Madame Aurélie Lancelle'),
+                                city: legal.city,
+                                siret: legal.siret,
+                                nda: legal.nda,
+                                cachet: ((settings as any)?.cachet_image as string) || null,
+                              }
+                            : null
+                        }
+                      />
+                    ),
+                  }]
+                : []),
+            ]}
+          />
 
           {dossierError ? (
             editable && (

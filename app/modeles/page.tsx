@@ -38,6 +38,8 @@ export default async function ModelesPage() {
   const { data: habObj } = await supabase.from('templates').select('id, objectifs_habilitation');
   // Durée du recyclage (migration 54).
   const { data: recDur } = await supabase.from('templates').select('id, duration_hours_recyclage');
+  // Départ anticipé (migration 56).
+  const { data: depOpts } = await supabase.from('templates').select('id, early_departure');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   const rows = (templates || []).map((t: any) => ({
@@ -63,6 +65,7 @@ export default async function ModelesPage() {
     objectifs_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.objectifs_recyclage ?? null,
     competences_recyclage: ((recOpts as any[]) || []).find((x) => x.id === t.id)?.competences_recyclage ?? null,
     duration_hours_recyclage: ((recDur as any[]) || []).find((x) => x.id === t.id)?.duration_hours_recyclage ?? null,
+    early_departure: ((depOpts as any[]) || []).find((x) => x.id === t.id)?.early_departure ?? null,
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

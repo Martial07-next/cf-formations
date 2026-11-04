@@ -2090,3 +2090,31 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .smart-main strong{font-size:13px}
 .smart-main small{font-size:11.5px;color:var(--muted)}
 .smart-ok{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ok-ink)}
+
+/* Papiers stagiaires : un volet à la fois (autorisations, vêtements, départs anticipés). */
+.papers-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.papers-head h2{margin:0}
+.papers-nav{display:flex;align-items:center;gap:4px;min-width:0;flex-wrap:nowrap}
+.papers-tabs{display:flex;gap:4px;background:var(--surface-2,#f1f4f1);border-radius:999px;padding:3px;overflow-x:auto;scrollbar-width:none}
+.papers-tabs::-webkit-scrollbar{display:none}
+.papers-tabs button{border:0;background:transparent;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;min-height:0}
+.papers-tabs button.on{background:var(--cf-dark,#17241B);color:#08FA64}
+.papers-tabs button:focus-visible{outline:2px solid var(--cf-mint-strong);outline-offset:1px}
+.papers-badge{background:#fde7c7;color:#7a4300;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800}
+.papers-tabs button.on .papers-badge{background:#08FA64;color:#17241B}
+.papers-slide>.panel{border:0;box-shadow:none;padding:0;margin:0;background:transparent}
+.papers-slide>.panel>.panel-head>h2{display:none}
+.papers-slide>.panel>.panel-head{justify-content:flex-end}
+.papers-slide>.panel>.panel-head:not(:has(button)){display:none}
+.depart-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.depart-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.depart-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.depart-main small{color:var(--muted);font-size:12.5px}
+.autor-card.depart-when{display:flex;flex-direction:row;gap:12px;align-items:center}
+.depart-when svg{flex-shrink:0;color:var(--cf-mint-strong)}
+.depart-when div{display:flex;flex-direction:column;gap:2px}
+.depart-when small{color:var(--muted);font-size:12.5px}
+.depart-reasons{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px}
+.depart-reason{display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:600}
+.depart-reason.on{border-color:var(--cf-mint-strong);background:var(--cf-mint-soft)}
+@media (max-width:640px){.papers-nav{width:100%}.papers-tabs{flex:1}}

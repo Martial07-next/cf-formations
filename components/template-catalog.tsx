@@ -1,6 +1,7 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
+import { departureAllowed } from '@/lib/departs';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
 import { FontsKit } from '@/components/fonts-kit';
@@ -51,6 +52,7 @@ type Template = {
   recyclage_available?: boolean;
   objectifs_recyclage?: string | null;
   duration_hours_recyclage?: number | null;
+  early_departure?: boolean | null;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -336,6 +338,11 @@ function TemplateFields({
             </>
           )}
         </div>
+        <input type="hidden" name="depart_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="early_departure" defaultChecked={departureAllowed(t?.early_departure, t?.title || '')} />
+          Départ anticipé possible (attestation et décharge de responsabilité par QR code) · décoché d’office pour l’IRVE
+        </label>
         <input type="hidden" name="auth_present" value="1" />
         <div className="autor-kinds" role="group" aria-label="Autorisations à faire remplir aux stagiaires">
           <span className="hint" style={{ fontWeight: 700 }}>Autorisations stagiaire (QR code, une seule fois par stagiaire) :</span>

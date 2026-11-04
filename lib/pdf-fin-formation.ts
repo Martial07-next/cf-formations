@@ -569,3 +569,109 @@ export async function buildHabilitationAttestationsPdf(input: HabilitationPdfInp
   }
   return ctx.doc.save();
 }
+
+// ---------------------------------------------------------------------------
+// Attestation de départ anticipé et décharge de responsabilité (migration 56)
+// ---------------------------------------------------------------------------
+
+export type DepartPdfInput = {
+  items: {
+    name: string;
+    company: string | null;
+    departedAt: string; // ISO (heure de l'envoi)
+    reason: string; // motif complet (« Autre » remplacé par la précision)
+    city: string | null;
+    signature: string; // data URL PNG
+  }[];
+  formationTitle: string;
+  sessionTitle: string;
+  startDate: string;
+  endDate: string;
+  lieu: string | null;
+  director: string;
+  city: string;
+  siret: string | null;
+  nda: string | null;
+  cachet: string | null;
+};
+
+const parisWhen = (iso: string) => {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); // AAAA-MM-JJ
+  const time = d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+  return { day, time };
+};
+
+/** Une page par attestation, même identité que l'attestation de fin de formation. */
+export async function buildDepartPdf(input: DepartPdfInput): Promise<Uint8Array> {
+  const { ctx, tpl } = await setup('/templates/attestation-fin-formation.pdf');
+  ctx.doc.setTitle(`Départs anticipés - ${input.sessionTitle}`);
+  ctx.doc.setAuthor('CF Réseaux');
+  ctx.cachet = await embedCachet(ctx.doc, input.cachet);
+  const [bg] = await ctx.doc.embedPdf(tpl, [0]);
+  const { f } = ctx;
+  const footerInput = { agrement: '', legal: { siret: input.siret, nda: input.nda, city: input.city } };
+  // Pied de page centré comme celui du certificat d'habilitation.
+  const center = 206.8 + f.title.widthOfTextAtSize(keep(f.title, 'HABILITATION ÉLECTRIQUE'), 10.1) / 2;
+  const line2 = 'DÉCHARGE DE RESPONSABILITÉ';
+  const line2x = center - f.title.widthOfTextAtSize(keep(f.title, line2), 10.1) / 2;
+  const B = 12.5;
+  const step = 17.27;
+
+  for (const it of input.items) {
+    const when = parisWhen(it.departedAt);
+    const page = ctx.doc.addPage([W, H]);
+    page.drawPage(bg, { x: 0, y: -7.83, width: W, height: H });
+    text(page, 'ATTESTATION DE', 18.7, 726.3, 38.7, f.title);
+    text(page, 'DÉPART ANTICIPÉ', 18.7, 685.9, 38.7, f.title);
+    text(page, 'et décharge de responsabilité', 23.1, 632.5, 14, f.regular);
+
+    let y = 588;
+    heading(page, ctx, 'LE STAGIAIRE', y);
+    y -= 22;
+    y = labelValue(page, { text: 'M./Mme → ', font: f.semibold }, { text: it.name, font: f.bold }, B, y, step);
+    if (it.company) {
+      y -= step;
+      y = labelValue(page, { text: 'Entreprise → ', font: f.semibold }, { text: it.company, font: f.regular }, B, y, step);
+    }
+
+    y -= 34;
+    heading(page, ctx, 'LA FORMATION', y);
+    y -= 22;
+    y = labelValue(page, { text: 'Intitulé de formation → ', font: f.semibold }, { text: input.formationTitle, font: f.regular }, B, y, step);
+    y -= step;
+    y = labelValue(page, { text: 'Dates → ', font: f.semibold }, { text: longPeriod(input.startDate, input.endDate), font: f.regular }, B, y, step);
+    y -= step;
+    y = labelValue(page, { text: 'Lieu → ', font: f.semibold }, { text: input.lieu || 'CF Réseaux', font: f.regular }, B, y, step);
+
+    y -= 34;
+    heading(page, ctx, 'LE DÉPART', y);
+    y -= 22;
+    text(page, `Date → ${longDate(when.day)}`, 23.1, y, B, f.bold);
+    y -= step;
+    text(page, `Heure de départ → ${when.time}`, 23.1, y, B, f.bold);
+    y -= step;
+    y = labelValue(page, { text: 'Raison du départ → ', font: f.bold }, { text: it.reason, font: f.regular }, B, y, step);
+
+    y -= 34;
+    heading(page, ctx, 'DÉCHARGE DE RESPONSABILITÉ', y);
+    y -= 6;
+    const body =
+      `Je, soussigné(e) ${it.name}, participant(e) à la formation « ${input.formationTitle} » dispensée par CF Réseaux, reconnais par la présente quitter la formation plus tôt. ` +
+      'Je certifie que cette décision a été prise en toute connaissance de cause et sans contrainte de la part de l’organisme de formation. ' +
+      'En conséquence, je décharge l’organisme de formation CF Réseaux, ainsi que ses responsables et formateurs, de toute responsabilité liée à ce départ anticipé.';
+    for (const l of wrapText(f.regular, body, B, 572 - 23.1)) {
+      y -= step;
+      text(page, l, 23.1, y, B, f.regular);
+    }
+
+    // Signatures : stagiaire à gauche, organisme (cachet) à droite.
+    text(page, `Fait à ${it.city || input.city || 'Cuincy'}, le ${longDate(when.day)} à ${when.time}`, 23.1, 160, 12.88, f.bold);
+    text(page, 'SIGNATURE DU STAGIAIRE', 23.1, 143.8, 13.65, f.semibold);
+    stamp(page, await embedCachet(ctx.doc, it.signature), { x: 23.1, y: 66, w: 170, h: 70 });
+    text(page, 'SIGNATURE ET CACHET', 395.6, 143.8, 13.65, f.semibold);
+    stamp(page, ctx.cachet, { x: 376.5, y: 58, w: 150, h: 80 });
+    footer(page, f, 'ATTESTATION DE DÉPART ANTICIPÉ', line2, line2x, footerInput);
+  }
+  return ctx.doc.save();
+}
