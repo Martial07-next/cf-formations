@@ -59,3 +59,9 @@ export function inDays(startAt: string, todayIso: string): string {
   const d = Math.round((new Date(startAt.slice(0, 10) + 'T00:00:00Z').getTime() - new Date(todayIso + 'T00:00:00Z').getTime()) / 86400000);
   return d <= 0 ? 'aujourd’hui' : d === 1 ? 'demain' : `dans ${d} jours`;
 }
+
+/** Pastille courte : « Aujourd’hui », « Demain », « J-3 ». */
+export function daysLeft(startAt: string, todayIso: string): string {
+  const d = Math.round((new Date(startAt.slice(0, 10) + 'T00:00:00Z').getTime() - new Date(todayIso + 'T00:00:00Z').getTime()) / 86400000);
+  return d <= 0 ? 'Aujourd’hui' : d === 1 ? 'Demain' : `Dans ${d} jours`;
+}

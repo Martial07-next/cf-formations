@@ -21,7 +21,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { parisNowKey, parisToday } from '@/lib/paris-time';
 import { addDays, effectiveDayTime, isoDate, weekdaysBetween } from '@/lib/week';
 import { computeDossierTodo } from '@/lib/dossier-todo';
-import { ALERT_PERIOD, alertHorizon, inDays, sessionAlerts, sessionsWithoutDigiforma } from '@/lib/session-alerts';
+import { ALERT_PERIOD, alertHorizon, daysLeft, inDays, sessionAlerts, sessionsWithoutDigiforma } from '@/lib/session-alerts';
 import { conventionStatus } from '@/lib/poec';
 import { ABSENCE_LABEL, frDate } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -162,8 +162,9 @@ export default async function DashboardPage() {
     toPrepare = sessionAlerts((next as any[]) || [], today, noDf).map((a) => ({
       href: `/sessions/${a.id}`,
       title: a.title,
-      meta: `${inDays(a.startAt, today)} · ${a.reasons.join(', ')}`,
-      badge: { text: a.urgent ? 'Urgent' : 'À préparer', tone: a.urgent ? 'urgent' : 'warn' },
+      meta: a.reasons.join(', '),
+      // Pastille : jours restants avant le début (rouge à 2 jours ou moins).
+      badge: { text: daysLeft(a.startAt, today), tone: a.urgent ? 'urgent' : 'warn' },
     }));
     todayAll = all
       .filter((s) => weekdaysBetween(s.start_at, s.end_at).includes(today))
