@@ -1,6 +1,6 @@
 'use client';
 
-import { DigiformaDocs } from '@/components/dossier/digiforma-docs';
+import { DigiformaDocs, type DigiformaInfo } from '@/components/dossier/digiforma-docs';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -110,7 +110,7 @@ export function DossierPanel({
   /** Remplaçant certains jours : jour → nom du formateur ce jour-là. */
   dayTrainerNames?: Record<string, string>;
   /** Lien Digiforma des autres documents à remplir (null si la migration 36 manque). */
-  digiforma?: { url: string | null; done: boolean } | null;
+  digiforma?: DigiformaInfo | null;
   /** Facturation faite (migration 30) ; null = pas de suivi de facturation. */
   billingDone?: boolean | null;
   /** Attestations de réussite (formation avec un modèle choisi, migration 39). */
@@ -255,9 +255,12 @@ export function DossierPanel({
   useEffect(() => setLocalEntries(entries), [entries]);
 
   // Documents à remplir sur Digiforma (lien renseigné) : coché par le formateur.
-  const [dfDone, setDfDone] = useState(Boolean(digiforma?.done));
-  useEffect(() => setDfDone(Boolean(digiforma?.done)), [digiforma?.done]);
-  const dfOn = Boolean(digiforma?.url);
+  // Tous les liens Digiforma cochés « fait » (un lien par session Digiforma).
+  const allDfDone = (d: DigiformaInfo | null | undefined) => Boolean(d?.links.length) && d!.links.every((l) => d!.done[l.id]);
+  const [dfDone, setDfDone] = useState(allDfDone(digiforma));
+  const dfKey = JSON.stringify(digiforma?.done || {});
+  useEffect(() => setDfDone(allDfDone(digiforma)), [dfKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dfOn = Boolean(digiforma?.links.length);
   // Documents obligatoires terminés.
   const requiredDocs = documents.filter((d) => d.required && d.filled_by !== 'aucun');
   const docsDone =
@@ -525,7 +528,7 @@ export function DossierPanel({
       {error && <div role="alert" className="alert alert-error">{error}</div>}
 
       {digiforma && (
-        <DigiformaDocs sessionId={sessionId} url={digiforma.url} done={dfDone} canEdit={canManage} canFill={canFill} onDone={setDfDone} />
+        <DigiformaDocs sessionId={sessionId} info={digiforma} canEdit={canManage} canFill={canFill} onAllDone={setDfDone} />
       )}
 
       <div className="dossier-actions">

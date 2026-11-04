@@ -10,6 +10,7 @@ import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTraineeConflictsBulk, sessionLinks, upsertSessionLinks } from '@/lib/trainee-conflict';
 
 import { graftOnCatalogHours } from '@/lib/graft';
+import { readDfLinks, type DfLink } from '@/lib/digiforma-links';
 
 export type ActionResult = { ok: true; notice?: string } | { ok: false; error: string };
 
@@ -654,19 +655,97 @@ export async function setTraineeCursus(sessionId: string, traineeIds: string[], 
 }
 
 /** Lien Digiforma des autres documents à remplir (vide = retiré). */
+const httpUrl = (raw: string) => {
+  const url = String(raw || '').trim().slice(0, 1000);
+  try {
+    return ['https:', 'http:'].includes(new URL(url).protocol) ? url : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Lien Digiforma unique (assistant de création, ancien format) : remplace le premier lien. */
 export async function setDigiformaDocsUrl(sessionId: string, raw: string): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const url = String(raw || '').trim().slice(0, 1000);
-  if (url) {
-    let ok = false;
-    try {
-      ok = ['https:', 'http:'].includes(new URL(url).protocol);
-    } catch {}
-    if (!ok) return { ok: false, error: 'Colle un lien complet (qui commence par https://).' };
-  }
+  if (url && !httpUrl(url)) return { ok: false, error: 'Colle un lien complet (qui commence par https://).' };
   const supabase = await createClient();
+  const { data: cur, error: readError } = await supabase.from('sessions').select('digiforma_docs_url, digiforma_links').eq('id', sessionId).maybeSingle();
+  if (!readError) {
+    const links = readDfLinks(cur as any);
+    const next: DfLink[] = url
+      ? links.length ? [{ ...links[0], url }, ...links.slice(1)] : [{ id: 'main', label: 'Session Digiforma', url, audience: 'all' }]
+      : links.slice(1);
+    return setDigiformaLinks(sessionId, next);
+  }
   const { error } = await supabase.from('sessions').update({ digiforma_docs_url: url || null }).eq('id', sessionId);
   if (error) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
   revalidatePath(`/sessions/${sessionId}`);
   return { ok: true };
+}
+
+/** Liens Digiforma de la session (migration 55) : nom, lien, stagiaires concernés. */
+export async function setDigiformaLinks(sessionId: string, input: DfLink[]): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  if (!Array.isArray(input) || input.length > 8) return { ok: false, error: 'Huit liens au maximum.' };
+  const links: DfLink[] = [];
+  for (const [i, l] of input.entries()) {
+    const url = httpUrl(l?.url || '');
+    if (!url) return { ok: false, error: `Lien ${i + 1} : colle un lien complet (qui commence par https://).` };
+    const audience = (['all', 'group', 'others', 'custom'] as const).includes(l.audience as any) ? l.audience : 'all';
+    links.push({
+      id: /^[a-z0-9-]{1,40}$/i.test(String(l.id || '')) ? String(l.id) : `l${Date.now().toString(36)}${i}`,
+      label: String(l.label || '').trim().slice(0, 80) || 'Session Digiforma',
+      url,
+      audience,
+      ...(audience === 'custom' ? { trainee_ids: (l.trainee_ids || []).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200) } : {}),
+    });
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('sessions')
+    .update({ digiforma_links: links.length ? links : null, digiforma_docs_url: links[0]?.url || null })
+    .eq('id', sessionId);
+  if (error) {
+    // Sans la migration 55 : un seul lien, pour tous.
+    if (links.length <= 1 && (!links[0] || links[0].audience === 'all')) {
+      const { error: e2 } = await supabase.from('sessions').update({ digiforma_docs_url: links[0]?.url || null }).eq('id', sessionId);
+      if (e2) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
+    } else return { ok: false, error: 'Plusieurs liens : exécute d’abord la migration 55 (supabase/migration_phase55.sql) dans Supabase.' };
+  }
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+export type DfCandidate = { sessionId: string; title: string; start: string; end: string; trainer: string | null; links: DfLink[] };
+
+/**
+ * Liens Digiforma à reprendre : sessions proches (3 semaines avant / après)
+ * du même parcours ou qui ont des stagiaires en commun, avec un lien.
+ */
+export async function digiformaCandidates(sessionId: string): Promise<{ ok: true; list: DfCandidate[] } | { ok: false; error: string }> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: me } = await supabase.from('sessions').select('id, start_at, end_at, poec_id, session_trainees(trainee_id)').eq('id', sessionId).maybeSingle();
+  if (!me) return { ok: false, error: 'Session introuvable.' };
+  const day = 86400000;
+  const from = new Date(new Date((me as any).start_at).getTime() - 21 * day).toISOString();
+  const to = new Date(new Date((me as any).end_at).getTime() + 21 * day).toISOString();
+  let { data, error } = await supabase
+    .from('sessions')
+    .select('id, title, start_at, end_at, poec_id, digiforma_docs_url, digiforma_links, trainers(full_name), session_trainees(trainee_id)')
+    .neq('id', sessionId)
+    .gte('end_at', from)
+    .lte('start_at', to)
+    .order('start_at');
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 55 (supabase/migration_phase55.sql) dans Supabase.' };
+  const mine = new Set((((me as any).session_trainees as any[]) || []).map((t) => t.trainee_id));
+  const list = ((data as any[]) || [])
+    .filter((s) => readDfLinks(s).length)
+    .filter((s) => ((me as any).poec_id && s.poec_id === (me as any).poec_id) || ((s.session_trainees as any[]) || []).some((t) => mine.has(t.trainee_id)))
+    .map((s) => {
+      const tr = Array.isArray(s.trainers) ? s.trainers[0] : s.trainers;
+      return { sessionId: s.id, title: s.title, start: s.start_at, end: s.end_at, trainer: tr?.full_name || null, links: readDfLinks(s) };
+    });
+  return { ok: true, list };
 }

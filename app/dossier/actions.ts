@@ -459,6 +459,24 @@ export async function setDigiformaDone(sessionId: string, done: boolean): Promis
   return { ok: true };
 }
 
+/** « Fait sur Digiforma » lien par lien ; le dossier compte « fait » quand tous les liens le sont. */
+export async function setDigiformaLinkDone(sessionId: string, linkId: string, done: boolean, linkIds: string[]): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const now = new Date().toISOString();
+  const { data: cur } = await r.supabase.from('session_forms').select('data, completed').eq('session_id', sessionId).eq('kind', 'digiforma').maybeSingle();
+  const prev = ((cur as any)?.data?.done as Record<string, boolean> | undefined) || Object.fromEntries(linkIds.map((id) => [id, Boolean((cur as any)?.completed)]));
+  const map = { ...prev, [linkId]: done };
+  const completed = linkIds.length > 0 && linkIds.every((id) => map[id]);
+  const { error } = await r.supabase.from('session_forms').upsert(
+    { session_id: sessionId, kind: 'digiforma', data: { done: map }, completed, completed_at: completed ? now : null, updated_by: r.profile.id, updated_at: now },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
+  refresh(sessionId);
+  return { ok: true };
+}
+
 // ---- Fiches à plusieurs, en direct (migration 47) ----------------------------
 
 type FormKind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation';

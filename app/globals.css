@@ -937,6 +937,27 @@ span.cursus-pill{cursor:default}
 .digiforma-docs .hint{flex:1;min-width:200px}
 .digiforma-docs form{display:flex;gap:6px;flex:1;min-width:260px}
 .digiforma-docs form input{flex:1}
+.digiforma-docs.editing{flex-direction:column;align-items:stretch}
+.df-links{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.df-link{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.df-link+.df-link{padding-top:10px;border-top:1px dashed #c9dcf6}
+.df-who,.df-shared{flex-basis:100%;color:var(--muted);font-size:12px;display:flex;gap:5px;align-items:flex-start}
+.df-who svg,.df-shared svg{flex-shrink:0;margin-top:2px}
+.df-shared{color:#2f5f9e}
+.df-missing{margin:0;font-size:12.5px;font-weight:600;color:#9a4a0b;display:flex;gap:6px;align-items:center}
+.df-links>.small.ghost{align-self:flex-start}
+.df-edit-row{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid #c9dcf6;border-radius:10px;background:#fff}
+.df-edit-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.df-edit-line>.input{flex:1;min-width:160px}
+.df-edit-line>.df-url{flex:2}
+.df-audience{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600}
+.df-pick{display:flex;flex-wrap:wrap;gap:6px}
+.df-chip{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:4px 10px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.df-chip.on{background:var(--cf-dark,#17241B);border-color:var(--cf-dark,#17241B);color:#08FA64}
+.df-candidates{display:flex;flex-direction:column;gap:6px}
+.df-candidate{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid #c9dcf6;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer;font:inherit}
+.df-candidate:hover{border-color:var(--cf-mint-strong);background:var(--cf-mint-soft)}
+.df-candidate small{color:var(--muted);font-size:12px}
 
 /* ================================================================
    Téléphones et tablettes (mobile-first)

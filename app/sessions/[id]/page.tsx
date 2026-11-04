@@ -1,4 +1,5 @@
 import { SessionStatus } from '@/components/session-status';
+import { readDfLinks, dfDoneMap, sameDfUrl } from '@/lib/digiforma-links';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadStaff } from '@/lib/tracking';
 import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/components/tracking/session-tracking';
@@ -105,8 +106,9 @@ export default async function SessionDetailPage({
     ),
     poec: start(supabase.from('sessions').select('poec_id, poec_programs(id, title, kind)').eq('id', id).maybeSingle()),
     // Lien Digiforma des autres documents (migration 36).
-    digiforma: start(supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle()),
-    digiformaDone: start(supabase.from('session_forms').select('completed').eq('session_id', id).eq('kind', 'digiforma').maybeSingle()),
+    // Plusieurs liens (migration 55), sinon le lien unique.
+    digiforma: start(supabase.from('sessions').select('digiforma_docs_url, digiforma_links').eq('id', id).maybeSingle()),
+    digiformaDone: start(supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'digiforma').maybeSingle()),
     track: Promise.all([
       start(supabase.from('sessions').select('created_by, manager_id, created_at, authorizations').eq('id', id).maybeSingle()),
       start(
@@ -238,11 +240,9 @@ export default async function SessionDetailPage({
   const { data: periodAbsences } = await early.absences;
   const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
   const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
-  const { data: dfRow, error: dfError } = await early.digiforma;
+  let { data: dfRow, error: dfError } = await early.digiforma;
+  if (dfError) ({ data: dfRow, error: dfError } = await supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle());
   const { data: dfDoneRow } = await early.digiformaDone;
-  const digiformaDocs = dfError
-    ? null
-    : { url: ((dfRow as any)?.digiforma_docs_url as string | null) ?? null, done: Boolean((dfDoneRow as any)?.completed) };
   const isOwn =
     Boolean(profile?.trainer_id) &&
     (profile?.trainer_id === (session as any).trainer_id || Object.values(dayTrainers).some((d) => d.trainer_id === profile?.trainer_id));
@@ -284,6 +284,39 @@ export default async function SessionDetailPage({
   // Sans la migration 43 (type de parcours) : titre seul.
   const poecRow = poecRes.error ? (await supabase.from('sessions').select('poec_id, poec_programs(id, title)').eq('id', id).maybeSingle()).data : poecRes.data;
   const poec = one((poecRow as any)?.poec_programs) as { id: string; title: string; kind?: string | null } | null;
+  // Liens Digiforma : stagiaires concernés (groupe du parcours) et sessions qui partagent le même lien.
+  const dfLinks = dfError ? [] : readDfLinks(dfRow as any);
+  let dfGroup: string[] | null = null;
+  if ((poecRow as any)?.poec_id) {
+    const { data: members } = await supabase.from('poec_trainees').select('trainee_id').eq('program_id', (poecRow as any).poec_id);
+    dfGroup = ((members as any[]) || []).map((m) => m.trainee_id as string);
+  }
+  const dfShared: Record<string, { id: string; title: string; trainer: string | null }[]> = {};
+  if (dfLinks.length) {
+    const day = 86400000;
+    const { data: near } = await supabase
+      .from('sessions')
+      .select('id, title, digiforma_docs_url, digiforma_links, trainers(full_name)')
+      .neq('id', id)
+      .not('digiforma_docs_url', 'is', null)
+      .gte('end_at', new Date(new Date(session.start_at).getTime() - 60 * day).toISOString())
+      .lte('start_at', new Date(new Date(session.end_at).getTime() + 60 * day).toISOString());
+    for (const o of (near as any[]) || []) {
+      const theirs = readDfLinks(o);
+      for (const l of dfLinks) {
+        if (theirs.some((t) => sameDfUrl(t.url, l.url))) (dfShared[l.id] ||= []).push({ id: o.id, title: o.title, trainer: one(o.trainers)?.full_name || null });
+      }
+    }
+  }
+  const digiformaDocs = dfError
+    ? null
+    : {
+        links: dfLinks,
+        done: dfDoneMap(dfLinks, dfDoneRow as any),
+        trainees: validatedTrainees.map((t) => ({ id: t.id, name: t.name })),
+        group: dfGroup,
+        shared: dfShared,
+      };
   // Parcours personnalisé : titre d'habilitation jamais demandé (le réglage du catalogue ne change pas).
   const customProgram = poec?.kind === 'personnalise';
 

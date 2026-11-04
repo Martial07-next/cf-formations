@@ -1,3 +1,5 @@
+import { readDfLinks, uncoveredTrainees } from '@/lib/digiforma-links';
+
 /**
  * Relances côté équipe : sessions qui commencent d'ici la fin de la semaine
  * prochaine et qui ne sont pas prêtes (dont le lien Digiforma manquant).
@@ -24,15 +26,41 @@ export function alertHorizon(todayIso: string): string {
 }
 export const ALERT_PERIOD = 'jusqu’à fin de semaine prochaine';
 
-/** Sessions sans lien Digiforma (vide si la migration 36 manque). */
-export async function sessionsWithoutDigiforma(supabase: any, ids: string[]): Promise<Set<string>> {
-  if (!ids.length) return new Set();
-  const { data, error } = await supabase.from('sessions').select('id, digiforma_docs_url').in('id', ids);
-  if (error) return new Set();
-  return new Set(((data as any[]) || []).filter((r) => !String(r.digiforma_docs_url || '').trim()).map((r) => r.id as string));
+/**
+ * Sessions dont des stagiaires n'ont pas de lien Digiforma : id → nombre de
+ * stagiaires non couverts (0 = aucun lien du tout). Vide si la migration 36 manque.
+ */
+export async function sessionsWithoutDigiforma(supabase: any, ids: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!ids.length) return out;
+  let { data, error } = await supabase.from('sessions').select('id, poec_id, digiforma_docs_url, digiforma_links, session_trainees(trainee_id, status)').in('id', ids);
+  if (error) ({ data, error } = await supabase.from('sessions').select('id, digiforma_docs_url').in('id', ids));
+  if (error) return out;
+  const rows = (data as any[]) || [];
+  const poecIds = [...new Set(rows.map((r) => r.poec_id).filter(Boolean))];
+  const groups = new Map<string, Set<string>>();
+  if (poecIds.length) {
+    const { data: members } = await supabase.from('poec_trainees').select('program_id, trainee_id').in('program_id', poecIds);
+    for (const m of (members as any[]) || []) {
+      if (!groups.has(m.program_id)) groups.set(m.program_id, new Set());
+      groups.get(m.program_id)!.add(m.trainee_id);
+    }
+  }
+  for (const r of rows) {
+    const links = readDfLinks(r);
+    if (!links.length) {
+      out.set(r.id, 0);
+      continue;
+    }
+    if (!r.session_trainees) continue;
+    const validated = (r.session_trainees as any[]).filter((t) => t.status === 'validee').map((t) => t.trainee_id as string);
+    const missing = uncoveredTrainees(links, validated, r.poec_id ? groups.get(r.poec_id) || new Set() : null).length;
+    if (missing) out.set(r.id, missing);
+  }
+  return out;
 }
 
-export function sessionAlerts(rows: any[], todayIso: string, noDigiforma?: Set<string>): SessionAlert[] {
+export function sessionAlerts(rows: any[], todayIso: string, noDigiforma?: Map<string, number>): SessionAlert[] {
   const today = new Date(todayIso + 'T00:00:00Z').getTime();
   const out: SessionAlert[] = [];
   for (const s of rows) {
@@ -44,7 +72,9 @@ export function sessionAlerts(rows: any[], todayIso: string, noDigiforma?: Set<s
     else if (s.status !== 'confirmee') reasons.push('pas confirmée');
     if (!s.trainer_id) reasons.push('sans formateur');
     if (!validated) reasons.push('aucun stagiaire validé');
-    if (noDigiforma?.has(s.id)) reasons.push('lien Digiforma manquant');
+    const dfMissing = noDigiforma?.get(s.id);
+    if (dfMissing === 0) reasons.push('lien Digiforma manquant');
+    else if (dfMissing) reasons.push(`${dfMissing} stagiaire${dfMissing > 1 ? 's' : ''} sans lien Digiforma`);
     if (waiting) reasons.push(`${waiting} stagiaire${waiting > 1 ? 's' : ''} en attente`);
     if (!reasons.length) continue;
     const manager = Array.isArray(s.manager) ? s.manager[0] : s.manager;
