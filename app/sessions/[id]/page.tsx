@@ -438,6 +438,7 @@ export default async function SessionDetailPage({
                     node: (
                       <SessionDeparts
                         sessionId={session.id}
+                        title={(tplOpt as any)?.title || session.title}
                         departures={departures}
                         trainees={validatedTrainees}
                         canCollect={departOn && (canEditStartTimes(profile?.role) || isOwn)}

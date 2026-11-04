@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Loader2, LogOut, QrCode, Trash2 } from 'lucide-react';
+import { Download, ExternalLink, Loader2, LogOut, Maximize2, QrCode, Trash2, X } from 'lucide-react';
 import { ensureAutorToken } from '@/app/autorisations/actions';
 import { deleteDeparture } from '@/app/depart/actions';
 import { askConfirm } from '@/lib/confirm-dialog';
@@ -22,7 +22,10 @@ export function SessionDeparts({
   canCollect,
   canManage,
   doc,
+  title = '',
 }: {
+  /** Intitulé de la formation (QR code en grand). */
+  title?: string;
   sessionId: string;
   departures: EarlyDeparture[];
   trainees: { id: string; name: string; company: string | null }[];
@@ -37,6 +40,30 @@ export function SessionDeparts({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const person = (id: string) => trainees.find((t) => t.id === id);
+  // QR code en grand (vidéoprojecteur / écran de la salle).
+  const [big, setBig] = useState<string | null>(null);
+  const bigRef = useRef<HTMLDivElement>(null);
+  const openBig = async () => {
+    if (!qr) return;
+    const QRCode = (await import('qrcode')).default;
+    setBig(await QRCode.toDataURL(qr.url, { width: 1400, margin: 2, errorCorrectionLevel: 'M' }));
+  };
+  const closeBig = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setBig(null);
+  };
+  useEffect(() => {
+    if (!big) return;
+    bigRef.current?.requestFullscreen?.().catch(() => {});
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setBig(null);
+    const onFs = () => !document.fullscreenElement && setBig(null);
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFs);
+    };
+  }, [big]);
   const list = [...departures].sort((a, b) => b.departed_at.localeCompare(a.departed_at));
 
   // QR affiché : la liste se met à jour dès que le stagiaire a envoyé.
@@ -106,13 +133,45 @@ export function SessionDeparts({
       </p>
 
       {qr && (
-        <div className="autor-qr">
-          <img src={qr.image} alt="QR code du départ anticipé" width={220} height={220} />
-          <div>
-            <strong>À scanner par le stagiaire qui part</strong>
-            <p className="hint">La liste ci-dessous se met à jour toute seule.</p>
-            <code className="autor-url">{qr.url}</code>
+        <div className="autor-qr depart-qr">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <button type="button" className="autor-qr-zoom" onClick={openBig} title="Afficher en grand">
+            <img src={qr.image} alt="QR code du départ anticipé" />
+          </button>
+          <p className="hint">À scanner par le stagiaire qui part. La liste ci-dessous se met à jour toute seule.</p>
+          <span className="row-actions">
+            <button type="button" className="small primary" onClick={openBig}><Maximize2 size={14} aria-hidden /> Afficher en grand</button>
+            <a className="btn small" href={qr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden /> Remplir sur cette tablette</a>
+          </span>
+        </div>
+      )}
+
+      {big && (
+        <div ref={bigRef} className="qr-big" role="dialog" aria-modal="true" aria-label="QR code du départ anticipé en grand">
+          <button type="button" className="qr-big-close" onClick={closeBig} aria-label="Fermer"><X size={22} /> Fermer</button>
+          <div className="qr-big-main">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-cf-reseaux.svg" alt="CF Réseaux" className="qr-big-logo" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={big} alt="QR code du départ anticipé" className="qr-big-code" />
           </div>
+          <aside className="qr-big-side">
+            <p className="qr-big-kicker">Départ anticipé</p>
+            {title && <h2>{title}</h2>}
+            <ol className="qr-big-steps">
+              <li>Scannez le QR code avec votre téléphone</li>
+              <li>Choisissez votre nom et la raison du départ</li>
+              <li>Signez la décharge : l’heure est enregistrée automatiquement</li>
+            </ol>
+            {list.length > 0 && (
+              <>
+                <p className="qr-big-kicker">Départs enregistrés</p>
+                <ul className="qr-big-todo">
+                  {list.map((d) => <li key={d.id}>{person(d.trainee_id)?.name || 'Stagiaire'} · {departWhen(d.departed_at).time}</li>)}
+                </ul>
+              </>
+            )}
+          </aside>
         </div>
       )}
 

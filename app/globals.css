@@ -2118,3 +2118,4 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .depart-reason{display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:600}
 .depart-reason.on{border-color:var(--cf-mint-strong);background:var(--cf-mint-soft)}
 @media (max-width:640px){.papers-nav{width:100%}.papers-tabs{flex:1}}
+.depart-qr{margin:4px 0 16px}
