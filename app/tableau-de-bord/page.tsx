@@ -21,7 +21,7 @@ import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/serve
 import { parisNowKey, parisToday } from '@/lib/paris-time';
 import { addDays, effectiveDayTime, isoDate, weekdaysBetween } from '@/lib/week';
 import { computeDossierTodo } from '@/lib/dossier-todo';
-import { ALERT_DAYS, inDays, sessionAlerts } from '@/lib/session-alerts';
+import { ALERT_PERIOD, alertHorizon, inDays, sessionAlerts, sessionsWithoutDigiforma } from '@/lib/session-alerts';
 import { conventionStatus } from '@/lib/poec';
 import { ABSENCE_LABEL, frDate } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -156,9 +156,10 @@ export default async function DashboardPage() {
       .from('sessions')
       .select('id, title, start_at, status, trainer_id, session_trainees(status)')
       .gte('start_at', today)
-      .lt('start_at', isoDate(addDays(new Date(today + 'T00:00:00Z'), ALERT_DAYS + 1)))
+      .lt('start_at', alertHorizon(today))
       .order('start_at');
-    toPrepare = sessionAlerts((next as any[]) || [], today).map((a) => ({
+    const noDf = await sessionsWithoutDigiforma(supabase, ((next as any[]) || []).map((s) => s.id));
+    toPrepare = sessionAlerts((next as any[]) || [], today, noDf).map((a) => ({
       href: `/sessions/${a.id}`,
       title: a.title,
       meta: `${inDays(a.startAt, today)} · ${a.reasons.join(', ')}`,
@@ -339,7 +340,7 @@ export default async function DashboardPage() {
 
           {staff && (
             <>
-              <Card icon={<AlertTriangle size={17} aria-hidden />} title={`À préparer (${ALERT_DAYS} jours)`} items={toPrepare} empty="Toutes les sessions à venir sont prêtes." tone={toPrepare.some((i) => i.badge?.tone === 'urgent') ? 'urgent' : toPrepare.length ? 'warn' : undefined} />
+              <Card icon={<AlertTriangle size={17} aria-hidden />} title={`À préparer (${ALERT_PERIOD})`} items={toPrepare} empty="Toutes les sessions à venir sont prêtes." tone={toPrepare.some((i) => i.badge?.tone === 'urgent') ? 'urgent' : toPrepare.length ? 'warn' : undefined} />
               {!trainerId && <Card icon={<CalendarClock size={17} aria-hidden />} title="Formations du jour" items={todayAll} empty="Aucune formation aujourd’hui." tone="dark" />}
               <Card icon={<ClipboardList size={17} aria-hidden />} title="Dossiers en attente du formateur" items={waitTrainer} empty="Aucun dossier en attente." tone={waitTrainer.length ? 'warn' : undefined} hint="Sessions terminées dont le formateur n’a pas tout rempli." />
               <Card icon={<FileSignature size={17} aria-hidden />} title="Dossiers à boucler (bureau)" items={officeTodo} empty="Rien à boucler." />

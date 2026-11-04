@@ -1,4 +1,7 @@
-/** Relances côté équipe : sessions qui commencent dans les 7 jours et qui ne sont pas prêtes. */
+/**
+ * Relances côté équipe : sessions qui commencent d'ici la fin de la semaine
+ * prochaine et qui ne sont pas prêtes (dont le lien Digiforma manquant).
+ */
 
 export type SessionAlert = {
   id: string;
@@ -12,7 +15,24 @@ export type SessionAlert = {
 
 export const ALERT_DAYS = 7;
 
-export function sessionAlerts(rows: any[], todayIso: string): SessionAlert[] {
+/** Fin (exclue) de la période suivie : le lundi qui suit la semaine prochaine. */
+export function alertHorizon(todayIso: string): string {
+  const d = new Date(todayIso + 'T00:00:00Z');
+  const dow = (d.getUTCDay() + 6) % 7; // lundi = 0
+  d.setUTCDate(d.getUTCDate() + (7 - dow) + 7);
+  return d.toISOString().slice(0, 10);
+}
+export const ALERT_PERIOD = 'jusqu’à fin de semaine prochaine';
+
+/** Sessions sans lien Digiforma (vide si la migration 36 manque). */
+export async function sessionsWithoutDigiforma(supabase: any, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const { data, error } = await supabase.from('sessions').select('id, digiforma_docs_url').in('id', ids);
+  if (error) return new Set();
+  return new Set(((data as any[]) || []).filter((r) => !String(r.digiforma_docs_url || '').trim()).map((r) => r.id as string));
+}
+
+export function sessionAlerts(rows: any[], todayIso: string, noDigiforma?: Set<string>): SessionAlert[] {
   const today = new Date(todayIso + 'T00:00:00Z').getTime();
   const out: SessionAlert[] = [];
   for (const s of rows) {
@@ -24,6 +44,7 @@ export function sessionAlerts(rows: any[], todayIso: string): SessionAlert[] {
     else if (s.status !== 'confirmee') reasons.push('pas confirmée');
     if (!s.trainer_id) reasons.push('sans formateur');
     if (!validated) reasons.push('aucun stagiaire validé');
+    if (noDigiforma?.has(s.id)) reasons.push('lien Digiforma manquant');
     if (waiting) reasons.push(`${waiting} stagiaire${waiting > 1 ? 's' : ''} en attente`);
     if (!reasons.length) continue;
     const manager = Array.isArray(s.manager) ? s.manager[0] : s.manager;

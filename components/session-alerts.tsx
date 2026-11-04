@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { AlertTriangle, BellRing } from 'lucide-react';
-import { ALERT_DAYS, inDays, type SessionAlert } from '@/lib/session-alerts';
+import { ALERT_PERIOD, inDays, type SessionAlert } from '@/lib/session-alerts';
 
-/** Bandeau de relance (équipe) : sessions à moins d'une semaine qui ne sont pas prêtes. */
+/** Bandeau de relance (équipe) : sessions d'ici la fin de la semaine prochaine qui ne sont pas prêtes. */
 export function SessionAlerts({ alerts, todayIso }: { alerts: SessionAlert[]; todayIso: string }) {
   if (!alerts.length) return null;
   const urgent = alerts.filter((a) => a.urgent).length;
@@ -16,7 +16,7 @@ export function SessionAlerts({ alerts, todayIso }: { alerts: SessionAlert[]; to
           {alerts.length} session{alerts.length > 1 ? 's' : ''} à relancer
         </strong>
         <span className="hint">
-          commencent dans moins de {ALERT_DAYS} jours{urgent ? ` · ${urgent} urgente${urgent > 1 ? 's' : ''}` : ''}
+          à venir {ALERT_PERIOD}{urgent ? ` · ${urgent} urgente${urgent > 1 ? 's' : ''}` : ''}
         </span>
       </summary>
       <ul>

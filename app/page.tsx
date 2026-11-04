@@ -12,7 +12,7 @@ import { shortName } from '@/lib/tracking';
 import { type DossierBadge } from '@/lib/billing';
 import { dossierBadges } from '@/lib/dossier-badges';
 import { parisNowKey, parisToday } from '@/lib/session-lock';
-import { ALERT_DAYS, sessionAlerts, type SessionAlert } from '@/lib/session-alerts';
+import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
@@ -129,7 +129,7 @@ export default async function Page({
       start(supabase.from('template_links').select('id, template_id, label, url, position').order('position')),
     ]),
   };
-  // Relances (équipe) : sessions qui commencent dans les 7 jours et ne sont pas prêtes.
+  // Relances (équipe) : sessions qui commencent d'ici la fin de la semaine prochaine et ne sont pas prêtes.
   const today = parisToday();
   const alertsQuery = canManage(profile?.role)
     ? (async () => {
@@ -138,11 +138,12 @@ export default async function Page({
             .from('sessions')
             .select(`id, title, start_at, status, trainer_id, session_trainees(status)${withManager ? ', manager:profiles!sessions_manager_id_fkey(full_name)' : ''}`)
             .gte('start_at', today)
-            .lt('start_at', isoDate(addDays(new Date(today + 'T00:00:00Z'), ALERT_DAYS + 1)))
+            .lt('start_at', alertHorizon(today))
             .order('start_at');
         let { data, error } = await base(true);
         if (error) ({ data } = await base(false));
-        return sessionAlerts((data as any[]) || [], today);
+        const noDf = await sessionsWithoutDigiforma(supabase, ((data as any[]) || []).map((s) => s.id));
+        return sessionAlerts((data as any[]) || [], today, noDf);
       })()
     : Promise.resolve([] as SessionAlert[]);
   // Formateur : ses formations (en cours et à venir) en tête du planning.
