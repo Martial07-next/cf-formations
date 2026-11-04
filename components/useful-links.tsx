@@ -3,24 +3,35 @@
 import { submitWith } from '@/lib/form-submit';
 import { FontsKit } from '@/components/fonts-kit';
 import { useMemo, useRef, useState, useTransition } from 'react';
-import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X, FileText } from 'lucide-react';
+import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X, FileText, Download } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
-import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink, isSupportFile } from '@/lib/links';
+import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink, isSupportFile, isOfficeFile } from '@/lib/links';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 export type TemplateLinks = { template_id: string; title: string; links: LinkItem[] };
 
 /** Un lien cliquable (nouvel onglet). */
 export function LinkRow({ link, note }: { link: LinkItem; note?: string | null }) {
-  return (
-    <a href={link.url} target="_blank" rel="noopener noreferrer" className="link-row">
+  const office = isOfficeFile(link.url);
+  const row = (
+    <a href={office ? `${link.url}?ouvrir` : link.url} target="_blank" rel="noopener noreferrer" className="link-row" title={office ? 'Ouvrir sans télécharger' : undefined}>
       {isSupportFile(link.url) ? <FileText size={15} aria-hidden /> : <Link2 size={15} aria-hidden />}
       <span>
         <strong>{link.label}</strong>
-        <small>{note || linkHost(link.url)}</small>
+        <small>{note || (office ? `${linkHost(link.url)} · s’ouvre sans téléchargement` : linkHost(link.url))}</small>
       </span>
       <ExternalLink size={14} aria-hidden className="link-row-go" />
     </a>
+  );
+  if (!isSupportFile(link.url)) return row;
+  // Fichier déposé : ouverture directe + téléchargement à part.
+  return (
+    <span className="link-row-wrap">
+      {row}
+      <a href={`${link.url}?telecharger`} className="link-row-dl" title="Télécharger" aria-label={`Télécharger ${link.label}`}>
+        <Download size={15} aria-hidden />
+      </a>
+    </span>
   );
 }
 

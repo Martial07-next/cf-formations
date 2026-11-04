@@ -480,6 +480,12 @@ button.tiny{width:24px;min-height:24px;padding:0}
 .link-row strong{font-size:13.5px}
 .link-row small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .link-row-go{color:var(--muted);flex-shrink:0}
+.link-row-wrap{display:flex;gap:6px;align-items:stretch;margin-bottom:6px;min-width:0}
+.link-row-wrap .link-row{flex:1;margin-bottom:0;min-width:0}
+.link-line .link-row-wrap{flex:1}
+.link-row-dl{display:grid;place-items:center;width:40px;flex-shrink:0;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:var(--surface);transition:border-color .15s,color .15s}
+.link-row-dl:hover{border-color:var(--cf-mint-strong);color:var(--ink)}
+.link-row-dl:focus-visible{outline:2px solid var(--cf-mint-strong);outline-offset:2px}
 .link-form{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface-2)}
 .link-formation{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:6px}
 .link-formation summary{cursor:pointer;font-weight:700;font-size:13.5px}

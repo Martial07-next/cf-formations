@@ -40,6 +40,9 @@ export function supportFileUrl(raw: string): string | null {
 }
 /** Chemin dans le bucket « supports » d'un fichier déposé. */
 export const supportStoragePath = (url: string) => decodeURIComponent(url.slice(SUPPORT_PREFIX.length));
+/** PowerPoint, Word, Excel : ouverts dans la visionneuse Microsoft, sans téléchargement. */
+export const OFFICE_EXT = ['ppt', 'pptx', 'pps', 'ppsx', 'doc', 'docx', 'xls', 'xlsx'];
+export const isOfficeFile = (url: string) => isSupportFile(url) && OFFICE_EXT.includes((url.split('.').pop() || '').toLowerCase());
 /** Nom du fichier (sans le dossier). */
 export const supportFileName = (url: string) => decodeURIComponent(url.split('/').pop() || '');
 

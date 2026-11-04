@@ -7,7 +7,7 @@ import { FontsKit } from '@/components/fonts-kit';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, FileText, Folder, FolderPlus, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
-import { isSupportFile, supportFileName, SUPPORT_BUCKET } from '@/lib/links';
+import { isSupportFile, isOfficeFile, supportFileName, SUPPORT_BUCKET } from '@/lib/links';
 import {
   createTemplate,
   updateTemplate,
@@ -353,7 +353,7 @@ function TemplateFields({
         <h3><span className="tf-num">5</span> Supports de cours</h3>
       <div className="field" style={{ marginBottom: 14 }}>
         <FontsKit compact />
-        <span className="hint">Ajoute un lien ou un fichier (PDF, PowerPoint, Word…) et nomme-le : les formateurs le retrouvent sur la fiche de session et dans « Liens utiles » du planning. Pense à « Enregistrer ».</span>
+        <span className="hint">Ajoute un lien ou un fichier (PDF, PowerPoint, Word…) et nomme-le : déposé une seule fois, il est disponible sur chaque session de cette formation et dans « Liens utiles » du planning. Les PowerPoint, Word et Excel s’ouvrent directement, sans téléchargement. Pense à « Enregistrer ».</span>
         {uploadError && <div role="alert" className="alert alert-error">{uploadError}</div>}
         <input type="hidden" name="links_json" value={linksJson} />
         <div className="link-editor">
@@ -361,7 +361,7 @@ function TemplateFields({
             <div className="link-editor-row" key={i}>
               <input aria-label={`Nom du lien ${i + 1}`} placeholder="Ex. Support stagiaire (PDF)" value={l.label} onChange={(e) => updateLink(i, { label: e.target.value })} />
               {isSupportFile(l.url) ? (
-                <a className="link-file-chip" href={l.url} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier">
+                <a className="link-file-chip" href={isOfficeFile(l.url) ? `${l.url}?ouvrir` : l.url} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier">
                   <FileText size={14} aria-hidden /> <span>{supportFileName(l.url)}</span>
                 </a>
               ) : (
