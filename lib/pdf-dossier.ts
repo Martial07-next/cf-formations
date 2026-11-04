@@ -1,6 +1,7 @@
 'use client';
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { deliverFile } from '@/lib/share';
 import { HALF_LABEL, type Slot, type SignatureRow } from '@/lib/dossier';
 import type { Legal } from '@/lib/pdf-brand';
 
@@ -324,13 +325,10 @@ export async function mergePdfs(parts: (ArrayBuffer | Uint8Array)[]): Promise<Ui
 }
 
 /** Téléchargement d'un PDF généré. */
+/**
+ * PDF prêt : téléchargé sur ordinateur ; sur téléphone, feuille de partage
+ * du système (AirDrop, Messages, Mail, Enregistrer dans Fichiers…).
+ */
 export function downloadPdf(bytes: Uint8Array, fileName: string) {
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName.replace(/[\\/:*?"<>|]+/g, '-');
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  void deliverFile(new Blob([bytes as BlobPart], { type: 'application/pdf' }), fileName);
 }

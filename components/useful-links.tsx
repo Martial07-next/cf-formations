@@ -1,17 +1,19 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
+import { ShareFileButton, usePhone } from '@/components/share-button';
 import { FontsKit } from '@/components/fonts-kit';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { ExternalLink, Link2, Pencil, Plus, Search, Settings2, Trash2, X, FileText, Download } from 'lucide-react';
 import { createUsefulLink, updateUsefulLink, deleteUsefulLink } from '@/app/liens/actions';
-import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink, isSupportFile, isOfficeFile } from '@/lib/links';
+import { LINK_CATEGORIES, linkHost, type LinkItem, type UsefulLink, isSupportFile, isOfficeFile, supportFileName } from '@/lib/links';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 export type TemplateLinks = { template_id: string; title: string; links: LinkItem[] };
 
 /** Un lien cliquable (nouvel onglet). */
 export function LinkRow({ link, note }: { link: LinkItem; note?: string | null }) {
+  const phone = usePhone();
   const office = isOfficeFile(link.url);
   const row = (
     <a href={office ? `${link.url}?ouvrir` : link.url} target="_blank" rel="noopener noreferrer" className="link-row" title={office ? 'Ouvrir sans télécharger' : undefined}>
@@ -23,11 +25,20 @@ export function LinkRow({ link, note }: { link: LinkItem; note?: string | null }
       <ExternalLink size={14} aria-hidden className="link-row-go" />
     </a>
   );
-  if (!isSupportFile(link.url)) return row;
-  // Fichier déposé : ouverture directe + téléchargement à part.
+  if (!isSupportFile(link.url)) {
+    if (!phone) return row;
+    return (
+      <span className="link-row-wrap phone-share-wrap">
+        {row}
+        <ShareFileButton url={link.url} title={link.label} className="link-row-dl" />
+      </span>
+    );
+  }
+  // Fichier déposé : ouverture directe + téléchargement à part (+ partage sur téléphone).
   return (
     <span className="link-row-wrap">
       {row}
+      <ShareFileButton url={`${link.url}?telecharger`} fileName={supportFileName(link.url)} title={link.label} className="link-row-dl" />
       <a href={`${link.url}?telecharger`} className="link-row-dl" title="Télécharger" aria-label={`Télécharger ${link.label}`}>
         <Download size={15} aria-hidden />
       </a>

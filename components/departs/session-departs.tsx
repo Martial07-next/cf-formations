@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { ShareLinkButton } from '@/components/share-button';
 import { useRouter } from 'next/navigation';
 import { Download, ExternalLink, Loader2, LogOut, Maximize2, QrCode, Trash2, X } from 'lucide-react';
 import { ensureAutorToken } from '@/app/autorisations/actions';
@@ -142,6 +143,7 @@ export function SessionDeparts({
           <span className="row-actions">
             <button type="button" className="small primary" onClick={openBig}><Maximize2 size={14} aria-hidden /> Afficher en grand</button>
             <a className="btn small" href={qr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden /> Remplir sur cette tablette</a>
+            <ShareLinkButton url={qr.url} title="Attestation de départ anticipé" text={`Attestation de départ anticipé${title ? ` · ${title}` : ''}`} />
           </span>
         </div>
       )}

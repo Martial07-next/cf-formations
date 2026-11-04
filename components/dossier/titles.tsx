@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { ShareLinkButton } from '@/components/share-button';
 import QRCode from 'qrcode';
 import { FileCheck2, Loader2, QrCode, RefreshCcw, ScanLine, Trash2, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -160,6 +161,7 @@ export function TitleQrButton({ sessionId, title, className = 'small' }: { sessi
               <p className="hint" style={{ margin: 0 }}>Les stagiaires scannent ce QR code, choisissent leur nom et prennent leur titre en photo (ou déposent un PDF). Le titre apparaît aussitôt dans le tour de table.</p>
               <p className="hint" style={{ margin: 0, wordBreak: 'break-all' }}>{qr.url}</p>
               <div className="row-actions">
+                <ShareLinkButton url={qr.url} title="Titre d’habilitation" text={`Dépose ton titre d’habilitation · ${title}`} className="small primary" />
                 <button type="button" className="small" onClick={() => navigator.clipboard?.writeText(qr.url)}>Copier le lien</button>
                 <button type="button" className="small" onClick={() => show(true)} disabled={busy}><RefreshCcw size={13} aria-hidden /> Nouveau QR code</button>
               </div>

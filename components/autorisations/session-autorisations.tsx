@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { ShareLinkButton } from '@/components/share-button';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, CircleDashed, QrCode, Download, Settings2, Ban, ExternalLink, Maximize2, X } from 'lucide-react';
 import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actions';
@@ -193,6 +194,7 @@ export function SessionAutorisations({
               <span className="row-actions">
                 <button type="button" className="small primary" onClick={openBig}><Maximize2 size={14} aria-hidden /> Afficher en grand</button>
                 <a className="btn small" href={qr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden /> Remplir sur cette tablette</a>
+                <ShareLinkButton url={qr.url} title="Autorisations stagiaire" text={`Autorisations à signer${title ? ` · ${title}` : ''}`} />
                 {canManage && (
                   <button type="button" className="small ghost" onClick={async () => (await askConfirm('Nouveau QR code ? L’ancien ne fonctionnera plus.')) && showQr(true)}>Nouveau QR</button>
                 )}

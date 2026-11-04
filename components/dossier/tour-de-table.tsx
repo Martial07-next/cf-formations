@@ -271,7 +271,7 @@ export function TourDeTable({
                       <td className="tdt-name">{t.name}</td>
                       {TDT_COLUMNS.map((c) => (
                         <Fragment key={c.key}>
-                          <td>
+                          <td data-label={c.label}>
                             <AutoText
                               label={`${c.label} : ${t.name}`}
                               placeholder={'placeholder' in c ? c.placeholder : undefined}
@@ -284,7 +284,7 @@ export function TourDeTable({
                             />
                           </td>
                           {c.key === 'habilitations' && titleOn && (
-                            <td className={`tdt-title-col${titleOk(t.id, { data }, titleFiles) ? ' ok' : ' ko'}`}>
+                            <td data-label="Titre d’habilitation" className={`tdt-title-col${titleOk(t.id, { data }, titleFiles) ? ' ok' : ' ko'}`}>
                               {(() => {
                                 const hasFile = titleFiles.some((f) => f.trainee_id === t.id);
                                 return (

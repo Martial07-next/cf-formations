@@ -2119,3 +2119,78 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .depart-reason.on{border-color:var(--cf-mint-strong);background:var(--cf-mint-soft)}
 @media (max-width:640px){.papers-nav{width:100%}.papers-tabs{flex:1}}
 .depart-qr{margin:4px 0 16px}
+
+/* ==========================================================================
+   Version téléphone (≤ 760 px, ordinateur inchangé)
+   ========================================================================== */
+@media (max-width:760px){
+  /* iOS : aucun champ sous 16 px (sinon zoom automatique à chaque saisie). */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px !important}
+  /* Textes longs (intitulés, adresses, liens) : retour à la ligne plutôt que débordement. */
+  h1,h2,h3,strong,.hint,small,td,li,p,code{overflow-wrap:break-word}
+  img,svg,video,canvas{max-width:100%}
+  /* Fiches plein écran : bouton Fermer toujours en haut à droite, actions sur toute la largeur. */
+  .pf-bar{position:sticky;top:0;z-index:3;padding:10px 56px 10px 12px;gap:8px}
+  .pf-bar .pf-title{flex:1 1 100%;min-width:0}
+  .pf-bar .row-actions{flex:1 1 100%;flex-wrap:wrap;gap:6px}
+  .pf-bar .row-actions > button.icon.ghost:last-child{position:absolute;top:6px;right:6px}
+  .pf-bar .row-actions > button:not(.icon){flex:1 1 auto}
+  /* Onglets des sessions : jamais sur deux lignes. */
+  .sessions-periods button{white-space:nowrap;flex:0 0 auto}
+  /* Tour de table : une carte par stagiaire au lieu du grand tableau. */
+  .tdt-scroll{overflow:visible;border:none;background:none}
+  table.tdt-table{min-width:0;display:block}
+  table.tdt-table thead{display:none}
+  table.tdt-table tbody{display:flex;flex-direction:column;gap:12px}
+  table.tdt-table tr{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:var(--shadow-sm)}
+  table.tdt-table td{display:block;border:none !important;padding:0 !important;min-width:0;background:none !important}
+  table.tdt-table td.tdt-num{grid-column:1;font-weight:800;color:var(--muted)}
+  table.tdt-table td.tdt-name{grid-column:2;font-weight:800;font-size:16px;position:static}
+  table.tdt-table td[data-label]{grid-column:1 / -1}
+  table.tdt-table td[data-label]::before{content:attr(data-label);display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:4px 0 3px}
+  table.tdt-table .tdt-input{border-color:var(--line-strong);background:var(--surface-2)}
+  table.tdt-table td.tdt-title-col{padding:8px 10px !important;border-radius:10px;background:var(--surface-2) !important}
+  table.tdt-table td.tdt-title-col.ko{background:#fff4e0 !important}
+  /* Feuille « Document prêt » (partage AirDrop, Messages…). */
+  .share-sheet-wrap{position:fixed;inset:0;z-index:1000;background:rgba(10,20,14,.45);display:flex;align-items:flex-end;animation:share-fade .18s ease}
+  .share-sheet-wrap.closing{opacity:0;transition:opacity .18s}
+  .share-sheet{width:100%;background:var(--surface);border-radius:20px 20px 0 0;padding:10px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;animation:share-up .22s ease}
+  .share-sheet-grip{align-self:center;width:42px;height:5px;border-radius:99px;background:var(--line-strong);margin-bottom:6px}
+  .share-sheet-kicker{margin:0;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ok-ink)}
+  .share-sheet h2{margin:0 0 6px;font-size:16px;line-height:1.3}
+  .share-sheet button{width:100%;min-height:48px;font-size:15px}
+  /* Bouton Partager à côté des supports / liens. */
+  .phone-share-wrap{display:flex}
+}
+@keyframes share-up{from{transform:translateY(100%)}to{transform:none}}
+@keyframes share-fade{from{opacity:0}to{opacity:1}}
+
+/* Téléphone : liste des sessions en cartes compactes (titre, formateur, dates, dossier, statut). */
+@media (max-width:640px){
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title title" "trainer stag" "dates room" "dossier dossier" "status actions";gap:6px 10px;padding:12px 14px;align-items:center}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td{display:block;border:none;padding:0;white-space:normal;max-width:none}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td::before{content:none}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(1){grid-area:status}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(2){grid-area:title;font-size:15.5px}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(3){grid-area:trainer;overflow:visible}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(4){grid-area:room;text-align:right;color:var(--muted);font-size:13px}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(5){grid-area:dates;color:var(--muted);font-size:13px}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(6){grid-area:stag;text-align:right;font-weight:800}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(6)::after{content:" stag.";font-weight:600;color:var(--muted);font-size:12px}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(7){grid-area:dossier}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(7):has(> .hint){display:none}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td.col-actions{grid-area:actions;position:static;box-shadow:none;background:none}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td.col-actions .row-actions{justify-content:flex-end}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(1) select.input{min-height:38px;width:100%}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) td:nth-child(3) .trainer-name{white-space:normal}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) tr.is-live{box-shadow:inset 4px 0 0 #08fa64,var(--shadow-sm)}
+  table.data.sessions-list:not(.emarg-table):not(.monthly):not(.rights-table) tr.is-live td:first-child{box-shadow:none}
+}
+
+/* Téléphone : stagiaires de l'assistant, nom sur toute la largeur et boutons dessous. */
+@media (max-width:640px){
+  .wiz-list li{flex-wrap:wrap;row-gap:8px}
+  .wiz-list li .wiz-list-main{flex:1 1 calc(100% - 24px);min-width:0}
+  .wiz-list li > button.small:not(.icon){flex:1 1 auto;margin-left:22px}
+}
+@media (max-width:640px){.smart-info{display:block}.smart-info svg{vertical-align:-2px;margin-right:4px}}

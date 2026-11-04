@@ -11,7 +11,7 @@ import { setWorkedHolidays } from '@/lib/holidays';
 type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number; must_change_password?: boolean; worked_holidays?: string[] } | null;
 
 /** Pages ouvertes sans compte (connexion, liens QR / signatures). */
-const PUBLIC = ['/login', '/emargement/', '/convention/', '/france-travail/', '/autorisations/', '/salarie/', '/titre/', '/auth/', '/mot-de-passe'];
+const PUBLIC = ['/login', '/emargement/', '/convention/', '/france-travail/', '/autorisations/', '/depart/', '/salarie/', '/titre/', '/auth/', '/mot-de-passe'];
 
 /** Mise en page commune : le menu reste affiché pendant la navigation, seul le contenu change. */
 export function AppShell({ profile, children }: { profile: Profile; children: React.ReactNode }) {
