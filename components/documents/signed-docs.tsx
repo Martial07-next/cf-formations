@@ -5,7 +5,7 @@ import { CheckCircle2, Download, Trash2, Clock } from 'lucide-react';
 import { docVersionUrl, deleteDocSignature } from '@/app/administration/documents/actions';
 import { signatureFor, type DocSignature, type SignableDoc } from '@/lib/documents';
 import type { Legal } from '@/lib/pdf-brand';
-import { askConfirm } from '@/lib/confirm-dialog';
+import { askConfirm, showMessage } from '@/lib/confirm-dialog';
 
 /** Téléchargement d'un document ajouté signé (PDF d'origine + page de signature). */
 export function SignedDocButton({
@@ -47,7 +47,7 @@ export function SignedDocButton({
           ]);
           downloadPdf(bytes, `${doc.title} - ${signerName}.pdf`);
         } catch (e) {
-          alert(e instanceof Error ? e.message : 'PDF impossible à générer.');
+          showMessage(e instanceof Error ? e.message : 'PDF impossible à générer.', { title: 'PDF impossible' });
         } finally {
           setBusy(false);
         }

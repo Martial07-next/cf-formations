@@ -41,12 +41,14 @@ export const getCurrentProfile = cache(async function getCurrentProfile() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   // Profil, fiche formateur liée et accès Facturation (migration 30) en parallèle.
-  const [{ data: profile }, { data: trainer }, { data: billing }, { data: dev }] = await Promise.all([
+  const [{ data: profile }, { data: trainer }, { data: billing }, { data: dev }, { data: names }] = await Promise.all([
     supabase.from('profiles').select('id, full_name, role').eq('id', user.id).single(),
     supabase.from('trainers').select('id').eq('profile_id', user.id).maybeSingle(),
     supabase.from('profiles').select('can_invoice').eq('id', user.id).maybeSingle(),
     // Accès Dev (migration 42) : requête séparée, ignorée si la colonne manque.
     supabase.from('profiles').select('can_dev').eq('id', user.id).maybeSingle(),
+    // Prénom / nom séparés (migration 53) : requête séparée, ignorée si absente.
+    supabase.from('profiles').select('first_name, last_name').eq('id', user.id).maybeSingle(),
   ]);
   if (!profile) return null;
   // Fériés travaillés (CF Congés) : connus avant tout calcul de jours de formation.
@@ -57,6 +59,8 @@ export const getCurrentProfile = cache(async function getCurrentProfile() {
     trainer_id: (trainer?.id as string | undefined) ?? null,
     can_invoice: Boolean((billing as any)?.can_invoice),
     can_dev: Boolean((dev as any)?.can_dev),
+    first_name: ((names as any)?.first_name as string | null) ?? null,
+    last_name: ((names as any)?.last_name as string | null) ?? null,
     /** Mot de passe temporaire donné par l'administrateur : à changer avant d'utiliser la plateforme. */
     must_change_password: Boolean(user.user_metadata?.must_change_password),
   };

@@ -50,7 +50,7 @@ export function generatePassword(): string {
 /** Crée un compte avec son rôle (et la fiche formateur liée pour un formateur / référent). */
 export async function createAccount(
   admin: ServiceClient,
-  input: { fullName: string; email: string; role: Role; password: string }
+  input: { fullName: string; email: string; role: Role; password: string; firstName?: string; lastName?: string }
 ): Promise<{ ok: true; userId: string; trainerLinked: boolean } | { ok: false; error: string }> {
   const { fullName, email, role, password } = input;
   const { data, error } = await admin.auth.admin.createUser({
@@ -67,6 +67,10 @@ export async function createAccount(
   const userId = data.user.id;
   // Le trigger handle_new_user crée le profil (sans accès) : on applique le rôle choisi.
   const { error: profileError } = await admin.from('profiles').upsert({ id: userId, full_name: fullName, role }, { onConflict: 'id' });
+  // Prénom / nom séparés (migration 53) : ignorés si la colonne manque.
+  if (!profileError && (input.firstName || input.lastName)) {
+    await admin.from('profiles').update({ first_name: input.firstName || null, last_name: input.lastName || null }).eq('id', userId);
+  }
   if (profileError) return { ok: false, error: `Compte créé, mais rôle non appliqué : ${profileError.message}` };
   const trainerLinked =
     role === 'formateur' || role === 'referent' ? await ensureTrainerProfile(admin, userId, fullName, email, role === 'formateur') : false;

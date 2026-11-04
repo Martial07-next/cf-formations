@@ -1,5 +1,7 @@
 'use client';
 
+import { splitName } from '@/lib/person-name';
+
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { KeyRound, Trash2, Pencil, X } from 'lucide-react';
 import { updateRole, resetUserPassword, deleteUserAccess, updateUserAccess } from '@/app/administration/actions';
@@ -8,7 +10,7 @@ import { setDevAccess } from '@/app/administration/actions';
 import { ROLE_LABELS, ROLE_OPTIONS, type Role } from '@/lib/roles';
 import { askConfirm } from '@/lib/confirm-dialog';
 
-type Row = { id: string; full_name: string; role: string; created_at: string; email?: string | null; can_invoice?: boolean | null; can_dev?: boolean | null };
+type Row = { id: string; full_name: string; first_name?: string | null; last_name?: string | null; role: string; created_at: string; email?: string | null; can_invoice?: boolean | null; can_dev?: boolean | null };
 
 /** Fenêtre « Modifier l'accès » : nom prénom, e-mail, mot de passe. */
 function EditAccess({ user, self, onClose, onDone }: { user: Row; self: boolean; onClose: () => void; onDone: (msg: string) => void }) {
@@ -33,19 +35,24 @@ function EditAccess({ user, self, onClose, onDone }: { user: Row; self: boolean;
           const fd = new FormData(e.currentTarget);
           startTransition(async () => {
             const res = await updateUserAccess(user.id, {
-              full_name: String(fd.get('full_name') || ''),
+              first_name: String(fd.get('first_name') || ''),
+              last_name: String(fd.get('last_name') || ''),
               email: String(fd.get('email') || ''),
               password: mode === 'type' ? String(fd.get('password') || '') : '',
               generate: mode === 'generate',
             });
             if (!res.ok) return setError(res.error);
-            onDone(res.password ? `Accès de ${fd.get('full_name')} modifié. Nouveau mot de passe : ${res.password} (à lui transmettre, il ne sera plus affiché).` : 'Accès modifié.');
+            onDone(res.password ? `Accès de ${fd.get('first_name')} ${fd.get('last_name')} modifié. Nouveau mot de passe : ${res.password} (à lui transmettre, il ne sera plus affiché).` : 'Accès modifié.');
           });
         }}
       >
         {error && <div role="alert" className="alert alert-error">{error}</div>}
         <div className="form-row">
-          <label>Nom prénom<input name="full_name" required defaultValue={user.full_name} /></label>
+          <label>Prénom<input name="first_name" required defaultValue={splitName(user).first} autoComplete="off" /></label>
+          <label>Nom<input name="last_name" required defaultValue={splitName(user).last} autoComplete="off" style={{ textTransform: 'uppercase' }} /></label>
+        </div>
+        <p className="hint" style={{ margin: '-4px 0 10px' }}>Le prénom sert au « Bonjour » du tableau de bord ; le nom est enregistré en majuscules.</p>
+        <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
           <label>E-mail (identifiant de connexion)<input type="email" name="email" required defaultValue={user.email || ''} /></label>
         </div>
         {!self && (

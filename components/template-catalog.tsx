@@ -21,6 +21,7 @@ import {
 import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
 import { HabSymbolsField } from '@/components/hab-symbols-field';
+import { SmartConfig } from '@/components/smart-config';
 import { formationSymbols } from '@/lib/habilitation';
 import type { DossierDocument } from '@/lib/dossier';
 import { TemplateDossierButton } from '@/components/dossier/document-manager';
@@ -144,6 +145,8 @@ function TemplateFields({
           <input name="title" required defaultValue={t?.title || ''} onChange={(e) => setTitleNow(e.target.value)} />
         </label>
       </div>
+      {/* Suggestions tirées de l'intitulé : certificat, titre exigé, recyclage, IRVE, durée, objectifs. */}
+      <SmartConfig title={titleNow} />
 
       <div className="form-row">
         <div className="field">

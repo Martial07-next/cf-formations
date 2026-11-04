@@ -7,7 +7,7 @@ import { ensureAutorToken, setSessionAuthKinds } from '@/app/autorisations/actio
 import type { AuthPdfItem } from '@/lib/pdf-autorisations';
 import { missingDocs, type DocSignature, type SignableDoc } from '@/lib/documents';
 import { AUTH_KINDS, AUTH_KIND, currentAuth, frDateTime, type AuthKind, type Authorization } from '@/lib/autorisations';
-import { askConfirm } from '@/lib/confirm-dialog';
+import { askConfirm, showMessage } from '@/lib/confirm-dialog';
 
 export type AutorRow = { id: string; name: string; auths: Authorization[]; docSigs?: DocSignature[] };
 
@@ -37,7 +37,7 @@ export function AuthPdfButton({
           const [{ buildAuthorizationsPdf }, { downloadPdf }] = await Promise.all([import('@/lib/pdf-autorisations'), import('@/lib/pdf-dossier')]);
           downloadPdf(await buildAuthorizationsPdf(items, cachet), fileName);
         } catch (e) {
-          alert(e instanceof Error ? e.message : 'PDF impossible à générer.');
+          showMessage(e instanceof Error ? e.message : 'PDF impossible à générer.', { title: 'PDF impossible' });
         } finally {
           setBusy(false);
         }

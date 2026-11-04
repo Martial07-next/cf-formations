@@ -77,8 +77,12 @@ export function CreateAccessPanel({ serviceReady }: { serviceReady: boolean }) {
         <form ref={formRef} action={handle}>
           <div className="form-row">
             <label>
-              Nom complet
-              <input name="full_name" required placeholder="Camille Martin" autoComplete="off" />
+              Prénom
+              <input name="first_name" required placeholder="Camille" autoComplete="off" />
+            </label>
+            <label>
+              Nom
+              <input name="last_name" required placeholder="MARTIN" autoComplete="off" style={{ textTransform: 'uppercase' }} />
             </label>
             <label>
               Adresse e-mail (identifiant)

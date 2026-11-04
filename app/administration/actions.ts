@@ -1,5 +1,7 @@
 'use server';
 
+import { composeFullName } from '@/lib/person-name';
+
 import { createClient, type Role } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
@@ -57,7 +59,10 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
   const admin = serviceClient();
   if (!admin) return { ok: false, error: NO_SERVICE_KEY };
 
-  const fullName = String(formData.get('full_name') || '').trim();
+  // Prénom et nom séparés : « Bonjour Prénom » sans erreur ; nom complet « Prénom NOM ».
+  const firstName = String(formData.get('first_name') || '').trim();
+  const lastName = String(formData.get('last_name') || '').trim();
+  const fullName = firstName || lastName ? composeFullName(firstName, lastName) : String(formData.get('full_name') || '').trim();
   const email = String(formData.get('email') || '').trim().toLowerCase();
   // « Dev (testeur) » : consultation + accès dev (remarques d'amélioration).
   const rawRole = String(formData.get('role') || '');
@@ -65,7 +70,7 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
   const role = (devAccess ? 'consultation' : rawRole) as Role;
   const typedPassword = String(formData.get('password') || '');
 
-  if (!fullName) return { ok: false, error: 'Indique le nom complet.' };
+  if (!firstName || !lastName) return { ok: false, error: 'Indique le prénom et le nom.' };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Adresse e-mail invalide.' };
   if (!ROLE_OPTIONS.includes(role)) return { ok: false, error: "Choisis le type d'accès." };
   if (typedPassword && typedPassword.length < 8) {
@@ -73,7 +78,7 @@ export async function createUserAccess(formData: FormData): Promise<CreateAccess
   }
   const password = typedPassword || generatePassword();
 
-  const res = await createAccount(admin, { fullName, email, role, password });
+  const res = await createAccount(admin, { fullName, email, role, password, firstName, lastName: lastName.toUpperCase() });
   if (!res.ok) return res;
   const { trainerLinked } = res;
   if (devAccess) {
@@ -119,15 +124,17 @@ export async function deleteUserAccess(userId: string): Promise<{ ok: true } | {
  */
 export async function updateUserAccess(
   userId: string,
-  input: { full_name: string; email: string; password: string; generate: boolean }
+  input: { first_name: string; last_name: string; email: string; password: string; generate: boolean }
 ): Promise<{ ok: true; password: string | null } | { ok: false; error: string }> {
   const me = await requireAdmin();
   if (!me) return FORBIDDEN;
   const admin = serviceClient();
   if (!admin) return { ok: false, error: NO_SERVICE_KEY };
-  const fullName = String(input.full_name || '').trim();
+  const firstName = String(input.first_name || '').trim();
+  const lastName = String(input.last_name || '').trim();
+  const fullName = composeFullName(firstName, lastName);
   const email = String(input.email || '').trim().toLowerCase();
-  if (!fullName) return { ok: false, error: 'Indique le nom prénom.' };
+  if (!firstName || !lastName) return { ok: false, error: 'Indique le prénom et le nom.' };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Adresse e-mail invalide.' };
   if (input.password && input.password.length < 8) return { ok: false, error: 'Le mot de passe doit faire au moins 8 caractères.' };
   if (userId === me.id && (input.password || input.generate)) return { ok: false, error: 'Change ton propre mot de passe depuis « Mon profil ».' };
@@ -141,6 +148,9 @@ export async function updateUserAccess(
   if (error) return { ok: false, error: /already|registered|exists/i.test(error.message) ? 'Un autre compte utilise déjà cet e-mail.' : error.message };
   const { error: pErr } = await admin.from('profiles').update({ full_name: fullName }).eq('id', userId);
   if (pErr) return { ok: false, error: pErr.message };
+  // Prénom / nom séparés (migration 53).
+  const { error: nErr } = await admin.from('profiles').update({ first_name: firstName, last_name: lastName.toUpperCase() }).eq('id', userId);
+  if (nErr) return { ok: false, error: 'Exécute d’abord la migration 53 (supabase/migration_phase53.sql) dans Supabase.' };
   revalidatePath('/administration');
   return { ok: true, password };
 }

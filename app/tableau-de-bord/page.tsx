@@ -31,6 +31,7 @@ import { customDocs, signatureFor } from '@/lib/documents';
 import { loadDocs, loadDocSignatures } from '@/lib/documents-server';
 import { DashCard as Card, type DashItem as Item } from '@/components/dash-card';
 import { LiveClock } from '@/components/live-clock';
+import { firstNameOf } from '@/lib/person-name';
 
 export const metadata = { title: 'Tableau de bord · CF PLANNING' };
 
@@ -277,8 +278,8 @@ export default async function DashboardPage() {
   }
 
   // Prénom : le mot qui n'est pas en majuscules (« EROUART Martial » → Martial).
-  const words: string[] = String(profile.full_name || '').split(/\s+/).filter(Boolean);
-  const first = words.find((w) => w !== w.toUpperCase()) || words[0] || '';
+  // Prénom enregistré (Administration › Modifier l'accès), sinon deviné dans le nom.
+  const first = firstNameOf(profile);
   const dateLabel = new Date(today + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   const myCount = myTodo.length;
 

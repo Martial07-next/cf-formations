@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
  * Bouton rouge pour les actions destructrices (supprimer, retirer, effacer,
  * annuler, détacher), vert sinon. Échap ou clic hors de la fenêtre = Annuler.
  */
-export type ConfirmOptions = { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean };
+export type ConfirmOptions = { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; /** Message d'information : un seul bouton. */ info?: boolean };
 
 const DESTRUCTIVE = /^(Dernière confirmation\s*:\s*)?(supprimer|retirer|effacer|annuler|détacher)/i;
 
@@ -25,6 +25,7 @@ function defaults(message: string, o: ConfirmOptions) {
     title: o.title ?? (danger ? 'Action à confirmer' : 'Confirmation'),
     confirmLabel: o.confirmLabel ?? (danger && verb ? (verb === 'Annuler' ? 'Oui, annuler' : verb) : 'Confirmer'),
     cancelLabel: o.cancelLabel ?? (verb === 'Annuler' ? 'Non' : 'Annuler'),
+    info: Boolean(o.info),
   };
 }
 
@@ -95,9 +96,11 @@ function ConfirmBox({
         )}
       </div>
       <div className="cf-confirm-foot">
-        <button type="button" onClick={() => finish(false)} autoFocus={options.danger && !input}>
-          {options.cancelLabel}
-        </button>
+        {!options.info && (
+          <button type="button" onClick={() => finish(false)} autoFocus={options.danger && !input}>
+            {options.cancelLabel}
+          </button>
+        )}
         <button
           type="button"
           className={options.danger ? 'cf-confirm-danger' : 'primary'}
@@ -148,4 +151,13 @@ export function askText(message: string, options: ConfirmOptions & { input?: Inp
   if (typeof document === 'undefined') return Promise.resolve(null);
   const { input = {}, ...rest } = options;
   return new Promise((resolve) => open(message, rest, input, (ok, value) => resolve(ok ? value.trim() : null)));
+}
+
+/**
+ * Message d'information (remplace le alert() du navigateur), même fenêtre que
+ * les confirmations, avec un seul bouton « OK ».
+ */
+export function showMessage(message: string, options: { title?: string } = {}): Promise<void> {
+  if (typeof document === 'undefined') return Promise.resolve();
+  return new Promise((resolve) => open(message, { title: options.title ?? 'Information', confirmLabel: 'OK', info: true, danger: false }, undefined, () => resolve()));
 }

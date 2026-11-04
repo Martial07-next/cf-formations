@@ -2048,3 +2048,17 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .dossier-pill.a-facturer,.dossier-pill.en-cours{background:#fff1d6;color:#8a4b00}
 .dossier-pill.en-attente{background:#eef0f3;color:var(--muted)}
 @media (max-width:760px){.sessions-periods{width:100%;overflow-x:auto}.sessions-periods button{padding:6px 10px}}
+
+/* ---- Configuration intelligente des formations ---- */
+.smart-config{margin:4px 0 16px;padding:12px 14px;border-radius:14px;border:1px solid #cfe9d9;background:#f4fbf7}
+.smart-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.smart-head strong{flex:1;font-size:13.5px}
+.smart-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#17241b;color:#08fa64}
+.smart-info{display:flex;align-items:center;gap:6px;margin:0 0 6px;font-size:12.5px;color:var(--ok-ink)}
+.smart-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.smart-list li{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;background:#fff;border:1px solid var(--line)}
+.smart-list li.done{opacity:.7}
+.smart-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.smart-main strong{font-size:13px}
+.smart-main small{font-size:11.5px;color:var(--muted)}
+.smart-ok{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ok-ink)}
