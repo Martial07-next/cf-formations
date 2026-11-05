@@ -296,8 +296,12 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
   const part = (alias: string, d: NonNullable<typeof ms.sub>, withName: boolean) =>
     `${alias}: ${d.field} { ${[d.id ? sel('id', d.id) : '', withName ? d.name : '', d.start, d.end, d.startTime, d.endTime].filter(Boolean).join(' ')} }`;
-  const subs = ms.sub ? part('subs', ms.sub, true) : '';
-  const slots = ms.slots ? part('slots', ms.slots, false) : '';
+  const slots = ms.slots ? part('slots', ms.slots, true) : '';
+  // Sous-session du même type qu'une session : ses créneaux aussi (découpage par semaine).
+  const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
+  const subs = ms.sub
+    ? `subs: ${ms.sub.field} { ${[ms.sub.id ? sel('id', ms.sub.id) : '', ms.sub.name, ms.sub.start, ms.sub.end, ms.sub.startTime, ms.sub.endTime].filter(Boolean).join(' ')} ${ms.sub.type === sessTypeName && slots ? slots : ''} }`
+    : '';
   const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} } }`);
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
@@ -311,8 +315,17 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
     hasStatus: Boolean(sh.status),
     hasModules: Boolean(ms.sub || ms.slots),
     sessions: (data?.sessions || []).map((s: any) => {
-      const subsList = (s.subs || []).map(mapDated).filter((m: any) => m.start);
-      // Sans sous-session : créneaux regroupés en blocs de jours consécutifs (un bloc = un module).
+      // Sous-sessions (modules d'un parcours GEIQ…) : une longue sous-session est découpée par semaine
+      // d'après ses créneaux ; chaque bloc garde le nom du module.
+      const subsList: DigiformaModule[] = (s.subs || []).flatMap((sub: any, i: number) => {
+        const m = mapDated(sub, i);
+        if (!m.start) return [];
+        const subSlots = (sub.slots || []).map(mapDated).filter((x: any) => x.start);
+        const long = m.end && day(m.end) - day(m.start) > 6 * 86400000;
+        if (!long || !subSlots.length) return long ? [] : [m];
+        return slotBlocks(subSlots.map((x: any) => ({ ...x, name: x.name || m.name }))).map((b) => ({ ...b, key: `${m.key}~${b.start.slice(0, 10)}` }));
+      });
+      // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
       const modules = subsList.length ? subsList : slotBlocks((s.slots || []).map(mapDated).filter((m: any) => m.start));
       return {
         fromSubsessions: subsList.length > 0,
@@ -327,17 +340,31 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   };
 }
 
-/** Créneaux → blocs de jours qui se suivent (week-end compris), avec les heures du premier et du dernier créneau. */
+const day = (v: string) => new Date(v.slice(0, 10) + 'T12:00:00Z').getTime();
+const mondayOfIso = (v: string) => {
+  const d = new Date(v.slice(0, 10) + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Créneaux → modules : un bloc par semaine (lundi → dimanche) et par module
+ * (nom du créneau). Les parcours longs (GEIQ…) donnent ainsi les jours
+ * réellement prévus chaque semaine, avec le module de la semaine.
+ */
 function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
   const sorted = [...slots].sort((a, b) => `${a.start}${a.startTime || ''}`.localeCompare(`${b.start}${b.startTime || ''}`));
   const out: DigiformaModule[] = [];
-  const day = (v: string) => new Date(v.slice(0, 10) + 'T12:00:00Z').getTime();
   for (const sl of sorted) {
     const last = out[out.length - 1];
-    if (last && day(sl.start) - day(last.end) <= 3 * 86400000) {
-      last.end = sl.end || sl.start;
-      last.endTime = sl.endTime;
-    } else out.push({ key: `bloc-${sl.start.slice(0, 10)}`, name: null, start: sl.start, end: sl.end || sl.start, startTime: sl.startTime, endTime: sl.endTime });
+    const sameWeek = last && mondayOfIso(sl.start) === mondayOfIso(last.start);
+    const sameModule = last && (last.name || '') === (sl.name || '');
+    if (last && sameWeek && sameModule && day(sl.start) - day(last.end) <= 3 * 86400000) {
+      if (day(sl.end || sl.start) >= day(last.end)) {
+        last.end = sl.end || sl.start;
+        last.endTime = sl.endTime;
+      }
+    } else out.push({ key: `bloc-${sl.start.slice(0, 10)}${sl.name ? `-${sl.name.slice(0, 40)}` : ''}`, name: sl.name, start: sl.start, end: sl.end || sl.start, startTime: sl.startTime, endTime: sl.endTime });
   }
   return out;
 }

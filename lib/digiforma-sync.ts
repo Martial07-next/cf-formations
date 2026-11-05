@@ -52,7 +52,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const subIds = new Set(
     listed.sessions
       .filter((x) => x.fromSubsessions && (!listed.hasStatus || isPlannedStatus(x.status)))
-      .flatMap((x) => x.modules.map((m) => m.key))
+      .flatMap((x) => x.modules.map((m) => m.key.split('~')[0]))
   );
   let asModule = 0;
   for (const s of listed.sessions) {
@@ -70,7 +70,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     }
     const raw = s.modules.length
       ? s.modules.map((m) => ({ key: `${s.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false }))
-      : s.startAt && s.endAt
+      : s.startAt && s.endAt && new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime() <= 6 * 86400000
         ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true }]
         : [];
     const upcoming = raw.filter((m) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at);
@@ -121,7 +121,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       continue;
     }
     const rows = s.modules.map((m) => {
-      const own = detail.byModule[m.key.slice(s.id.length + 1)];
+      const own = detail.byModule[m.key.slice(s.id.length + 1).split('~')[0]];
       return {
         key: m.key,
         df_session_id: s.id,
@@ -160,6 +160,12 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       .gte('end_at', `${today}T00:00:00`)
       .not('key', 'in', `(${keep.map((k) => `"${k.replace(/"/g, '')}"`).join(',')})`);
   }
+  // Première version de la synchronisation : sessions Digiforma entières (parfois sur des mois) posées dans
+  // « À affecter ». Jamais placées (toujours sans salle) : retirées, les modules les remplacent.
+  const { data: legacy } = await supabase.from('sessions').select('id').in('room_id', [...holdIds]).like('notes', 'Importée automatiquement de Digiforma%');
+  const legacyIds = ((legacy as any[]) || []).map((x) => x.id);
+  if (legacyIds.length) await supabase.from('sessions').delete().in('id', legacyIds);
+
   // Modules passés jamais placés : plus utiles.
   await supabase.from('digiforma_modules').delete().is('placed_session_id', null).lt('end_at', `${today}T00:00:00`);
 
@@ -192,6 +198,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s) ou en cours` +
     (asModule ? ` (${asModule} sous-session(s) de parcours GEIQ / POEC prises comme modules)` : '') +
     `. ${linked} module(s) déjà sur le planning, reliés (non reproposés). ` +
+    (legacyIds.length ? `${legacyIds.length} ancienne(s) session(s) entière(s) « À affecter » retirée(s). ` : '') +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +
