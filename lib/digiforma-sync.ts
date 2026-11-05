@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
+import { matchCatalog } from '@/lib/catalog-match';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
@@ -47,7 +48,18 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let notPlanned = 0;
   let past = 0;
   const todo: { id: string; name: string; modules: { key: string; name: string | null; start_at: string; end_at: string; whole: boolean }[] }[] = [];
+  // Sous-sessions des parcours (GEIQ…) : déjà prises comme modules de leur session parente.
+  const subIds = new Set(
+    listed.sessions
+      .filter((x) => x.fromSubsessions && (!listed.hasStatus || isPlannedStatus(x.status)))
+      .flatMap((x) => x.modules.map((m) => m.key))
+  );
+  let asModule = 0;
   for (const s of listed.sessions) {
+    if (subIds.has(s.id)) {
+      asModule++;
+      continue;
+    }
     if (listed.hasStatus) {
       const st = s.status || '(vide)';
       seenStatus.set(st, (seenStatus.get(st) || 0) + 1);
@@ -67,6 +79,33 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
   // Les plus proches d'abord (si le temps manque, la suite est reprise au prochain passage).
   todo.sort((a, b) => a.modules[0].start_at.localeCompare(b.modules[0].start_at));
+
+  // Sessions déjà sur le planning (même formation, mêmes dates) : le module y est relié, pas reproposé.
+  const { data: tplRows } = await supabase.from('templates').select('id, title');
+  const catalog = ((tplRows as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
+  const { data: holdRows } = await supabase.from('rooms').select('id').eq('is_holding', true);
+  const holdIds = new Set(((holdRows as any[]) || []).map((r) => r.id));
+  const { data: planRows } = await supabase
+    .from('sessions')
+    .select('id, title, template_id, start_at, end_at, room_id')
+    .gte('end_at', `${today}T00:00:00`)
+    .lte('start_at', `${horizon}T23:59:59`);
+  const planned = ((planRows as any[]) || []).filter((p) => !holdIds.has(p.room_id));
+  const { data: linkedRows } = await supabase.from('digiforma_modules').select('placed_session_id').not('placed_session_id', 'is', null);
+  const alreadyLinked = new Set(((linkedRows as any[]) || []).map((r) => r.placed_session_id));
+  let linked = 0;
+  const findOnPlanning = (name: string, parent: string, start: string, end: string): string | null => {
+    const sameDays = planned.filter((p) => !alreadyLinked.has(p.id) && p.start_at.slice(0, 10) <= end.slice(0, 10) && p.end_at.slice(0, 10) >= start.slice(0, 10));
+    if (!sameDays.length) return null;
+    const m = matchCatalog(name, catalog, parent);
+    const byTemplate = m.templateId && m.confidence !== 'none' ? sameDays.filter((p) => p.template_id === m.templateId) : [];
+    if (byTemplate.length === 1) return byTemplate[0].id;
+    const byTitle = sameDays
+      .map((p) => ({ p, r: matchCatalog(name, [{ id: p.id, title: p.title }], parent) }))
+      .filter((x) => x.r.score >= 0.6)
+      .sort((a, b) => b.r.score - a.r.score);
+    return byTitle.length === 1 || (byTitle.length > 1 && byTitle[0].r.score - byTitle[1].r.score >= 0.15) ? byTitle[0].p.id : null;
+  };
 
   let modulesSaved = 0;
   let remaining = 0;
@@ -98,6 +137,19 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const { error } = await supabase.from('digiforma_modules').upsert(rows, { onConflict: 'key' });
     if (error) continue;
     modulesSaved += rows.length;
+    // Modules pas encore placés mais déjà sur le planning (créés à la main) : reliés.
+    const { data: unplaced } = await supabase.from('digiforma_modules').select('key').eq('df_session_id', s.id).is('placed_session_id', null);
+    const open = new Set(((unplaced as any[]) || []).map((u) => u.key));
+    for (const r of rows) {
+      if (!open.has(r.key)) continue;
+      const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at);
+      if (!hit) continue;
+      const { error: le } = await supabase.from('digiforma_modules').update({ placed_session_id: hit }).eq('key', r.key);
+      if (!le) {
+        alreadyLinked.add(hit);
+        linked++;
+      }
+    }
     // Modules disparus de Digiforma (pas encore placés) : retirés.
     const keep = rows.map((r) => r.key);
     await supabase
@@ -137,7 +189,9 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
 
   const log =
-    `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s). ` +
+    `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s) ou en cours` +
+    (asModule ? ` (${asModule} sous-session(s) de parcours GEIQ / POEC prises comme modules)` : '') +
+    `. ${linked} module(s) déjà sur le planning, reliés (non reproposés). ` +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +
@@ -169,7 +223,8 @@ export async function addNewTrainees(supabase: SupabaseClient, row: { id: string
     const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
     const { data: ins, error } = await supabase
       .from('session_trainees')
-      .upsert({ session_id: row.id, trainee_id: trainee.id, status: conflict ? 'en_attente' : 'validee' }, { onConflict: 'session_id,trainee_id', ignoreDuplicates: true })
+      // Inscription indécise (ou autre) sur Digiforma, ou créneau déjà pris : en attente.
+      .upsert({ session_id: row.id, trainee_id: trainee.id, status: conflict || t.status === 'en_attente' ? 'en_attente' : 'validee' }, { onConflict: 'session_id,trainee_id', ignoreDuplicates: true })
       .select('trainee_id');
     if (!error && (ins as any[] | null)?.length) added++;
   }

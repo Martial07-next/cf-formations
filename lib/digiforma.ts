@@ -62,6 +62,8 @@ export type DigiformaTrainee = {
   firstName: string | null;
   lastName: string;
   email: string | null;
+  /** Inscription sur Digiforma : confirmée → validée ; indécise ou autre → en attente. */
+  status?: 'validee' | 'en_attente';
 };
 
 export type DigiformaSession = {
@@ -118,6 +120,7 @@ async function traineeSelection(): Promise<string> {
     sel('firstName', pick(tf, ['firstname', 'firstName', 'first_name'])),
     sel('lastName', pick(tf, ['lastname', 'lastName', 'last_name', 'birthName'])),
     sel('email', pick(tf, ['email', 'mail'])),
+    sel('regStatus', (f[`${f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant'}#leaf`] || []).find((n) => /status|state|pipeline|registration|inscription/i.test(n)) || null),
   ]
     .filter(Boolean)
     .join(' ');
@@ -216,7 +219,7 @@ export function isPlannedStatus(v: string | null): boolean {
  * ---------------------------------------------------------------------- */
 
 export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null };
-export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[] };
+export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
 
 /** Champs d'un type « daté » (sous-session, créneau) : nom, début, fin, heures, stagiaires. */
 function datedShape(f: Record<string, string[]>, type: string | null) {
@@ -274,6 +277,13 @@ export async function digiformaStructure(): Promise<string> {
     `Modules (sous-sessions) : ${ms.sub ? `${ms.sub.field} (${ms.sub.type}) · ${ms.sub.name || '-'} ${ms.sub.start} ${ms.sub.end} ${ms.sub.trainees ? '· stagiaires' : ''}` : 'aucun'}`,
     `Créneaux : ${ms.slots ? `${ms.slots.field} (${ms.slots.type}) · ${ms.slots.start} ${ms.slots.startTime} ${ms.slots.endTime}` : 'aucun'}`,
   ];
+  const st = await statusShape();
+  lines.push(
+    `Statut du stagiaire : ${st.traineeStatus || 'aucun'} · inscriptions : ${st.custField ? `${st.custField} (${st.custT}) statut ${st.custStatus || 'aucun'}, stagiaires ${st.custTrainees || st.custTrainee || 'aucun'}` : 'aucune'} · abandons : ${st.abField ? `${st.abField} (${st.abT})` : 'aucun'}`
+  );
+  lines.push(`${st.traineeT} : ${(f[st.traineeT] || []).join(', ')}`);
+  if (st.custT) lines.push(`${st.custT} : ${(f[st.custT] || []).join(', ')}`);
+  if (st.abT && !st.abDirect) lines.push(`${st.abT} : ${(f[st.abT] || []).join(', ')}`);
   if (ms.sub?.type) lines.push(`${ms.sub.type} : ${(f[ms.sub.type] || []).join(', ')}`);
   if (ms.slots?.type) lines.push(`${ms.slots.type} : ${(f[ms.slots.type] || []).join(', ')}`);
   return lines.join('\n');
@@ -305,6 +315,7 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
       // Sans sous-session : créneaux regroupés en blocs de jours consécutifs (un bloc = un module).
       const modules = subsList.length ? subsList : slotBlocks((s.slots || []).map(mapDated).filter((m: any) => m.start));
       return {
+        fromSubsessions: subsList.length > 0,
         id: String(s.id),
         name: s.name || 'Session Digiforma',
         status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? '' : s.status),
@@ -337,14 +348,18 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
   const ms = await moduleShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
   const tSel = await traineeSelection();
-  const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } }` : '';
+  const stPart = await statusPart();
+  const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
+  const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } ${ms.sub.type === sessTypeName ? stPart : ''} }` : '';
   const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
-  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${modPart} } }`, { id });
+  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${stPart} ${modPart} } }`, { id });
   const byModule: Record<string, DigiformaTrainee[]> = {};
   (data?.session?.subs || []).forEach((m: any, i: number) => {
-    byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = (m.trainees || []).map(mapTrainee);
+    const raw = m.trainees || [];
+    byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = applyStatus(raw.map(mapTrainee), m, raw);
   });
-  return { trainees: (data?.session?.trainees || []).map(mapTrainee), byModule };
+  const raw = data?.session?.trainees || [];
+  return { trainees: applyStatus(raw.map(mapTrainee), data?.session, raw), byModule };
 }
 
 /** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */
@@ -363,4 +378,73 @@ export function toWallClock(v: string, time: string | null, fallback: string): s
   // Date sans heure (minuit) : horaires par défaut de la journée.
   const hm = `${p.hour}:${p.minute}`;
   return `${p.year}-${p.month}-${p.day}T${hm === '00:00' && !time ? fallback : hm}:00`;
+}
+
+
+/* ------------------------------------------------------------------------
+ * Statut d'inscription des stagiaires (indécis, confirmé, annulé…) :
+ * sur le stagiaire, ou sur l'inscription du client de la session
+ * (« customers »), et départs (« abandons »). Détecté dans le schéma.
+ * ---------------------------------------------------------------------- */
+
+const STATUS_RE = /status|state|pipeline|stage|registration|inscription|crm/i;
+
+async function statusShape() {
+  const f = await schemaFields();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const traineeT = f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant';
+  const typeOf = (t: string, field: string) => f[`${t}.${field}#type`]?.[0] || null;
+  const leafStatus = (t: string | null) => (t ? (f[`${t}#leaf`] || []).find((n) => STATUS_RE.test(n)) || null : null);
+  const traineeStatus = leafStatus(traineeT);
+  const custField = pick(f[sessT], ['customers', 'clients', 'registrations', 'inscriptions']);
+  const custT = custField ? typeOf(sessT, custField) : null;
+  const custStatus = leafStatus(custT);
+  const custTrainees = custT ? pick(f[custT], ['trainees', 'students', 'participants']) : null;
+  const custTrainee = custT && !custTrainees ? pick(f[custT], ['trainee', 'student', 'participant']) : null;
+  const abField = pick(f[sessT], ['abandons', 'withdrawals', 'dropouts']);
+  const abT = abField ? typeOf(sessT, abField) : null;
+  const abDirect = abT === traineeT;
+  const abTrainee = abT && !abDirect ? pick(f[abT], ['trainee', 'student', 'participant']) : null;
+  return { traineeT, traineeStatus, custField, custT, custStatus, custTrainees, custTrainee, abField, abT, abDirect, abTrainee };
+}
+
+/** Morceau de requête (session ou sous-session) : statuts d'inscription et abandons. */
+async function statusPart(): Promise<string> {
+  const st = await statusShape();
+  const parts: string[] = [];
+  if (st.custField && st.custStatus && (st.custTrainees || st.custTrainee)) {
+    parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custTrainees ? `who: ${st.custTrainees} { id }` : `one: ${st.custTrainee} { id }`} }`);
+  }
+  if (st.abField && (st.abDirect || st.abTrainee)) parts.push(st.abDirect ? `gone: ${st.abField} { id }` : `gone: ${st.abField} { one: ${st.abTrainee} { id } }`);
+  return parts.join(' ');
+}
+
+/** Valeur de statut → validée / en attente / exclu (annulé, abandon). */
+export function registrationOf(v: unknown): 'validee' | 'en_attente' | 'exclu' {
+  const t = String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!t) return 'validee';
+  if (/annul|cancel|abandon|withdraw|lost|perdu|refus|declin/.test(t)) return 'exclu';
+  if (/confirm|valid|accept|won|gagn|inscrit|registered|enrolled|ongoing|finished|termin/.test(t)) return 'validee';
+  return 'en_attente'; // indécis, en attente, à confirmer, devis…
+}
+
+/** Applique statuts d'inscription et abandons à une liste de stagiaires (bloc renvoyé par statusPart). */
+function applyStatus(trainees: DigiformaTrainee[], block: any, rawTrainees: any[]): DigiformaTrainee[] {
+  const byId = new Map<string, 'validee' | 'en_attente' | 'exclu'>();
+  for (const r of block?.regs || []) {
+    const st = registrationOf(r.regStatus);
+    for (const w of [...(r.who || []), ...(r.one ? [r.one] : [])]) {
+      const prev = byId.get(String(w.id));
+      // Le plus restrictif l'emporte (exclu > en attente > validée).
+      if (!prev || st === 'exclu' || (st === 'en_attente' && prev === 'validee')) byId.set(String(w.id), st);
+    }
+  }
+  for (const g of block?.gone || []) byId.set(String(g.one?.id ?? g.id), 'exclu');
+  return trainees
+    .map((t, i) => {
+      const own = rawTrainees[i]?.regStatus;
+      const st = byId.get(t.id) ?? (own !== undefined ? registrationOf(own) : 'validee');
+      return st === 'exclu' ? null : { ...t, status: st };
+    })
+    .filter(Boolean) as DigiformaTrainee[];
 }

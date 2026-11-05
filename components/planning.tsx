@@ -202,6 +202,7 @@ export function Planning({
   createdBy = {},
   alerts = null,
   toAssign = [],
+  toAssignWeek = null,
   mine = null,
   nowKey = '',
   renderedAt = 0,
@@ -243,6 +244,8 @@ export function Planning({
   alerts?: React.ReactNode;
   /** Sessions importées de Digiforma, sans salle : listées sous le planning (pas dans la grille). */
   toAssign?: ToAssign[];
+  /** Lundi de la semaine des modules (vue semaine / jour) ; null en vue mois (regroupés par semaine). */
+  toAssignWeek?: string | null;
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
   nowKey?: string;
   /** Formateur : ses formations, affichées en premier. */
@@ -939,7 +942,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
 
       {canEdit && (
         <dialog
@@ -1196,7 +1199,7 @@ export type ToAssign = {
  * durer un an, seuls les modules de la semaine se placent), et sessions déjà
  * créées dont la salle reste à choisir.
  */
-function ToAssignSection({ items, catalog }: { items: ToAssign[]; catalog: { id: string; title: string }[] }) {
+function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog: { id: string; title: string }[]; week: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   // Formation choisie pour chaque module (par défaut : celle reconnue).
@@ -1218,14 +1221,19 @@ function ToAssignSection({ items, catalog }: { items: ToAssign[]; catalog: { id:
   return (
     <section className="panel to-assign" aria-labelledby="to-assign-title">
       <div className="panel-head">
-        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Modules Digiforma à placer sur cette période <span className="to-assign-count">{items.length}</span></h2>
+        <h2 id="to-assign-title">
+          <Inbox size={17} aria-hidden /> Modules Digiforma à placer{week ? ` · ${weekLabel(week)}` : ' · par semaine'} <span className="to-assign-count">{items.length}</span>
+        </h2>
       </div>
       <p className="hint" style={{ marginTop: 0 }}>
-        Modules des sessions planifiées sur Digiforma qui ont lieu sur la période affichée, avec leurs stagiaires à jour. « Placer » crée la session : choisis ensuite la salle et le formateur sur sa fiche.
+        Modules des sessions planifiées ou en cours sur Digiforma (dont les modules des parcours GEIQ) qui ont lieu cette semaine, avec leurs stagiaires à jour (indécis : en attente). Ceux déjà sur le planning n’apparaissent pas. « Placer » crée la session : choisis ensuite la salle et le formateur sur sa fiche.
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
+      {weekGroups(items, week).map((g) => (
+      <div key={g.monday} className="to-assign-week">
+      {!week && <h3 className="to-assign-week-title">{weekLabel(g.monday)}</h3>}
       <ul className="to-assign-list">
-        {items.map((s) => (
+        {g.items.map((s) => (
           <li key={s.kind + s.id}>
             <span className="to-assign-main">
               <strong>{s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title}</strong>
@@ -1263,6 +1271,32 @@ function ToAssignSection({ items, catalog }: { items: ToAssign[]; catalog: { id:
           </li>
         ))}
       </ul>
+      </div>
+      ))}
     </section>
   );
+}
+
+/** Lundi (AAAA-MM-JJ) de la semaine d'une date. */
+function mondayIso(iso: string) {
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+/** « Semaine du 9 au 15 novembre ». */
+function weekLabel(monday: string) {
+  const a = new Date(monday + 'T12:00:00Z');
+  const b = new Date(a.getTime() + 6 * 86400000);
+  const f = (d: Date, month: boolean) => d.toLocaleDateString('fr-FR', { day: 'numeric', ...(month ? { month: 'long' } : {}), timeZone: 'UTC' });
+  return `Semaine du ${f(a, a.getUTCMonth() !== b.getUTCMonth())} au ${f(b, true)}`;
+}
+/** Modules regroupés par semaine de début (une seule semaine en vue semaine / jour). */
+function weekGroups(items: ToAssign[], week: string | null) {
+  if (week) return [{ monday: week, items }];
+  const map = new Map<string, ToAssign[]>();
+  for (const it of items) {
+    const k = mondayIso(it.start_at);
+    map.set(k, [...(map.get(k) || []), it]);
+  }
+  return [...map].sort(([a], [b]) => a.localeCompare(b)).map(([monday, list]) => ({ monday, items: list }));
 }

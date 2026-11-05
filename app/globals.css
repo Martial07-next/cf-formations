@@ -2214,3 +2214,5 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .to-assign-flag.doute{background:#fde7c7;color:#7a4300}
 .to-assign-flag.none{background:var(--surface-2);color:var(--muted)}
 @media (max-width:640px){.to-assign-list{grid-template-columns:1fr}}
+.to-assign-week+.to-assign-week{margin-top:14px}
+.to-assign-week-title{margin:0 0 8px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}

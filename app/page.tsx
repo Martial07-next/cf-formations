@@ -150,8 +150,11 @@ export default async function Page({
     : Promise.resolve([] as SessionAlert[]);
   // Digiforma (migration 57) : modules de la période à placer + sessions créées dont la salle reste à choisir.
   const holdingIds = ((rooms as any[]) || []).filter((r) => r.is_holding).map((r) => r.id as string);
-  const periodFrom = isoDate(new Date(Math.max(rangeStart.getTime(), Date.now()))) + 'T00:00:00';
-  const periodTo = isoDate(rangeEnd) + 'T00:00:00';
+  // Par semaine : vue semaine / jour → la semaine (lundi → dimanche) ; vue mois → les semaines du mois, regroupées.
+  const weekStart = currentView === 'month' ? rangeStart : mondayOf(currentView === 'day' ? dayAnchor : monday);
+  const weekEnd = currentView === 'month' ? addDays(rangeEnd, 2) : addDays(weekStart, 7);
+  const periodFrom = isoDate(new Date(Math.max(weekStart.getTime(), new Date(isoDate(new Date()) + 'T00:00:00Z').getTime()))) + 'T00:00:00';
+  const periodTo = isoDate(weekEnd) + 'T00:00:00';
   const catalog = ((templates as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
   const toAssignQuery: Promise<ToAssign[]> = canManage(profile?.role)
     ? (async () => {
@@ -460,6 +463,7 @@ export default async function Page({
         mine={await mineQuery.then((list) => (list ? <MySessions sessions={list} nowKey={parisNowKey()} /> : null))}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
         toAssign={await toAssignQuery}
+        toAssignWeek={currentView === 'month' ? null : isoDate(weekStart)}
       />
     </main>
   );
