@@ -17,6 +17,7 @@ import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
+import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -243,8 +244,12 @@ export default async function Page({
             }
             // Déjà sur le planning : session aux mêmes jours avec les mêmes stagiaires, ou parcours déjà posé cette semaine.
             let covered: string | null = null;
+            // Personne de réel sur ces jours, ou stage / vacances : rien à placer en salle.
+            if (isCompanyPeriod(m.name || '')) covered = 'Stage en entreprise : période du parcours, pas de salle';
+            else if (isOffPeriod(m.name || '')) covered = 'Pas de formation ces jours-là (vacances, fermeture…)';
+            else if (!real.length) covered = all.length ? 'Aucun vrai stagiaire prévu (fictifs ou corbeille seulement)' : 'Aucun stagiaire prévu sur ces créneaux';
             const bySession = real.length ? sessPeople.find((x) => sameDays(x.start_at, x.end_at, m.start_at, m.end_at) && x.people.count(real) >= half(real.length)) : null;
-            if (bySession) covered = `Déjà sur le planning : ${bySession.title}`;
+            if (!covered && bySession) covered = `Déjà sur le planning : ${bySession.title}`;
             if (!covered && program) {
               const ev = ((progEvents as any[]) || []).find((e) => e.poec_id === program!.id && e.start_date <= m.end_at.slice(0, 10) && e.end_date >= m.start_at.slice(0, 10));
               const ps = sessPeople.find((x) => x.poec_id === program!.id && sameDays(x.start_at, x.end_at, m.start_at, m.end_at));

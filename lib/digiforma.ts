@@ -217,7 +217,7 @@ export function isPlannedStatus(v: string | null): boolean {
  * les modules, avec leurs propres dates, qui se placent sur le planning).
  * ---------------------------------------------------------------------- */
 
-export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null };
+export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[] };
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
 
 /** Champs d'un type « daté » (sous-session, créneau) : nom, début, fin, heures, stagiaires. */
@@ -394,13 +394,23 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
         last.end = sl.end || sl.start;
         last.endTime = sl.endTime;
       }
-    } else out.push({ key: `bloc-${sl.start.slice(0, 10)}${sl.name ? `-${sl.name.slice(0, 40)}` : ''}`, name: sl.name, start: sl.start, end: sl.end || sl.start, startTime: sl.startTime, endTime: sl.endTime });
+      last.slotIds!.push(sl.key);
+    } else
+      out.push({
+        key: `bloc-${sl.start.slice(0, 10)}${sl.name ? `-${sl.name.slice(0, 40)}` : ''}`,
+        name: sl.name,
+        start: sl.start,
+        end: sl.end || sl.start,
+        startTime: sl.startTime,
+        endTime: sl.endTime,
+        slotIds: [sl.key],
+      });
   }
   return out;
 }
 
 /** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
-export async function digiformaSessionDetail(id: string): Promise<{ trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]> }> {
+export async function digiformaSessionDetail(id: string): Promise<{ trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> }> {
   const sh = await sessionShape();
   const ms = await moduleShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
@@ -409,14 +419,18 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
   const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
   const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } ${ms.sub.type === sessTypeName ? stPart : ''} }` : '';
   const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
-  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${stPart} ${modPart} } }`, { id });
+  const att = await slotAttendancePart();
+  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${stPart} ${modPart} ${att} } }`, { id });
+  // Présence par créneau : stagiaires réellement prévus ce jour-là.
+  const bySlot: Record<string, string[]> = {};
+  for (const sl of data?.session?.att || []) bySlot[String(sl.id)] = (sl.ct || []).map((c: any) => String(c.one?.id ?? c.id ?? '')).filter(Boolean);
   const byModule: Record<string, DigiformaTrainee[]> = {};
   (data?.session?.subs || []).forEach((m: any, i: number) => {
     const raw = m.trainees || [];
     byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = applyStatus(raw.map(mapTrainee), m, raw);
   });
   const raw = data?.session?.trainees || [];
-  return { trainees: applyStatus(raw.map(mapTrainee), data?.session, raw), byModule };
+  return { trainees: applyStatus(raw.map(mapTrainee), data?.session, raw), byModule, bySlot };
 }
 
 /** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */
@@ -523,4 +537,20 @@ function applyStatus(trainees: DigiformaTrainee[], block: any, rawTrainees: any[
       return st === 'exclu' ? null : { ...t, status: st };
     })
     .filter(Boolean) as DigiformaTrainee[];
+}
+
+/** Morceau de requête : stagiaires prévus sur chaque créneau (si l'API le permet). */
+async function slotAttendancePart(): Promise<string> {
+  const f = await schemaFields();
+  const ms = await moduleShape();
+  if (!ms.slots?.type) return '';
+  const slotT = ms.slots.type;
+  const ctField = ['customerTrainees', 'trainees', 'attendees'].find((n) => (f[slotT] || []).includes(n) && !(f[`${slotT}#leaf`] || []).includes(n)) || null;
+  if (!ctField) return '';
+  const ctT = f[`${slotT}.${ctField}#type`]?.[0] || null;
+  if (!ctT) return '';
+  // Directement des stagiaires, ou des inscriptions qui portent un stagiaire.
+  if (ctT === (f.Trainee ? 'Trainee' : 'Student')) return `att: ${ms.slots.field} { id ct: ${ctField} { id } }`;
+  const tr = pick(f[ctT], ['trainee', 'student', 'participant']);
+  return tr ? `att: ${ms.slots.field} { id ct: ${ctField} { one: ${tr} { id } } }` : '';
 }
