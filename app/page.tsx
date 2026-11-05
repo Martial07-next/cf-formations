@@ -15,7 +15,8 @@ import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
-import { matchModule } from '@/lib/catalog-match';
+import { matchCatalog, matchModule } from '@/lib/catalog-match';
+import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -181,18 +182,88 @@ export default async function Page({
             : Promise.resolve({ data: [] as any[] }),
         ]);
         const mods = mods0.error ? await modsQuery(false) : mods0;
+        const modRows = (mods.data as any[]) || [];
+
+        // Corbeille (migration 59) : modules et stagiaires mis de côté.
+        const { data: ign } = await supabase.from('digiforma_ignored').select('kind, value, label');
+        const ignoredModules = new Set(((ign as any[]) || []).filter((x) => x.kind === 'module').map((x) => x.value));
+        const ignoredPeople = new Set(((ign as any[]) || []).filter((x) => x.kind === 'trainee').map((x) => x.value));
+
+        // Ce qui est déjà sur le planning cette semaine : sessions (avec stagiaires), parcours et leurs évènements.
+        const [{ data: weekSessions }, { data: progRows }, { data: progEvents }] = await Promise.all([
+          supabase
+            .from('sessions')
+            .select('id, title, template_id, poec_id, room_id, start_at, end_at, session_trainees(trainees(email, full_name, first_name, last_name))')
+            .lt('start_at', periodTo)
+            .gte('end_at', periodFrom),
+          supabase.from('poec_programs').select('id, title, start_date, end_date, poec_trainees(trainees(email, full_name, first_name, last_name))').gte('end_date', periodFrom.slice(0, 10)),
+          supabase.from('planning_events').select('id, poec_id, start_date, end_date').not('poec_id', 'is', null).lte('start_date', periodTo.slice(0, 10)).gte('end_date', periodFrom.slice(0, 10)),
+        ]);
+        const sessPeople = ((weekSessions as any[]) || [])
+          .filter((x) => !holdingIds.includes(x.room_id))
+          .map((x) => {
+            const pp = new People();
+            for (const st of x.session_trainees || []) {
+              const t = Array.isArray(st.trainees) ? st.trainees[0] : st.trainees;
+              if (t) pp.add(t);
+            }
+            return { ...x, people: pp };
+          });
+        const programs = ((progRows as any[]) || []).map((p) => {
+          const pp = new People();
+          for (const pt of p.poec_trainees || []) {
+            const t = Array.isArray(pt.trainees) ? pt.trainees[0] : pt.trainees;
+            if (t) pp.add(t);
+          }
+          return { id: p.id as string, title: p.title as string, people: pp };
+        });
+        const sameDays = (a1: string, b1: string, a2: string, b2: string) => a1.slice(0, 10) <= b2.slice(0, 10) && b1.slice(0, 10) >= a2.slice(0, 10);
+        const half = (n: number) => Math.max(1, Math.ceil(n / 2));
+
+        const moduleItems = modRows
+          .filter((m) => !ignoredModules.has(m.key))
+          .map((m) => {
+            const all = (Array.isArray(m.trainees) ? m.trainees : []) as any[];
+            // Stagiaires réels : sans les fictifs (« Apprenant A ») ni ceux mis à la corbeille.
+            const real = all.filter((t) => !isPlaceholder(t) && !ignoredPeople.has(personKey(t)));
+            const fake = all.filter((t) => isPlaceholder(t) || ignoredPeople.has(personKey(t)));
+            // Parcours du planning : la moitié au moins de ses stagiaires réels, sinon le même nom.
+            let program: { id: string; title: string } | null = null;
+            if (real.length) {
+              const best = programs.map((p) => ({ p, n: p.people.count(real) })).filter((x) => x.n >= half(real.length)).sort((x, y) => y.n - x.n)[0];
+              if (best) program = { id: best.p.id, title: best.p.title };
+            }
+            if (!program && m.df_session_name) {
+              const byName = matchCatalog(m.df_session_name, programs, '');
+              if (byName.templateId && byName.score >= 0.55) program = { id: byName.templateId, title: byName.title || '' };
+            }
+            // Déjà sur le planning : session aux mêmes jours avec les mêmes stagiaires, ou parcours déjà posé cette semaine.
+            let covered: string | null = null;
+            const bySession = real.length ? sessPeople.find((x) => sameDays(x.start_at, x.end_at, m.start_at, m.end_at) && x.people.count(real) >= half(real.length)) : null;
+            if (bySession) covered = `Déjà sur le planning : ${bySession.title}`;
+            if (!covered && program) {
+              const ev = ((progEvents as any[]) || []).find((e) => e.poec_id === program!.id && e.start_date <= m.end_at.slice(0, 10) && e.end_date >= m.start_at.slice(0, 10));
+              const ps = sessPeople.find((x) => x.poec_id === program!.id && sameDays(x.start_at, x.end_at, m.start_at, m.end_at));
+              if (ev || ps) covered = `Parcours « ${program.title} » déjà posé cette semaine${ps ? ` (${ps.title})` : ''}`;
+            }
+            const match = matchModule(m.whole_session ? m.df_session_name || '' : m.name || m.df_session_name || '', m.df_session_name || '', catalog);
+            return {
+              match,
+              kind: 'module' as const,
+              id: m.key as string,
+              title: (m.whole_session ? m.df_session_name : m.name || m.df_session_name) || 'Module Digiforma',
+              parent: m.whole_session ? null : (m.df_session_name as string | null),
+              start_at: m.start_at as string,
+              end_at: m.end_at as string,
+              trainees: real.length,
+              people: real.map((t) => ({ key: personKey(t), name: personName(t) })),
+              fake: fake.map((t) => ({ key: personKey(t), name: personName(t) || 'Sans nom' })),
+              program,
+              covered,
+            };
+          });
         return [
-          ...((mods.data as any[]) || []).map((m) => ({
-            // Nom du catalogue de la plateforme, d'après le nom du module (et de la session Digiforma).
-            match: matchModule(m.whole_session ? m.df_session_name || '' : m.name || m.df_session_name || '', m.df_session_name || '', catalog),
-            kind: 'module' as const,
-            id: m.key as string,
-            title: (m.whole_session ? m.df_session_name : m.name || m.df_session_name) || 'Module Digiforma',
-            parent: m.whole_session ? null : (m.df_session_name as string | null),
-            start_at: m.start_at as string,
-            end_at: m.end_at as string,
-            trainees: Array.isArray(m.trainees) ? m.trainees.length : 0,
-          })),
+          ...moduleItems,
           ...((held.data as any[]) || []).map((x) => ({
             match: null,
             kind: 'session' as const,
@@ -202,6 +273,10 @@ export default async function Page({
             start_at: x.start_at as string,
             end_at: x.end_at as string,
             trainees: ((x.session_trainees as any[]) || []).filter((t) => t.status === 'validee').length,
+            people: [],
+            fake: [],
+            program: null,
+            covered: null,
           })),
         ].sort((p, q) => p.start_at.localeCompare(q.start_at));
       })()
@@ -467,6 +542,7 @@ export default async function Page({
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
         toAssign={await toAssignQuery}
         toAssignWeek={currentView === 'month' ? null : isoDate(weekStart)}
+        toAssignTrash={canManage(profile?.role) ? await supabase.from('digiforma_ignored').select('kind, value, label').order('created_at', { ascending: false }).limit(300).then((r) => ((r.data as any[]) || []) as { kind: 'module' | 'trainee'; value: string; label: string | null }[]) : []}
       />
     </main>
   );

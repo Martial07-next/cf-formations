@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
+import { isPlaceholder, personKey } from '@/lib/digiforma-people';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
@@ -26,6 +27,9 @@ const HORIZON_DAYS = 183;
 export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
   const deadline = Date.now() + budgetMs;
   seenRegStatus.clear();
+  // Corbeille (migration 59) : stagiaires mis de côté, jamais ajoutés.
+  const { data: ign } = await supabase.from('digiforma_ignored').select('value').eq('kind', 'trainee');
+  ignoredTrainees = new Set(((ign as any[]) || []).map((x) => x.value));
   const today = new Date().toISOString().slice(0, 10);
   const horizon = new Date(Date.now() + HORIZON_DAYS * 86400000).toISOString().slice(0, 10);
 
@@ -165,6 +169,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const sameDays = planned.filter((p) => !alreadyLinked.has(p.id) && p.start_at.slice(0, 10) <= end.slice(0, 10) && p.end_at.slice(0, 10) >= start.slice(0, 10));
     if (!sameDays.length) return null;
     // 1. Mêmes stagiaires sur les mêmes jours (parcours GEIQ / POEC posés sous le nom du module) : la moitié au moins.
+    trainees = trainees.filter((t) => !isPlaceholder(t));
     if (trainees.length) {
       const byPeople = sameDays
         .map((p) => ({ p, n: overlap(p.id, trainees) }))
@@ -295,7 +300,11 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 }
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
-export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remote: DigiformaTrainee[]): Promise<number> {
+let ignoredTrainees = new Set<string>();
+
+export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remoteAll: DigiformaTrainee[]): Promise<number> {
+  // Jamais de stagiaire fictif (« Apprenant A ») ni mis à la corbeille.
+  const remote = remoteAll.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(personKey(t)));
   if (!remote.length) return 0;
   const { data: links } = await supabase.from('session_trainees').select('trainee_id, trainees(email, full_name, first_name, last_name)').eq('session_id', row.id);
   const emails = new Set<string>();

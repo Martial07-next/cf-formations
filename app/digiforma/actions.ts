@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { addNewTrainees } from '@/lib/digiforma-sync';
 import { markHolidaysAccounted } from '@/lib/holiday-shifts';
+import { isPlaceholder, personKey } from '@/lib/digiforma-people';
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -13,7 +14,7 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
  * module, stagiaires à jour au dernier passage), puis sa fiche s'ouvre pour
  * choisir la salle et le formateur.
  */
-export async function placeDigiformaModule(key: string, templateId: string | null = null): Promise<Result<{ sessionId: string }>> {
+export async function placeDigiformaModule(key: string, templateId: string | null = null, programId: string | null = null): Promise<Result<{ sessionId: string }>> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { data: m, error } = await supabase.from('digiforma_modules').select('*').eq('key', key).maybeSingle();
@@ -36,6 +37,8 @@ export async function placeDigiformaModule(key: string, templateId: string | nul
     .insert({
       title: title || 'Session Digiforma',
       ...(tpl ? { template_id: tpl.id } : {}),
+      // Parcours de ces stagiaires (GEIQ, POEC, personnalisé) : la session y est rattachée.
+      ...(programId ? { poec_id: programId } : {}),
       room_id: holding.id,
       start_at: (m as any).start_at,
       end_at: (m as any).end_at,
@@ -47,8 +50,26 @@ export async function placeDigiformaModule(key: string, templateId: string | nul
     .single();
   if (insError || !created) return { ok: false, error: 'Création impossible, réessaie.' };
   await markHolidaysAccounted(supabase, created.id).catch(() => null);
-  await addNewTrainees(supabase, created as any, ((m as any).trainees as any[]) || []);
+  // Stagiaires réels seulement : ni fictifs (« Apprenant A »), ni ceux mis à la corbeille ; jamais de doublon.
+  const { data: ign } = await supabase.from('digiforma_ignored').select('value').eq('kind', 'trainee');
+  const ignored = new Set(((ign as any[]) || []).map((x) => x.value));
+  const real = (((m as any).trainees as any[]) || []).filter((t) => !isPlaceholder(t) && !ignored.has(personKey(t)));
+  await addNewTrainees(supabase, created as any, real);
   await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).eq('key', key);
   revalidatePath('/');
   return { ok: true, sessionId: created.id };
+}
+
+/** Corbeille Digiforma : un module ou un stagiaire mis de côté (ou restauré). */
+export async function setDigiformaIgnored(kind: 'module' | 'trainee', value: string, label: string, on: boolean): Promise<Result> {
+  const profile = await requireManager();
+  if (!profile) return FORBIDDEN;
+  if (!['module', 'trainee'].includes(kind) || !value) return { ok: false, error: 'Élément invalide.' };
+  const supabase = await createClient();
+  const { error } = on
+    ? await supabase.from('digiforma_ignored').upsert({ kind, value: value.slice(0, 300), label: label.slice(0, 200), created_by: (profile as any).id ?? null }, { onConflict: 'kind,value' })
+    : await supabase.from('digiforma_ignored').delete().eq('kind', kind).eq('value', value);
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 59 (supabase/migration_phase59.sql) dans Supabase.' };
+  revalidatePath('/');
+  return { ok: true };
 }

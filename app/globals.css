@@ -2225,3 +2225,16 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .to-assign-list li > button,.to-assign-list li > a{grid-area:go;white-space:nowrap}
 .to-assign-list li:not(:has(.to-assign-match)) > a{grid-column:1 / -1;justify-self:end}
 @media (max-width:640px){.to-assign-list{grid-template-columns:1fr}.to-assign-list li{grid-template-areas:"main main" "match match" "go go"}.to-assign-list li > button{width:100%}}
+
+/* Modules à placer : parcours, stagiaires réels, corbeille. */
+.to-assign-main small.to-assign-program{font-weight:700;color:#5b3fa8}
+.to-assign-people{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.to-assign-person{display:inline-flex;align-items:center;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 9px;font-size:12px}
+.to-assign-person button{border:0;background:none;min-height:0;width:20px;height:20px;padding:0;color:var(--muted);cursor:pointer;border-radius:999px}
+.to-assign-person button:hover{background:#fdecea;color:#9a2c0b}
+.to-assign-main small.to-assign-fake{color:#9a4a0b}
+.to-assign-go{grid-area:go;display:inline-flex;gap:6px;align-items:center}
+.to-assign-more{margin-top:12px;border-top:1px solid #f0d9a8;padding-top:10px}
+.to-assign-more summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center}
+.to-assign-more ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.to-assign-more li{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;flex-wrap:wrap}

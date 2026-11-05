@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import type { CatalogMatch } from '@/lib/catalog-match';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2, Link2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2, Link2, Trash2 } from 'lucide-react';
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
@@ -203,6 +203,7 @@ export function Planning({
   alerts = null,
   toAssign = [],
   toAssignWeek = null,
+  toAssignTrash = [],
   mine = null,
   nowKey = '',
   renderedAt = 0,
@@ -246,6 +247,8 @@ export function Planning({
   toAssign?: ToAssign[];
   /** Lundi de la semaine des modules (vue semaine / jour) ; null en vue mois (regroupés par semaine). */
   toAssignWeek?: string | null;
+  /** Corbeille Digiforma (modules et stagiaires mis de côté, migration 59). */
+  toAssignTrash?: TrashItem[];
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
   nowKey?: string;
   /** Formateur : ses formations, affichées en premier. */
@@ -942,7 +945,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
+      {canEdit && (toAssign.length > 0 || toAssignTrash.length > 0) && <ToAssignSection items={toAssign} trash={toAssignTrash} week={toAssignWeek} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
 
       {canEdit && (
         <dialog
@@ -1189,93 +1192,153 @@ export type ToAssign = {
   parent: string | null;
   start_at: string;
   end_at: string;
+  /** Stagiaires réels (sans les fictifs ni la corbeille). */
   trainees: number;
+  people: { key: string; name: string }[];
+  /** Stagiaires fictifs (« Apprenant A ») ou mis à la corbeille. */
+  fake: { key: string; name: string }[];
+  /** Parcours de la plateforme (POEC, GEIQ, personnalisé) de ces stagiaires. */
+  program: { id: string; title: string } | null;
+  /** Déjà sur le planning (raison) : non proposé. */
+  covered: string | null;
   /** Formation du catalogue reconnue d'après le nom du module. */
   match: CatalogMatch | null;
 };
+export type TrashItem = { kind: 'module' | 'trainee'; value: string; label: string | null };
 
 /**
- * Digiforma : modules de la période à placer (une session Digiforma peut
- * durer un an, seuls les modules de la semaine se placent), et sessions déjà
- * créées dont la salle reste à choisir.
+ * Digiforma : modules de la semaine à placer (une session Digiforma peut
+ * durer un an, seuls les modules de la semaine se placent), sans doublon :
+ * ce qui est déjà sur le planning (même stagiaires, parcours déjà posé) est
+ * masqué ; stagiaires fictifs et mis de côté : à la corbeille.
  */
-function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog: { id: string; title: string }[]; week: string | null }) {
+export function ToAssignSection({ items, trash, catalog, week }: { items: ToAssign[]; trash: TrashItem[]; catalog: { id: string; title: string }[]; week: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // Formation choisie pour chaque module (par défaut : celle reconnue).
   const [chosen, setChosen] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
   const d = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
   const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
-  const place = async (key: string) => {
+  const open = items.filter((i) => !i.covered);
+  const done = items.filter((i) => i.covered);
+  const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setBusy(key);
     setError(null);
+    const r = await fn();
+    setBusy(null);
+    if (!r.ok) setError(r.error || 'Action impossible.');
+    else router.refresh();
+  };
+  const place = async (item: ToAssign) => {
+    setBusy(item.id);
+    setError(null);
     const { placeDigiformaModule } = await import('@/app/digiforma/actions');
-    const item = items.find((i) => i.id === key);
-    const templateId = chosen[key] ?? item?.match?.templateId ?? '';
-    const r = await placeDigiformaModule(key, templateId || null);
+    const templateId = chosen[item.id] ?? item.match?.templateId ?? '';
+    const r = await placeDigiformaModule(item.id, templateId || null, item.program?.id || null);
     setBusy(null);
     if (!r.ok) setError(r.error);
     else router.push(`/sessions/${r.sessionId}`);
   };
+  const toTrash = (kind: 'module' | 'trainee', value: string, label: string, on: boolean) =>
+    act(`${kind}:${value}`, async () => (await import('@/app/digiforma/actions')).setDigiformaIgnored(kind, value, label, on));
+
   return (
     <section className="panel to-assign" aria-labelledby="to-assign-title">
       <div className="panel-head">
         <h2 id="to-assign-title">
-          <Inbox size={17} aria-hidden /> Modules Digiforma à placer{week ? ` · ${weekLabel(week)}` : ' · par semaine'} <span className="to-assign-count">{items.length}</span>
+          <Inbox size={17} aria-hidden /> Modules Digiforma à placer{week ? ` · ${weekLabel(week)}` : ' · par semaine'} <span className="to-assign-count">{open.length}</span>
         </h2>
       </div>
       <p className="hint" style={{ marginTop: 0 }}>
-        Modules des sessions planifiées ou en cours sur Digiforma (dont les modules des parcours GEIQ) qui ont lieu cette semaine, avec leurs stagiaires à jour (indécis : en attente). Ceux déjà sur le planning n’apparaissent pas. « Placer » crée la session : choisis ensuite la salle et le formateur sur sa fiche.
+        Modules des sessions planifiées ou en cours sur Digiforma qui ont lieu cette semaine. Ce qui est déjà sur le planning (mêmes stagiaires, ou parcours déjà posé) est masqué ; les stagiaires fictifs (« Apprenant A »…) vont à la corbeille. « Placer » crée la session (rattachée au parcours s’il y en a un) : choisis ensuite la salle et le formateur.
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
-      {weekGroups(items, week).map((g) => (
-      <div key={g.monday} className="to-assign-week">
-      {!week && <h3 className="to-assign-week-title">{weekLabel(g.monday)}</h3>}
-      <ul className="to-assign-list">
-        {g.items.map((s) => (
-          <li key={s.kind + s.id}>
-            <span className="to-assign-main">
-              <strong>{s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title}</strong>
-              {(() => {
-                // Nom d'origine Digiforma, seulement s'il apporte quelque chose (pas de répétition du titre).
-                const shown = s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title;
-                const origin = [s.title, s.parent].filter((x, i, a) => x && x !== shown && a.indexOf(x) === i).join(' · ');
-                return origin ? <small className="to-assign-parent">Digiforma : {origin}</small> : null;
-              })()}
-              <small>
-                {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
-              </small>
-            </span>
-            {s.kind === 'module' && (
-              <label className="to-assign-match">
-                <span className={`to-assign-flag ${s.match?.confidence || 'none'}`}>
-                  {s.match?.confidence === 'sure' ? 'Formation reconnue' : s.match?.confidence === 'doute' ? 'À vérifier' : 'Aucune formation reconnue'}
-                </span>
-                <select
-                  aria-label={`Formation du catalogue pour ${s.title}`}
-                  value={chosen[s.id] ?? s.match?.templateId ?? ''}
-                  onChange={(e) => setChosen((c) => ({ ...c, [s.id]: e.target.value }))}
-                >
-                  <option value="">Garder le nom Digiforma</option>
-                  {catalog.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>
-              </label>
-            )}
-            {s.kind === 'module' ? (
-              <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s.id)}>
-                {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
-              </button>
-            ) : (
-              <Link href={`/sessions/${s.id}`} className="btn small">
-                Choisir la salle <ChevronRight size={14} aria-hidden />
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-      </div>
+      {open.length === 0 && <p className="empty" style={{ margin: 0 }}>Rien à placer cette semaine : tout est déjà sur le planning.</p>}
+      {weekGroups(open, week).map((g) => (
+        <div key={g.monday} className="to-assign-week">
+          {!week && <h3 className="to-assign-week-title">{weekLabel(g.monday)}</h3>}
+          <ul className="to-assign-list">
+            {g.items.map((s) => {
+              const shown = s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title;
+              const origin = [s.title, s.parent].filter((x, i, a) => x && x !== shown && a.indexOf(x) === i).join(' · ');
+              return (
+                <li key={s.kind + s.id}>
+                  <span className="to-assign-main">
+                    <strong>{shown}</strong>
+                    {origin && <small className="to-assign-parent">Digiforma : {origin}</small>}
+                    {s.program && <small className="to-assign-program">Parcours : {s.program.title}</small>}
+                    <small>
+                      {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
+                    </small>
+                    {s.people.length > 0 && (
+                      <span className="to-assign-people">
+                        {s.people.map((p) => (
+                          <span key={p.key} className="to-assign-person">
+                            {p.name}
+                            <button type="button" aria-label={`Mettre ${p.name} à la corbeille`} title="Pas un vrai stagiaire : à la corbeille" onClick={() => toTrash('trainee', p.key, p.name, true)}>×</button>
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {s.fake.length > 0 && <small className="to-assign-fake">{s.fake.length} fictif{s.fake.length > 1 ? 's' : ''} à la corbeille : {s.fake.map((p) => p.name).join(', ')}</small>}
+                  </span>
+                  {s.kind === 'module' && (
+                    <label className="to-assign-match">
+                      <span className={`to-assign-flag ${s.match?.confidence || 'none'}`}>
+                        {s.match?.confidence === 'sure' ? 'Formation reconnue' : s.match?.confidence === 'doute' ? 'À vérifier' : 'Aucune formation reconnue'}
+                      </span>
+                      <select aria-label={`Formation du catalogue pour ${s.title}`} value={chosen[s.id] ?? s.match?.templateId ?? ''} onChange={(e) => setChosen((c) => ({ ...c, [s.id]: e.target.value }))}>
+                        <option value="">Garder le nom Digiforma</option>
+                        {catalog.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {s.kind === 'module' ? (
+                    <span className="to-assign-go">
+                      <button type="button" className="small icon ghost" aria-label={`Mettre ${s.title} à la corbeille`} title="Corbeille" disabled={!!busy} onClick={() => toTrash('module', s.id, `${s.title} · ${d(s.start_at)}`, true)}>
+                        <Trash2 size={14} />
+                      </button>
+                      <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s)}>
+                        {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
+                      </button>
+                    </span>
+                  ) : (
+                    <Link href={`/sessions/${s.id}`} className="btn small to-assign-go">
+                      Choisir la salle <ChevronRight size={14} aria-hidden />
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ))}
+      {done.length > 0 && (
+        <details className="to-assign-more">
+          <summary>Déjà sur le planning ({done.length}) : non proposés</summary>
+          <ul>
+            {done.map((s) => (
+              <li key={s.id}>
+                <strong>{s.title}</strong> <span className="hint">{d(s.start_at)} · {s.covered}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {trash.length > 0 && (
+        <details className="to-assign-more">
+          <summary><Trash2 size={13} aria-hidden /> Corbeille ({trash.length})</summary>
+          <ul>
+            {trash.map((t) => (
+              <li key={t.kind + t.value}>
+                <span>{t.kind === 'module' ? 'Module' : 'Stagiaire'} : <strong>{t.label || t.value}</strong></span>
+                <button type="button" className="small ghost" disabled={!!busy} onClick={() => toTrash(t.kind, t.value, t.label || '', false)}>Restaurer</button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }
