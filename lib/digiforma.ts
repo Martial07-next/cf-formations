@@ -81,7 +81,7 @@ let schemaCache: Promise<Record<string, string[]>> | null = null;
 
 async function schemaFields(): Promise<Record<string, string[]>> {
   if (!schemaCache) {
-    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name type { kind ofType { kind ofType { kind } } } } } } }`)
+    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name type { kind name ofType { kind name ofType { kind name } } } } } } }`)
       .then((data) => {
         const out: Record<string, string[]> = {};
         const leafKind = (ty: any): boolean => (ty?.kind === 'NON_NULL' || ty?.kind === 'LIST' ? leafKind(ty.ofType) : ty?.kind === 'SCALAR' || ty?.kind === 'ENUM');
@@ -90,6 +90,9 @@ async function schemaFields(): Promise<Record<string, string[]>> {
           out[t.name] = t.fields.map((f) => f.name);
           // Champs simples (texte, nombre, énumération) : sélectionnables sans sous-champs.
           out[`${t.name}#leaf`] = t.fields.filter((f) => leafKind(f.type)).map((f) => f.name);
+          // Type nommé de chaque champ (ex. TrainingSession.modules → Module).
+          const named = (ty: any): string | null => (ty?.name ? ty.name : ty?.ofType ? named(ty.ofType) : null);
+          for (const fl of t.fields) out[`${t.name}.${fl.name}#type`] = [named(fl.type) || ''];
         }
         out.__query = out[data.__schema.queryType?.name || 'Query'] || out.Query || out.RootQueryType || [];
         return out;
@@ -202,4 +205,118 @@ export async function digiformaListSessionDates(): Promise<{ hasStatus: boolean;
 export function isPlannedStatus(v: string | null): boolean {
   const t = (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return /planifi|planned|scheduled|confirm/.test(t);
+}
+
+
+/* ------------------------------------------------------------------------
+ * Modules d'une session Digiforma (une session peut durer un an : ce sont
+ * les modules, avec leurs propres dates, qui se placent sur le planning).
+ * ---------------------------------------------------------------------- */
+
+export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null };
+export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[] };
+
+async function moduleShape() {
+  const f = await schemaFields();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const leaf = f[`${sessT}#leaf`] || [];
+  const objFields = (f[sessT] || []).filter((n) => !leaf.includes(n));
+  const field =
+    pick(objFields, ['modules', 'trainingModules', 'sessionModules', 'subsessions', 'subSessions', 'steps', 'sequences', 'slots', 'trainingSessionSlots', 'dates', 'sessionDates', 'days']) ||
+    objFields.find((n) => /modul|sub.?session|slot|creneau|sequence|step|date/i.test(n)) ||
+    null;
+  const modT = field ? f[`${sessT}.${field}#type`]?.[0] || null : null;
+  const ml = modT ? f[`${modT}#leaf`] : undefined;
+  const mf = modT ? f[modT] : undefined;
+  return {
+    field,
+    type: modT,
+    id: pick(ml, ['id', 'uuid']),
+    name: sel('name', pick(ml, ['name', 'title', 'label'])),
+    start: sel('startDate', pick(ml, ['startDate', 'startAt', 'start', 'beginDate', 'dateStart', 'date', 'day'])),
+    end: sel('endDate', pick(ml, ['endDate', 'endAt', 'end', 'finishDate', 'dateEnd', 'date', 'day'])),
+    startTime: sel('startTime', pick(ml, ['startTime', 'startHour', 'from', 'beginTime'])),
+    endTime: sel('endTime', pick(ml, ['endTime', 'endHour', 'to', 'finishTime'])),
+    trainees: pick(mf, ['trainees', 'students', 'participants']),
+  };
+}
+
+/** Structure Digiforma détectée (diagnostic, Administration → Intégrations). */
+export async function digiformaStructure(): Promise<string> {
+  const f = await schemaFields();
+  const sh = await sessionShape();
+  const ms = await moduleShape();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const lines = [
+    `Requêtes : sessions = ${sh.listField || '?'}, session = ${sh.oneField || '?'}`,
+    `${sessT} : ${(f[sessT] || []).join(', ')}`,
+    `Statut utilisé : ${sh.status || 'aucun'} · dates : ${sh.start || '?'} / ${sh.end || '?'}`,
+    `Modules : ${ms.field ? `${ms.field} (${ms.type})` : 'aucun champ trouvé'}`,
+  ];
+  if (ms.type) lines.push(`${ms.type} : ${(f[ms.type] || []).join(', ')}`);
+  return lines.join('\n');
+}
+
+/** Sessions Digiforma avec leurs modules (sans stagiaires : requête légère). */
+export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasModules: boolean; sessions: DigiformaSessionModules[] }> {
+  const sh = await sessionShape();
+  const ms = await moduleShape();
+  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
+  const mods = ms.field ? `modules: ${ms.field} { ${[ms.id ? sel('id', ms.id) : '', ms.name, ms.start, ms.end, ms.startTime, ms.endTime].filter(Boolean).join(' ')} }` : '';
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${mods} } }`);
+  return {
+    hasStatus: Boolean(sh.status),
+    hasModules: Boolean(ms.field),
+    sessions: (data?.sessions || []).map((s: any) => ({
+      id: String(s.id),
+      name: s.name || 'Session Digiforma',
+      status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? '' : s.status),
+      startAt: s.startDate || null,
+      endAt: s.endDate || null,
+      modules: (s.modules || [])
+        .map((m: any, i: number) => ({
+          key: String(m.id ?? `${i}-${m.startDate || ''}`),
+          name: m.name || null,
+          start: m.startDate || null,
+          end: m.endDate || m.startDate || null,
+          startTime: m.startTime || null,
+          endTime: m.endTime || null,
+        }))
+        .filter((m: any) => m.start),
+    })),
+  };
+}
+
+/** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
+export async function digiformaSessionDetail(id: string): Promise<{ trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]> }> {
+  const sh = await sessionShape();
+  const ms = await moduleShape();
+  if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
+  const tSel = await traineeSelection();
+  const modPart = ms.field && ms.trainees ? `modules: ${ms.field} { ${ms.id ? sel('id', ms.id) : ''} ${ms.start} trainees: ${ms.trainees} { ${tSel} } }` : '';
+  const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
+  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${modPart} } }`, { id });
+  const byModule: Record<string, DigiformaTrainee[]> = {};
+  (data?.session?.modules || []).forEach((m: any, i: number) => {
+    byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = (m.trainees || []).map(mapTrainee);
+  });
+  return { trainees: (data?.session?.trainees || []).map(mapTrainee), byModule };
+}
+
+/** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */
+export function toWallClock(v: string, time: string | null, fallback: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const t = (time || '').match(/^(\d{1,2}):(\d{2})/);
+    return `${v}T${t ? `${t[1].padStart(2, '0')}:${t[2]}` : fallback}:00`;
+  }
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return `${v.slice(0, 10)}T${fallback}:00`;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value])
+  );
+  // Date sans heure (minuit) : horaires par défaut de la journée.
+  const hm = `${p.hour}:${p.minute}`;
+  return `${p.year}-${p.month}-${p.day}T${hm === '00:00' && !time ? fallback : hm}:00`;
 }

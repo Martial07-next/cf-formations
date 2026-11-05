@@ -29,10 +29,11 @@ export function DigiformaSyncPanel({
     <div className="panel">
       <h2>Relais Digiforma → planning</h2>
       <p className="panel-intro">
-        Chaque matin, la plateforme récupère les sessions <strong>planifiées</strong> sur Digiforma et pas encore
-        passées, avec leurs stagiaires. Elles apparaissent <strong>sous le planning</strong>, dans la section
-        « Sessions Digiforma à placer » : ouvre leur fiche pour choisir la salle et le formateur. Les sessions
-        terminées ou non planifiées sont ignorées, et une session déjà importée n'est jamais écrasée.
+        Chaque matin, la plateforme relit les sessions <strong>planifiées</strong> sur Digiforma et enregistre
+        leurs <strong>modules à venir</strong> (dates et stagiaires à jour). Sous le planning, la section
+        « Modules Digiforma à placer » montre ceux de la semaine affichée : « Placer » crée la session, puis on
+        choisit la salle et le formateur. Les nouveaux stagiaires inscrits sur Digiforma sont ajoutés aux modules
+        déjà placés ; un stagiaire parti n'est plus proposé pour les modules suivants.
       </p>
 
       <div className="counters" style={{ margin: '14px 0' }}>

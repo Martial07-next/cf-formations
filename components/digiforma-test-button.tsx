@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { testDigiformaConnection } from '@/app/administration/parametres/actions';
 
 export function DigiformaTestButton() {
-  const [result, setResult] = useState<{ text: string; error: boolean } | null>(null);
+  const [result, setResult] = useState<{ text: string; error: boolean; structure?: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleTest() {
@@ -12,7 +12,7 @@ export function DigiformaTestButton() {
     startTransition(async () => {
       const res = await testDigiformaConnection();
       if (res.ok) {
-        setResult({ text: `Connexion réussie : ${res.typeCount} types détectés dans le schéma Digiforma.`, error: false });
+        setResult({ text: `Connexion réussie : ${res.typeCount} types détectés dans le schéma Digiforma.`, error: false, structure: res.structure });
       } else {
         setResult({ text: res.error, error: true });
       }
@@ -28,6 +28,12 @@ export function DigiformaTestButton() {
         <div role="status" className={`alert ${result.error ? 'alert-error' : 'alert-success'}`} style={{ marginTop: 10 }}>
           {result.text}
         </div>
+      )}
+      {result?.structure && (
+        <details style={{ marginTop: 8 }}>
+          <summary className="hint" style={{ cursor: 'pointer' }}>Structure Digiforma détectée (sessions, statut, modules)</summary>
+          <pre className="log-box" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{result.structure}</pre>
+        </details>
       )}
     </div>
   );

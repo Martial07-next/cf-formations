@@ -1176,29 +1176,66 @@ function HolidayTag({ day, compact = false }: { day: string; compact?: boolean }
   );
 }
 
-export type ToAssign = { id: string; title: string; start_at: string; end_at: string; digiforma_ref: string | null; validated: number };
+export type ToAssign = {
+  kind: 'module' | 'session';
+  /** Clé du module Digiforma, ou id de la session déjà créée. */
+  id: string;
+  title: string;
+  /** Session Digiforma du module. */
+  parent: string | null;
+  start_at: string;
+  end_at: string;
+  trainees: number;
+};
 
-/** Sessions planifiées sur Digiforma, importées sans salle : à placer depuis leur fiche. */
+/**
+ * Digiforma : modules de la période à placer (une session Digiforma peut
+ * durer un an, seuls les modules de la semaine se placent), et sessions déjà
+ * créées dont la salle reste à choisir.
+ */
 function ToAssignSection({ items }: { items: ToAssign[] }) {
-  const d = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Paris' });
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const d = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+  const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
+  const place = async (key: string) => {
+    setBusy(key);
+    setError(null);
+    const { placeDigiformaModule } = await import('@/app/digiforma/actions');
+    const r = await placeDigiformaModule(key);
+    setBusy(null);
+    if (!r.ok) setError(r.error);
+    else router.push(`/sessions/${r.sessionId}`);
+  };
   return (
     <section className="panel to-assign" aria-labelledby="to-assign-title">
       <div className="panel-head">
-        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Sessions Digiforma à placer sur cette période <span className="to-assign-count">{items.length}</span></h2>
+        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Modules Digiforma à placer sur cette période <span className="to-assign-count">{items.length}</span></h2>
       </div>
-      <p className="hint" style={{ marginTop: 0 }}>Importées de Digiforma (sessions planifiées, pas encore passées). Ouvre la fiche pour choisir la salle et le formateur : la session rejoint alors le planning.</p>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Modules des sessions planifiées sur Digiforma qui ont lieu sur la période affichée, avec leurs stagiaires à jour. « Placer » crée la session : choisis ensuite la salle et le formateur sur sa fiche.
+      </p>
+      {error && <div role="alert" className="alert alert-error">{error}</div>}
       <ul className="to-assign-list">
         {items.map((s) => (
-          <li key={s.id}>
+          <li key={s.kind + s.id}>
             <span className="to-assign-main">
               <strong>{s.title}</strong>
+              {s.parent && <small className="to-assign-parent">{s.parent}</small>}
               <small>
-                {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {s.validated} stagiaire{s.validated > 1 ? 's' : ''}
+                {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
               </small>
             </span>
-            <Link href={`/sessions/${s.id}`} className="btn small primary">
-              Choisir la salle <ChevronRight size={14} aria-hidden />
-            </Link>
+            {s.kind === 'module' ? (
+              <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s.id)}>
+                {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
+              </button>
+            ) : (
+              <Link href={`/sessions/${s.id}`} className="btn small">
+                Choisir la salle <ChevronRight size={14} aria-hidden />
+              </Link>
+            )}
           </li>
         ))}
       </ul>

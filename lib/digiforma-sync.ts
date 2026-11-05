@@ -1,67 +1,53 @@
-import { markHolidaysAccounted } from '@/lib/holiday-shifts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaFetchSessionTrainees, digiformaListSessionDates, isPlannedStatus } from '@/lib/digiforma';
+import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
   | { ok: false; error: string };
 
+/** Modules suivis : ceux qui commencent dans les 6 prochains mois. */
+const HORIZON_DAYS = 183;
+
 /**
- * Relais Digiforma → planning.
+ * Relais Digiforma → planning (migration 57).
  *
- * Récupère les sessions Digiforma et crée dans le planning celles qui :
- *   · ne sont pas encore connues (par digiforma_ref) ;
- *   · ne sont PAS encore passées (date de fin >= maintenant).
- * Elles arrivent dans la salle « À affecter » avec le statut « En attente »,
- * avec leurs stagiaires. Une session déjà importée n'est jamais écrasée : seuls
- * les nouveaux stagiaires inscrits ensuite sur Digiforma y sont ajoutés.
- *
- * Fonction serveur ordinaire (pas une Server Action) : elle n'est appelable
- * que par l'action admin `syncDigiformaNow` ou par la route cron protégée.
+ * Une session Digiforma peut s'étaler sur un an : on ne la pose pas telle
+ * quelle sur le planning. On enregistre ses MODULES (dates réelles et
+ * stagiaires à jour) dans « digiforma_modules » ; le bureau place ensuite,
+ * semaine par semaine, ceux qui ont lieu (section sous le planning).
+ *   · seulement les sessions planifiées sur Digiforma ;
+ *   · seulement les modules pas encore passés (6 mois à l'avance) ;
+ *   · stagiaires relus à chaque passage : un stagiaire parti n'est plus
+ *     proposé, un nouveau inscrit est ajouté aux modules déjà placés.
+ * Fonction serveur ordinaire : appelée par l'action admin ou par le cron.
  */
 export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
-  // Temps limité (la plateforme coupe à 60 s) : ce qui reste est repris à la synchronisation suivante.
   const deadline = Date.now() + budgetMs;
-  const { data: holdingRoom } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
-  if (!holdingRoom) {
-    return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
-  }
+  const today = new Date().toISOString().slice(0, 10);
+  const horizon = new Date(Date.now() + HORIZON_DAYS * 86400000).toISOString().slice(0, 10);
 
-  let sessions;
   let listed;
   try {
-    // Requête légère (sans les stagiaires) : les stagiaires ne sont chargés que pour les sessions à importer.
-    listed = await digiformaListSessionDates();
-    sessions = listed.sessions;
+    listed = await digiformaListModules();
   } catch (e: any) {
     await logSync(supabase, 'error', e.message);
     return { ok: false, error: `Digiforma : ${e.message}` };
   }
 
-  const { data: existingRefs } = await supabase
-    .from('sessions')
-    .select('id, digiforma_ref, start_at, end_at')
-    .not('digiforma_ref', 'is', null);
-  const known = new Set((existingRefs || []).map((r: any) => r.digiforma_ref));
-  const knownRows = (existingRefs as any[]) || [];
+  const probe = await supabase.from('digiforma_modules').select('key').limit(1);
+  if (probe.error) {
+    const msg = 'Exécute d’abord la migration 57 (supabase/migration_phase57.sql) dans Supabase.';
+    await logSync(supabase, 'error', msg);
+    return { ok: false, error: msg };
+  }
 
-  const now = Date.now();
-  let created = 0;
-  let traineesLinked = 0;
-  let skipped = 0;
-  let past = 0;
-  let heldBack = 0;
-  let remaining = 0;
-  let notPlanned = 0;
+  // Sessions planifiées, avec des modules à venir (ou la session entière si l'API n'a pas de modules).
   const seenStatus = new Map<string, number>();
-
-  for (const s of sessions) {
-    if (known.has(s.id)) {
-      skipped++;
-      continue;
-    }
-    // Seulement les sessions planifiées sur Digiforma.
+  let notPlanned = 0;
+  let past = 0;
+  const todo: { id: string; name: string; modules: { key: string; name: string | null; start_at: string; end_at: string; whole: boolean }[] }[] = [];
+  for (const s of listed.sessions) {
     if (listed.hasStatus) {
       const st = s.status || '(vide)';
       seenStatus.set(st, (seenStatus.get(st) || 0) + 1);
@@ -70,117 +56,124 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         continue;
       }
     }
-    const start = s.startAt ? new Date(s.startAt) : null;
-    const end = s.endAt ? new Date(s.endAt) : null;
-    if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
-      skipped++;
-      continue; // dates absentes ou incohérentes : impossible de placer la session
-    }
-    if (end.getTime() < now) {
-      past++;
-      continue; // session déjà passée : on ne l'ajoute pas au planning
-    }
+    const raw = s.modules.length
+      ? s.modules.map((m) => ({ key: `${s.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false }))
+      : s.startAt && s.endAt
+        ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true }]
+        : [];
+    const upcoming = raw.filter((m) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at);
+    past += raw.length - upcoming.length;
+    if (upcoming.length) todo.push({ id: s.id, name: s.name, modules: upcoming });
+  }
+  // Les plus proches d'abord (si le temps manque, la suite est reprise au prochain passage).
+  todo.sort((a, b) => a.modules[0].start_at.localeCompare(b.modules[0].start_at));
+
+  let modulesSaved = 0;
+  let remaining = 0;
+  for (const s of todo) {
     if (Date.now() > deadline) {
       remaining++;
-      continue; // plus le temps : reprise à la prochaine synchronisation
+      continue;
     }
-    let sTrainees: Awaited<ReturnType<typeof digiformaFetchSessionTrainees>>;
+    let detail: { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]> };
     try {
-      sTrainees = await digiformaFetchSessionTrainees(s.id);
+      detail = await digiformaSessionDetail(s.id);
     } catch {
-      sTrainees = [];
+      continue;
     }
-
-    const { data: newSession, error } = await supabase
-      .from('sessions')
-      .insert({
-        title: s.name,
-        room_id: holdingRoom.id,
-        start_at: start.toISOString(),
-        end_at: end.toISOString(),
-        status: 'planifiee',
-        digiforma_ref: s.id,
-        notes: 'Importée automatiquement de Digiforma, salle à affecter.',
-      })
-      .select('id')
-      .single();
-
-    if (error || !newSession) continue;
-    created++;
-    // Dates venues de Digiforma : les fériés de la période y sont déjà pris en compte.
-    await markHolidaysAccounted(supabase, newSession.id).catch(() => null);
-
-    for (const t of sTrainees) {
-      const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
-      if (!trainee) continue;
-
-      let traineeStatus: 'validee' | 'en_attente' = 'validee';
-      const conflict = await findTraineeConflict(supabase, trainee.id, start.toISOString(), end.toISOString(), newSession.id);
-      if (conflict) {
-        traineeStatus = 'en_attente';
-        heldBack++;
-      }
-
-      const { error: linkError } = await supabase
-        .from('session_trainees')
-        .upsert({ session_id: newSession.id, trainee_id: trainee.id, status: traineeStatus }, { onConflict: 'session_id,trainee_id' });
-      if (!linkError) traineesLinked++;
-    }
+    const rows = s.modules.map((m) => {
+      const own = detail.byModule[m.key.slice(s.id.length + 1)];
+      return {
+        key: m.key,
+        df_session_id: s.id,
+        df_session_name: s.name,
+        name: m.name,
+        start_at: m.start_at,
+        end_at: m.end_at,
+        trainees: own && own.length ? own : detail.trainees,
+        whole_session: m.whole,
+        synced_at: new Date().toISOString(),
+      };
+    });
+    const { error } = await supabase.from('digiforma_modules').upsert(rows, { onConflict: 'key' });
+    if (error) continue;
+    modulesSaved += rows.length;
+    // Modules disparus de Digiforma (pas encore placés) : retirés.
+    const keep = rows.map((r) => r.key);
+    await supabase
+      .from('digiforma_modules')
+      .delete()
+      .eq('df_session_id', s.id)
+      .is('placed_session_id', null)
+      .gte('end_at', `${today}T00:00:00`)
+      .not('key', 'in', `(${keep.map((k) => `"${k.replace(/"/g, '')}"`).join(',')})`);
   }
+  // Modules passés jamais placés : plus utiles.
+  await supabase.from('digiforma_modules').delete().is('placed_session_id', null).lt('end_at', `${today}T00:00:00`);
 
-  // Sessions déjà importées et pas encore terminées : nouveaux stagiaires inscrits sur Digiforma
-  // ajoutés au planning (aucun stagiaire n'est retiré, aucun statut n'est modifié).
+  // Modules déjà placés et pas terminés : nouveaux stagiaires ajoutés à la session du planning.
   let addedLater = 0;
-  let notRefreshed = 0;
-  for (const row of knownRows.filter((r) => new Date(r.end_at).getTime() >= now)) {
-    if (Date.now() > deadline) {
-      notRefreshed++;
-      continue;
-    }
-    let remote: Awaited<ReturnType<typeof digiformaFetchSessionTrainees>>;
+  const { data: placed } = await supabase
+    .from('digiforma_modules')
+    .select('trainees, placed_session_id, sessions:placed_session_id(id, start_at, end_at)')
+    .not('placed_session_id', 'is', null)
+    .gte('end_at', `${today}T00:00:00`);
+  for (const p of (placed as any[]) || []) {
+    if (Date.now() > deadline) break;
+    const sess = Array.isArray(p.sessions) ? p.sessions[0] : p.sessions;
+    if (!sess) continue;
+    addedLater += await addNewTrainees(supabase, sess, (p.trainees as DigiformaTrainee[]) || []);
+  }
+  // Sessions reliées à une session Digiforma par leur référence (saisie sur la fiche).
+  const { data: refRows } = await supabase.from('sessions').select('id, digiforma_ref, start_at, end_at').not('digiforma_ref', 'is', null).gte('end_at', `${today}T00:00:00`);
+  for (const row of (refRows as any[]) || []) {
+    if (Date.now() > deadline) break;
+    if (String(row.digiforma_ref).includes(':')) continue; // module placé : traité ci-dessus
     try {
-      remote = await digiformaFetchSessionTrainees(row.digiforma_ref);
+      addedLater += await addNewTrainees(supabase, row, await digiformaFetchSessionTrainees(row.digiforma_ref));
     } catch {
-      continue;
-    }
-    if (!remote.length) continue;
-    const { data: links } = await supabase
-      .from('session_trainees')
-      .select('trainee_id, trainees(email, full_name, first_name, last_name)')
-      .eq('session_id', row.id);
-    const emails = new Set<string>();
-    const names = new Set<string>();
-    for (const l of (links as any[]) || []) {
-      const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees;
-      if (t?.email) emails.add(String(t.email).trim().toLowerCase());
-      for (const n of [t?.full_name, `${t?.first_name || ''} ${t?.last_name || ''}`]) if (n && n.trim()) names.add(nameKey(n));
-    }
-    for (const t of remote) {
-      if (t.email && emails.has(t.email.trim().toLowerCase())) continue;
-      if (names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))) continue;
-      const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
-      if (!trainee) continue;
-      const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
-      const { data: ins, error: linkError } = await supabase
-        .from('session_trainees')
-        .upsert({ session_id: row.id, trainee_id: trainee.id, status: conflict ? 'en_attente' : 'validee' }, { onConflict: 'session_id,trainee_id', ignoreDuplicates: true })
-        .select('trainee_id');
-      if (!linkError && (ins as any[] | null)?.length) addedLater++;
+      // session introuvable sur Digiforma : ignorée
     }
   }
 
   const log =
-    `${created} session(s) à venir ajoutée(s) au planning, ${traineesLinked} inscription(s) stagiaire ` +
-    `(dont ${heldBack} en attente pour conflit de créneau), ${past} session(s) passée(s) ignorée(s), ` +
-    `${skipped} déjà connue(s) ou incomplète(s).` +
-    (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation pour les importer.` : '') +
-    ` ${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà importées.` +
-    (notRefreshed ? ` ${notRefreshed} session(s) importée(s) pas encore relue(s) : relance la synchronisation.` : '') +
+    `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s). ` +
+    `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
+    `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
+    (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +
     (listed.hasStatus
       ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
-      : ' Statut Digiforma introuvable : sessions avec des dates importées.');
+      : ' Statut Digiforma introuvable : toutes les sessions avec des dates sont prises.') +
+    (listed.hasModules ? '' : ' Aucun champ « modules » trouvé dans l’API : sessions entières utilisées.');
   await logSync(supabase, 'ok', log);
-  return { ok: true, created, traineesLinked, skipped, past, log };
+  return { ok: true, created: modulesSaved, traineesLinked: addedLater, skipped: notPlanned, past, log };
+}
+
+/** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
+export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remote: DigiformaTrainee[]): Promise<number> {
+  if (!remote.length) return 0;
+  const { data: links } = await supabase.from('session_trainees').select('trainee_id, trainees(email, full_name, first_name, last_name)').eq('session_id', row.id);
+  const emails = new Set<string>();
+  const names = new Set<string>();
+  for (const l of (links as any[]) || []) {
+    const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees;
+    if (t?.email) emails.add(String(t.email).trim().toLowerCase());
+    for (const n of [t?.full_name, `${t?.first_name || ''} ${t?.last_name || ''}`]) if (n && n.trim()) names.add(nameKey(n));
+  }
+  let added = 0;
+  for (const t of remote) {
+    if (t.email && emails.has(t.email.trim().toLowerCase())) continue;
+    if (names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))) continue;
+    const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
+    if (!trainee) continue;
+    const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
+    const { data: ins, error } = await supabase
+      .from('session_trainees')
+      .upsert({ session_id: row.id, trainee_id: trainee.id, status: conflict ? 'en_attente' : 'validee' }, { onConflict: 'session_id,trainee_id', ignoreDuplicates: true })
+      .select('trainee_id');
+    if (!error && (ins as any[] | null)?.length) added++;
+  }
+  return added;
 }
 
 async function logSync(supabase: SupabaseClient, status: 'ok' | 'error', log: string) {
@@ -192,5 +185,5 @@ async function logSync(supabase: SupabaseClient, status: 'ok' | 'error', log: st
 
 /** Nom comparable : sans accents, minuscules, mots triés (« Léa MARTIN » = « MARTIN Lea »). */
 function nameKey(v: string) {
-  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[\s-]+/).filter(Boolean).sort().join(' ');
+  return v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[\s-]+/).filter(Boolean).sort().join(' ');
 }

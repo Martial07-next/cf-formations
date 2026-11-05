@@ -147,30 +147,54 @@ export default async function Page({
         return sessionAlerts((data as any[]) || [], today, noDf);
       })()
     : Promise.resolve([] as SessionAlert[]);
-  // Sessions importées de Digiforma, sans salle (« À affecter ») : section sous le planning.
+  // Digiforma (migration 57) : modules de la période à placer + sessions créées dont la salle reste à choisir.
   const holdingIds = ((rooms as any[]) || []).filter((r) => r.is_holding).map((r) => r.id as string);
-  const toAssignQuery: Promise<ToAssign[]> =
-    canManage(profile?.role) && holdingIds.length
-      ? (async () => {
-          const { data } = await supabase
-            .from('sessions')
-            .select('id, title, start_at, end_at, digiforma_ref, session_trainees(status)')
-            .in('room_id', holdingIds)
-            // Période affichée (semaine / jour / mois), sans les sessions déjà passées.
-            .lt('start_at', rangeEnd.toISOString())
-            .gte('end_at', new Date(Math.max(rangeStart.getTime(), Date.now())).toISOString())
+  const periodFrom = isoDate(new Date(Math.max(rangeStart.getTime(), Date.now()))) + 'T00:00:00';
+  const periodTo = isoDate(rangeEnd) + 'T00:00:00';
+  const toAssignQuery: Promise<ToAssign[]> = canManage(profile?.role)
+    ? (async () => {
+        const [mods, held] = await Promise.all([
+          supabase
+            .from('digiforma_modules')
+            .select('key, df_session_name, name, start_at, end_at, trainees, whole_session')
+            .is('placed_session_id', null)
+            .lt('start_at', periodTo)
+            .gte('end_at', periodFrom)
             .order('start_at')
-            .limit(200);
-          return ((data as any[]) || []).map((s) => ({
-            id: s.id,
-            title: s.title,
-            start_at: s.start_at,
-            end_at: s.end_at,
-            digiforma_ref: s.digiforma_ref ?? null,
-            validated: ((s.session_trainees as any[]) || []).filter((t) => t.status === 'validee').length,
-          }));
-        })()
-      : Promise.resolve([]);
+            .limit(200),
+          holdingIds.length
+            ? supabase
+                .from('sessions')
+                .select('id, title, start_at, end_at, session_trainees(status)')
+                .in('room_id', holdingIds)
+                .lt('start_at', periodTo)
+                .gte('end_at', periodFrom)
+                .order('start_at')
+                .limit(200)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+        return [
+          ...((mods.data as any[]) || []).map((m) => ({
+            kind: 'module' as const,
+            id: m.key as string,
+            title: (m.whole_session ? m.df_session_name : m.name || m.df_session_name) || 'Module Digiforma',
+            parent: m.whole_session ? null : (m.df_session_name as string | null),
+            start_at: m.start_at as string,
+            end_at: m.end_at as string,
+            trainees: Array.isArray(m.trainees) ? m.trainees.length : 0,
+          })),
+          ...((held.data as any[]) || []).map((x) => ({
+            kind: 'session' as const,
+            id: x.id as string,
+            title: x.title as string,
+            parent: null,
+            start_at: x.start_at as string,
+            end_at: x.end_at as string,
+            trainees: ((x.session_trainees as any[]) || []).filter((t) => t.status === 'validee').length,
+          })),
+        ].sort((p, q) => p.start_at.localeCompare(q.start_at));
+      })()
+    : Promise.resolve([]);
   // Formateur : ses formations (en cours et à venir) en tête du planning.
   const myTrainerId = profile?.trainer_id || null;
   const mineQuery: Promise<MySession[] | null> = myTrainerId
