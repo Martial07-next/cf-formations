@@ -14,7 +14,8 @@ export type SyncResult =
  *   · ne sont pas encore connues (par digiforma_ref) ;
  *   · ne sont PAS encore passées (date de fin >= maintenant).
  * Elles arrivent dans la salle « À affecter » avec le statut « En attente »,
- * avec leurs stagiaires. Une session déjà importée n'est jamais écrasée.
+ * avec leurs stagiaires. Une session déjà importée n'est jamais écrasée : seuls
+ * les nouveaux stagiaires inscrits ensuite sur Digiforma y sont ajoutés.
  *
  * Fonction serveur ordinaire (pas une Server Action) : elle n'est appelable
  * que par l'action admin `syncDigiformaNow` ou par la route cron protégée.
@@ -40,9 +41,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 
   const { data: existingRefs } = await supabase
     .from('sessions')
-    .select('digiforma_ref')
+    .select('id, digiforma_ref, start_at, end_at')
     .not('digiforma_ref', 'is', null);
   const known = new Set((existingRefs || []).map((r: any) => r.digiforma_ref));
+  const knownRows = (existingRefs as any[]) || [];
 
   const now = Date.now();
   let created = 0;
@@ -126,11 +128,54 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     }
   }
 
+  // Sessions déjà importées et pas encore terminées : nouveaux stagiaires inscrits sur Digiforma
+  // ajoutés au planning (aucun stagiaire n'est retiré, aucun statut n'est modifié).
+  let addedLater = 0;
+  let notRefreshed = 0;
+  for (const row of knownRows.filter((r) => new Date(r.end_at).getTime() >= now)) {
+    if (Date.now() > deadline) {
+      notRefreshed++;
+      continue;
+    }
+    let remote: Awaited<ReturnType<typeof digiformaFetchSessionTrainees>>;
+    try {
+      remote = await digiformaFetchSessionTrainees(row.digiforma_ref);
+    } catch {
+      continue;
+    }
+    if (!remote.length) continue;
+    const { data: links } = await supabase
+      .from('session_trainees')
+      .select('trainee_id, trainees(email, full_name, first_name, last_name)')
+      .eq('session_id', row.id);
+    const emails = new Set<string>();
+    const names = new Set<string>();
+    for (const l of (links as any[]) || []) {
+      const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees;
+      if (t?.email) emails.add(String(t.email).trim().toLowerCase());
+      for (const n of [t?.full_name, `${t?.first_name || ''} ${t?.last_name || ''}`]) if (n && n.trim()) names.add(nameKey(n));
+    }
+    for (const t of remote) {
+      if (t.email && emails.has(t.email.trim().toLowerCase())) continue;
+      if (names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))) continue;
+      const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
+      if (!trainee) continue;
+      const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
+      const { data: ins, error: linkError } = await supabase
+        .from('session_trainees')
+        .upsert({ session_id: row.id, trainee_id: trainee.id, status: conflict ? 'en_attente' : 'validee' }, { onConflict: 'session_id,trainee_id', ignoreDuplicates: true })
+        .select('trainee_id');
+      if (!linkError && (ins as any[] | null)?.length) addedLater++;
+    }
+  }
+
   const log =
     `${created} session(s) à venir ajoutée(s) au planning, ${traineesLinked} inscription(s) stagiaire ` +
     `(dont ${heldBack} en attente pour conflit de créneau), ${past} session(s) passée(s) ignorée(s), ` +
     `${skipped} déjà connue(s) ou incomplète(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation pour les importer.` : '') +
+    ` ${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà importées.` +
+    (notRefreshed ? ` ${notRefreshed} session(s) importée(s) pas encore relue(s) : relance la synchronisation.` : '') +
     (listed.hasStatus
       ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
       : ' Statut Digiforma introuvable : sessions avec des dates importées.');
@@ -143,4 +188,9 @@ async function logSync(supabase: SupabaseClient, status: 'ok' | 'error', log: st
     .from('app_settings')
     .update({ digiforma_last_sync: new Date().toISOString(), digiforma_last_sync_status: status, digiforma_last_sync_log: log })
     .eq('id', true);
+}
+
+/** Nom comparable : sans accents, minuscules, mots triés (« Léa MARTIN » = « MARTIN Lea »). */
+function nameKey(v: string) {
+  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[\s-]+/).filter(Boolean).sort().join(' ');
 }

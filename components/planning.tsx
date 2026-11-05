@@ -1184,9 +1184,9 @@ function ToAssignSection({ items }: { items: ToAssign[] }) {
   return (
     <section className="panel to-assign" aria-labelledby="to-assign-title">
       <div className="panel-head">
-        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Sessions Digiforma à placer <span className="to-assign-count">{items.length}</span></h2>
+        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Sessions Digiforma à placer sur cette période <span className="to-assign-count">{items.length}</span></h2>
       </div>
-      <p className="hint" style={{ marginTop: 0 }}>Importées de Digiforma (sessions planifiées). Ouvre la fiche pour choisir la salle et le formateur : la session rejoint alors le planning.</p>
+      <p className="hint" style={{ marginTop: 0 }}>Importées de Digiforma (sessions planifiées, pas encore passées). Ouvre la fiche pour choisir la salle et le formateur : la session rejoint alors le planning.</p>
       <ul className="to-assign-list">
         {items.map((s) => (
           <li key={s.id}>

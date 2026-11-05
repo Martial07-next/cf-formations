@@ -156,7 +156,9 @@ export default async function Page({
             .from('sessions')
             .select('id, title, start_at, end_at, digiforma_ref, session_trainees(status)')
             .in('room_id', holdingIds)
-            .gte('end_at', new Date().toISOString())
+            // Période affichée (semaine / jour / mois), sans les sessions déjà passées.
+            .lt('start_at', rangeEnd.toISOString())
+            .gte('end_at', new Date(Math.max(rangeStart.getTime(), Date.now())).toISOString())
             .order('start_at')
             .limit(200);
           return ((data as any[]) || []).map((s) => ({
