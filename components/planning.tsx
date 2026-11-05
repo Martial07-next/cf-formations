@@ -1237,9 +1237,12 @@ function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog:
           <li key={s.kind + s.id}>
             <span className="to-assign-main">
               <strong>{s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title}</strong>
-              <small className="to-assign-parent">
-                {s.kind === 'module' ? `Digiforma : ${s.title}${s.parent && s.parent !== s.title ? ` · ${s.parent}` : ''}` : s.parent}
-              </small>
+              {(() => {
+                // Nom d'origine Digiforma, seulement s'il apporte quelque chose (pas de répétition du titre).
+                const shown = s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title;
+                const origin = [s.title, s.parent].filter((x, i, a) => x && x !== shown && a.indexOf(x) === i).join(' · ');
+                return origin ? <small className="to-assign-parent">Digiforma : {origin}</small> : null;
+              })()}
               <small>
                 {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
               </small>

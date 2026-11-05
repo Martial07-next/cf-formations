@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog } from '@/lib/catalog-match';
 
@@ -25,6 +25,7 @@ const HORIZON_DAYS = 183;
  */
 export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
   const deadline = Date.now() + budgetMs;
+  seenRegStatus.clear();
   const today = new Date().toISOString().slice(0, 10);
   const horizon = new Date(Date.now() + HORIZON_DAYS * 86400000).toISOString().slice(0, 10);
 
@@ -93,10 +94,37 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const planned = ((planRows as any[]) || []).filter((p) => !holdIds.has(p.room_id));
   const { data: linkedRows } = await supabase.from('digiforma_modules').select('placed_session_id').not('placed_session_id', 'is', null);
   const alreadyLinked = new Set(((linkedRows as any[]) || []).map((r) => r.placed_session_id));
+  // Stagiaires des sessions du planning (pour reconnaître un module déjà posé, même sous un autre nom).
+  const people = new Map<string, { emails: Set<string>; names: Set<string> }>();
+  for (let i = 0; i < planned.length; i += 150) {
+    const ids = planned.slice(i, i + 150).map((p) => p.id);
+    const { data: st } = await supabase.from('session_trainees').select('session_id, status, trainees(email, full_name, first_name, last_name)').in('session_id', ids);
+    for (const r of (st as any[]) || []) {
+      const t = Array.isArray(r.trainees) ? r.trainees[0] : r.trainees;
+      if (!t) continue;
+      const e = people.get(r.session_id) || { emails: new Set<string>(), names: new Set<string>() };
+      if (t.email) e.emails.add(String(t.email).trim().toLowerCase());
+      for (const n of [t.full_name, `${t.first_name || ''} ${t.last_name || ''}`]) if (n && n.trim()) e.names.add(nameKey(n));
+      people.set(r.session_id, e);
+    }
+  }
+  const overlap = (sessionId: string, list: DigiformaTrainee[]) => {
+    const e = people.get(sessionId);
+    if (!e) return 0;
+    return list.filter((t) => (t.email && e.emails.has(t.email.trim().toLowerCase())) || e.names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))).length;
+  };
   let linked = 0;
-  const findOnPlanning = (name: string, parent: string, start: string, end: string): string | null => {
+  const findOnPlanning = (name: string, parent: string, start: string, end: string, trainees: DigiformaTrainee[] = []): string | null => {
     const sameDays = planned.filter((p) => !alreadyLinked.has(p.id) && p.start_at.slice(0, 10) <= end.slice(0, 10) && p.end_at.slice(0, 10) >= start.slice(0, 10));
     if (!sameDays.length) return null;
+    // 1. Mêmes stagiaires sur les mêmes jours (parcours GEIQ / POEC posés sous le nom du module) : la moitié au moins.
+    if (trainees.length) {
+      const byPeople = sameDays
+        .map((p) => ({ p, n: overlap(p.id, trainees) }))
+        .filter((x) => x.n >= Math.max(1, Math.ceil(trainees.length / 2)))
+        .sort((a, b) => b.n - a.n);
+      if (byPeople.length === 1 || (byPeople.length > 1 && byPeople[0].n > byPeople[1].n)) return byPeople[0].p.id;
+    }
     const m = matchCatalog(name, catalog, parent);
     const byTemplate = m.templateId && m.confidence !== 'none' ? sameDays.filter((p) => p.template_id === m.templateId) : [];
     if (byTemplate.length === 1) return byTemplate[0].id;
@@ -142,7 +170,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const open = new Set(((unplaced as any[]) || []).map((u) => u.key));
     for (const r of rows) {
       if (!open.has(r.key)) continue;
-      const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at);
+      const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at, (r.trainees as DigiformaTrainee[]) || []);
       if (!hit) continue;
       const { error: le } = await supabase.from('digiforma_modules').update({ placed_session_id: hit }).eq('key', r.key);
       if (!le) {
@@ -205,7 +233,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (listed.hasStatus
       ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
       : ' Statut Digiforma introuvable : toutes les sessions avec des dates sont prises.') +
-    (listed.hasModules ? '' : ' Aucun champ « modules » trouvé dans l’API : sessions entières utilisées.');
+    (listed.hasModules ? '' : ' Aucun champ « modules » trouvé dans l’API : sessions entières utilisées.') +
+    (seenRegStatus.size ? ` Statuts d'inscription (clients) : ${[...seenRegStatus].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '');
   await logSync(supabase, 'ok', log);
   return { ok: true, created: modulesSaved, traineesLinked: addedLater, skipped: notPlanned, past, log };
 }

@@ -2216,3 +2216,12 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 @media (max-width:640px){.to-assign-list{grid-template-columns:1fr}}
 .to-assign-week+.to-assign-week{margin-top:14px}
 .to-assign-week-title{margin:0 0 8px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+
+/* Cartes des modules à placer : titre et infos sur toute la largeur, formation + bouton dessous. */
+.to-assign-list{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+.to-assign-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main main" "match go";align-items:end;gap:10px 12px}
+.to-assign-list li > .to-assign-main{grid-area:main}
+.to-assign-list li > .to-assign-match{grid-area:match}
+.to-assign-list li > button,.to-assign-list li > a{grid-area:go;white-space:nowrap}
+.to-assign-list li:not(:has(.to-assign-match)) > a{grid-column:1 / -1;justify-self:end}
+@media (max-width:640px){.to-assign-list{grid-template-columns:1fr}.to-assign-list li{grid-template-areas:"main main" "match match" "go go"}.to-assign-list li > button{width:100%}}

@@ -120,7 +120,6 @@ async function traineeSelection(): Promise<string> {
     sel('firstName', pick(tf, ['firstname', 'firstName', 'first_name'])),
     sel('lastName', pick(tf, ['lastname', 'lastName', 'last_name', 'birthName'])),
     sel('email', pick(tf, ['email', 'mail'])),
-    sel('regStatus', (f[`${f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant'}#leaf`] || []).find((n) => /status|state|pipeline|registration|inscription/i.test(n)) || null),
   ]
     .filter(Boolean)
     .join(' ');
@@ -261,7 +260,16 @@ async function moduleShape() {
   };
   const sub = firstDated(['subsessions', 'subSessions', 'childSessions', 'trainingModules', 'sessionModules', 'modules']);
   const slots = firstDated(['trainingSessionSlots', 'slots', 'dates', 'sessionDates', 'days']);
-  return { sub, slots };
+  // Module du créneau (Digiforma : TrainingSessionSlot.subsession) : nom du module de chaque jour.
+  let slotModule: { field: string; id: string | null; name: string | null } | null = null;
+  if (slots?.type) {
+    const sf = f[slots.type] || [];
+    const sl = f[`${slots.type}#leaf`] || [];
+    const field = ['subsession', 'subSession', 'module', 'trainingModule'].find((n) => sf.includes(n) && !sl.includes(n)) || null;
+    const t = field ? f[`${slots.type}.${field}#type`]?.[0] || null : null;
+    if (field && t) slotModule = { field, id: pick(f[`${t}#leaf`], ['id']), name: pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']) };
+  }
+  return { sub, slots, slotModule };
 }
 
 /** Structure Digiforma détectée (diagnostic, Administration → Intégrations). */
@@ -275,11 +283,11 @@ export async function digiformaStructure(): Promise<string> {
     `${sessT} : ${(f[sessT] || []).join(', ')}`,
     `Statut utilisé : ${sh.status || 'aucun'} · dates : ${sh.start || '?'} / ${sh.end || '?'}`,
     `Modules (sous-sessions) : ${ms.sub ? `${ms.sub.field} (${ms.sub.type}) · ${ms.sub.name || '-'} ${ms.sub.start} ${ms.sub.end} ${ms.sub.trainees ? '· stagiaires' : ''}` : 'aucun'}`,
-    `Créneaux : ${ms.slots ? `${ms.slots.field} (${ms.slots.type}) · ${ms.slots.start} ${ms.slots.startTime} ${ms.slots.endTime}` : 'aucun'}`,
+    `Créneaux : ${ms.slots ? `${ms.slots.field} (${ms.slots.type}) · ${ms.slots.start} ${ms.slots.startTime} ${ms.slots.endTime} · module du créneau : ${ms.slotModule ? `${ms.slotModule.field} (${ms.slotModule.name || 'sans nom'})` : 'aucun'}` : 'aucun'}`,
   ];
   const st = await statusShape();
   lines.push(
-    `Statut du stagiaire : ${st.traineeStatus || 'aucun'} · inscriptions : ${st.custField ? `${st.custField} (${st.custT}) statut ${st.custStatus || 'aucun'}, stagiaires ${st.custTrainees || st.custTrainee || 'aucun'}` : 'aucune'} · abandons : ${st.abField ? `${st.abField} (${st.abT})` : 'aucun'}`
+    `Inscriptions : ${st.custField ? `${st.custField} (${st.custT}) statut ${st.custStatus || 'aucun'}${st.custStatus2 ? ` + ${st.custStatus2}` : ''}, stagiaires ${st.custTrainees || (st.ctField ? `${st.ctField}.${st.ctTrainee}` : st.custTrainee) || 'aucun'}` : 'aucune'} · abandons : ${st.abField ? `${st.abField} (${st.abT}${st.abFlag ? `, ${st.abFlag}` : ''}${st.abBack ? `, ${st.abBack}` : ''})` : 'aucun'}`
   );
   lines.push(`${st.traineeT} : ${(f[st.traineeT] || []).join(', ')}`);
   if (st.custT) lines.push(`${st.custT} : ${(f[st.custT] || []).join(', ')}`);
@@ -296,7 +304,10 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
   const part = (alias: string, d: NonNullable<typeof ms.sub>, withName: boolean) =>
     `${alias}: ${d.field} { ${[d.id ? sel('id', d.id) : '', withName ? d.name : '', d.start, d.end, d.startTime, d.endTime].filter(Boolean).join(' ')} }`;
-  const slots = ms.slots ? part('slots', ms.slots, true) : '';
+  const slotMod = ms.slotModule && (ms.slotModule.id || ms.slotModule.name) ? `mod: ${ms.slotModule.field} { ${[ms.slotModule.id ? sel('id', ms.slotModule.id) : '', ms.slotModule.name ? sel('name', ms.slotModule.name) : ''].join(' ')} }` : '';
+  const slots = ms.slots
+    ? `slots: ${ms.slots.field} { ${[ms.slots.id ? sel('id', ms.slots.id) : '', ms.slots.name, ms.slots.start, ms.slots.end, ms.slots.startTime, ms.slots.endTime, slotMod].filter(Boolean).join(' ')} }`
+    : '';
   // Sous-session du même type qu'une session : ses créneaux aussi (découpage par semaine).
   const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
   const subs = ms.sub
@@ -305,7 +316,8 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} } }`);
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
-    name: m.name || null,
+    // Créneau : nom de son module (sous-session) ; sinon son propre nom.
+    name: m.mod?.name || m.name || null,
     start: m.startDate || null,
     end: m.endDate || m.startDate || null,
     startTime: m.startTime || null,
@@ -421,28 +433,39 @@ async function statusShape() {
   const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
   const traineeT = f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant';
   const typeOf = (t: string, field: string) => f[`${t}.${field}#type`]?.[0] || null;
-  const leafStatus = (t: string | null) => (t ? (f[`${t}#leaf`] || []).find((n) => STATUS_RE.test(n)) || null : null);
-  const traineeStatus = leafStatus(traineeT);
+  // Le statut du stagiaire lui-même (fiche globale, DPC…) ne dit rien de son inscription à la session : ignoré.
+  const traineeStatus = null as string | null;
   const custField = pick(f[sessT], ['customers', 'clients', 'registrations', 'inscriptions']);
   const custT = custField ? typeOf(sessT, custField) : null;
-  const custStatus = leafStatus(custT);
+  const custLeaf = custT ? f[`${custT}#leaf`] || [] : [];
+  const custStatus = pick(custLeaf, ['pipelineState', 'crmStatus', 'status', 'state']);
+  const custStatus2 = custStatus === 'pipelineState' ? pick(custLeaf, ['crmStatus']) : null;
   const custTrainees = custT ? pick(f[custT], ['trainees', 'students', 'participants']) : null;
-  const custTrainee = custT && !custTrainees ? pick(f[custT], ['trainee', 'student', 'participant']) : null;
+  // Digiforma : Customer.customerTrainees → { trainee }.
+  const ctField = custT && !custTrainees ? pick(f[custT], ['customerTrainees', 'registrations']) : null;
+  const ctT = ctField ? typeOf(custT!, ctField) : null;
+  const ctTrainee = ctT ? pick(f[ctT], ['trainee', 'student', 'participant']) : null;
+  const custTrainee = custT && !custTrainees && !ctTrainee ? pick(f[custT], ['trainee', 'student', 'participant']) : null;
   const abField = pick(f[sessT], ['abandons', 'withdrawals', 'dropouts']);
   const abT = abField ? typeOf(sessT, abField) : null;
   const abDirect = abT === traineeT;
   const abTrainee = abT && !abDirect ? pick(f[abT], ['trainee', 'student', 'participant']) : null;
-  return { traineeT, traineeStatus, custField, custT, custStatus, custTrainees, custTrainee, abField, abT, abDirect, abTrainee };
+  const abLeaf = abT ? f[`${abT}#leaf`] || [] : [];
+  const abFlag = pick(abLeaf, ['isAbandon']);
+  const abBack = pick(abLeaf, ['isBack']);
+  return { traineeT, traineeStatus, custField, custT, custStatus, custStatus2, custTrainees, ctField, ctTrainee, custTrainee, abField, abT, abDirect, abTrainee, abFlag, abBack };
 }
 
 /** Morceau de requête (session ou sous-session) : statuts d'inscription et abandons. */
 async function statusPart(): Promise<string> {
   const st = await statusShape();
   const parts: string[] = [];
-  if (st.custField && st.custStatus && (st.custTrainees || st.custTrainee)) {
-    parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custTrainees ? `who: ${st.custTrainees} { id }` : `one: ${st.custTrainee} { id }`} }`);
+  const who = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
+  if (st.custField && st.custStatus && who) parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custStatus2 ? `regStatus2: ${st.custStatus2}` : ''} ${who} }`);
+  if (st.abField && (st.abDirect || st.abTrainee)) {
+    const flags = [st.abFlag ? `isAbandon: ${st.abFlag}` : '', st.abBack ? `isBack: ${st.abBack}` : ''].join(' ');
+    parts.push(st.abDirect ? `gone: ${st.abField} { id }` : `gone: ${st.abField} { ${flags} one: ${st.abTrainee} { id } }`);
   }
-  if (st.abField && (st.abDirect || st.abTrainee)) parts.push(st.abDirect ? `gone: ${st.abField} { id }` : `gone: ${st.abField} { one: ${st.abTrainee} { id } }`);
   return parts.join(' ');
 }
 
@@ -455,18 +478,26 @@ export function registrationOf(v: unknown): 'validee' | 'en_attente' | 'exclu' {
   return 'en_attente'; // indécis, en attente, à confirmer, devis…
 }
 
+/** Statuts d'inscription rencontrés (compte-rendu de synchronisation). */
+export const seenRegStatus = new Map<string, number>();
+
 /** Applique statuts d'inscription et abandons à une liste de stagiaires (bloc renvoyé par statusPart). */
 function applyStatus(trainees: DigiformaTrainee[], block: any, rawTrainees: any[]): DigiformaTrainee[] {
   const byId = new Map<string, 'validee' | 'en_attente' | 'exclu'>();
   for (const r of block?.regs || []) {
     const st = registrationOf(r.regStatus);
-    for (const w of [...(r.who || []), ...(r.one ? [r.one] : [])]) {
+    seenRegStatus.set(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`, (seenRegStatus.get(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`) || 0) + 1);
+    for (const w of [...(r.who || []), ...((r.ct || []).map((c: any) => c.one).filter(Boolean)), ...(r.one ? [r.one] : [])]) {
       const prev = byId.get(String(w.id));
       // Le plus restrictif l'emporte (exclu > en attente > validée).
       if (!prev || st === 'exclu' || (st === 'en_attente' && prev === 'validee')) byId.set(String(w.id), st);
     }
   }
-  for (const g of block?.gone || []) byId.set(String(g.one?.id ?? g.id), 'exclu');
+  // Abandons : seulement un vrai abandon, sans retour (les absences maladie / justifiées ne comptent pas).
+  for (const g of block?.gone || []) {
+    if (g.isAbandon === false || g.isBack === true) continue;
+    byId.set(String(g.one?.id ?? g.id), 'exclu');
+  }
   return trainees
     .map((t, i) => {
       const own = rawTrainees[i]?.regStatus;
