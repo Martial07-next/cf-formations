@@ -269,7 +269,16 @@ async function moduleShape() {
     const t = field ? f[`${slots.type}.${field}#type`]?.[0] || null : null;
     if (field && t) slotModule = { field, id: pick(f[`${t}#leaf`], ['id']), name: pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']) };
   }
-  return { sub, slots, slotModule };
+  // Sous-sessions sans dates propres (GEIQ) : leur nom + la liste de leurs créneaux → module de chaque jour.
+  let subNames: { field: string; type: string; id: string | null; name: string | null; slotList: string | null } | null = null;
+  const subField = ['subsessions', 'subSessions', 'childSessions'].find((n) => objFields.includes(n)) || null;
+  const subT = typeOf(subField);
+  if (subField && subT) {
+    const lf = f[`${subT}#leaf`] || [];
+    const slotList = slots?.type ? (f[subT] || []).find((n) => f[`${subT}.${n}#type`]?.[0] === slots.type) || null : null;
+    subNames = { field: subField, type: subT, id: pick(lf, ['id']), name: pick(lf, ['name', 'customName', 'title', 'label', 'code']), slotList };
+  }
+  return { sub, slots, slotModule, subNames };
 }
 
 /** Structure Digiforma détectée (diagnostic, Administration → Intégrations). */
@@ -293,6 +302,9 @@ export async function digiformaStructure(): Promise<string> {
   if (st.custT) lines.push(`${st.custT} : ${(f[st.custT] || []).join(', ')}`);
   if (st.abT && !st.abDirect) lines.push(`${st.abT} : ${(f[st.abT] || []).join(', ')}`);
   if (ms.sub?.type) lines.push(`${ms.sub.type} : ${(f[ms.sub.type] || []).join(', ')}`);
+  if (ms.subNames) lines.push(`Sous-sessions ${ms.subNames.field} (${ms.subNames.type}) : nom ${ms.subNames.name || 'aucun'}, créneaux ${ms.subNames.slotList || 'aucun'} · champs : ${(f[ms.subNames.type] || []).join(', ')}`);
+  const progT = f[`${sessT}.program#type`]?.[0];
+  if (progT) lines.push(`Programme (${progT}) : ${(f[progT] || []).join(', ')}`);
   if (ms.slots?.type) lines.push(`${ms.slots.type} : ${(f[ms.slots.type] || []).join(', ')}`);
   return lines.join('\n');
 }
@@ -313,7 +325,9 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   const subs = ms.sub
     ? `subs: ${ms.sub.field} { ${[ms.sub.id ? sel('id', ms.sub.id) : '', ms.sub.name, ms.sub.start, ms.sub.end, ms.sub.startTime, ms.sub.endTime].filter(Boolean).join(' ')} ${ms.sub.type === sessTypeName && slots ? slots : ''} }`
     : '';
-  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} } }`);
+  const sn = ms.subNames && ms.subNames.name && ms.subNames.slotList ? ms.subNames : null;
+  const subNamesPart = sn ? `subn: ${sn.field} { ${sn.id ? sel('id', sn.id) : ''} name: ${sn.name} sl: ${sn.slotList} { id } }` : '';
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} ${subNamesPart} } }`);
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
     // Créneau : nom de son module (sous-session) ; sinon son propre nom.
@@ -338,7 +352,11 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
         return slotBlocks(subSlots.map((x: any) => ({ ...x, name: x.name || m.name }))).map((b) => ({ ...b, key: `${m.key}~${b.start.slice(0, 10)}` }));
       });
       // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
-      const modules = subsList.length ? subsList : slotBlocks((s.slots || []).map(mapDated).filter((m: any) => m.start));
+      // Créneau → module : par sa sous-session, sinon par la liste des créneaux de chaque sous-session.
+      const bySlot = new Map<string, string>();
+      for (const sub of s.subn || []) for (const sl of sub.sl || []) if (sub.name) bySlot.set(String(sl.id), String(sub.name));
+      const slotsList = (s.slots || []).map((x: any, i: number) => ({ ...mapDated(x, i), name: x.mod?.name || bySlot.get(String(x.id)) || x.name || null })).filter((m: any) => m.start);
+      const modules = subsList.length ? subsList : slotBlocks(slotsList);
       return {
         fromSubsessions: subsList.length > 0,
         id: String(s.id),

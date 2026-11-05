@@ -163,7 +163,7 @@ export default async function Page({
         const modsQuery = (withCovered: boolean) => {
           let q = supabase
             .from('digiforma_modules')
-            .select('key, df_session_name, name, start_at, end_at, trainees, whole_session')
+            .select('*')
             .is('placed_session_id', null);
           if (withCovered) q = q.is('covered_by', null);
           return q.lt('start_at', periodTo).gte('end_at', periodFrom).order('start_at').limit(200);
@@ -228,7 +228,12 @@ export default async function Page({
             const fake = all.filter((t) => isPlaceholder(t) || trashed.has(t));
             // Parcours du planning : la moitié au moins de ses stagiaires réels, sinon le même nom.
             let program: { id: string; title: string } | null = null;
-            if (real.length) {
+            // Parcours enregistré par la synchronisation (migration 61).
+            if (m.program_id) {
+              const p = programs.find((x) => x.id === m.program_id);
+              if (p) program = { id: p.id, title: p.title };
+            }
+            if (!program && real.length) {
               const best = programs.map((p) => ({ p, n: p.people.count(real) })).filter((x) => x.n >= half(real.length)).sort((x, y) => y.n - x.n)[0];
               if (best) program = { id: best.p.id, title: best.p.title };
             }
