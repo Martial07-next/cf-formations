@@ -175,3 +175,16 @@ export async function digiformaFetchSessionTrainees(digiformaRef: string): Promi
   );
   return (data?.session?.trainees || []).map(mapTrainee);
 }
+
+/** Sessions Digiforma sans leurs stagiaires (requête légère, pour trier avant d'importer). */
+export async function digiformaListSessionDates(): Promise<Omit<DigiformaSession, 'trainees'>[]> {
+  const sh = await sessionShape();
+  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} } }`);
+  return (data?.sessions || []).map((s: any) => ({
+    id: String(s.id),
+    name: s.name || 'Session Digiforma',
+    startAt: s.startDate || null,
+    endAt: s.endDate || null,
+  }));
+}

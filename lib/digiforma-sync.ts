@@ -1,6 +1,6 @@
 import { markHolidaysAccounted } from '@/lib/holiday-shifts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaListTrainingSessions } from '@/lib/digiforma';
+import { digiformaFetchSessionTrainees, digiformaListSessionDates } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 
 export type SyncResult =
@@ -19,7 +19,9 @@ export type SyncResult =
  * Fonction serveur ordinaire (pas une Server Action) : elle n'est appelable
  * que par l'action admin `syncDigiformaNow` ou par la route cron protégée.
  */
-export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncResult> {
+export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
+  // Temps limité (la plateforme coupe à 60 s) : ce qui reste est repris à la synchronisation suivante.
+  const deadline = Date.now() + budgetMs;
   const { data: holdingRoom } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
   if (!holdingRoom) {
     return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
@@ -27,7 +29,8 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
 
   let sessions;
   try {
-    sessions = await digiformaListTrainingSessions();
+    // Requête légère (sans les stagiaires) : les stagiaires ne sont chargés que pour les sessions à importer.
+    sessions = await digiformaListSessionDates();
   } catch (e: any) {
     await logSync(supabase, 'error', e.message);
     return { ok: false, error: `Digiforma : ${e.message}` };
@@ -45,6 +48,7 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
   let skipped = 0;
   let past = 0;
   let heldBack = 0;
+  let remaining = 0;
 
   for (const s of sessions) {
     if (known.has(s.id)) {
@@ -60,6 +64,16 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
     if (end.getTime() < now) {
       past++;
       continue; // session déjà passée : on ne l'ajoute pas au planning
+    }
+    if (Date.now() > deadline) {
+      remaining++;
+      continue; // plus le temps : reprise à la prochaine synchronisation
+    }
+    let sTrainees: Awaited<ReturnType<typeof digiformaFetchSessionTrainees>>;
+    try {
+      sTrainees = await digiformaFetchSessionTrainees(s.id);
+    } catch {
+      sTrainees = [];
     }
 
     const { data: newSession, error } = await supabase
@@ -81,7 +95,7 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
     // Dates venues de Digiforma : les fériés de la période y sont déjà pris en compte.
     await markHolidaysAccounted(supabase, newSession.id).catch(() => null);
 
-    for (const t of s.trainees) {
+    for (const t of sTrainees) {
       const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
       if (!trainee) continue;
 
@@ -102,7 +116,8 @@ export async function runDigiformaSync(supabase: SupabaseClient): Promise<SyncRe
   const log =
     `${created} session(s) à venir ajoutée(s) au planning, ${traineesLinked} inscription(s) stagiaire ` +
     `(dont ${heldBack} en attente pour conflit de créneau), ${past} session(s) passée(s) ignorée(s), ` +
-    `${skipped} déjà connue(s) ou incomplète(s).`;
+    `${skipped} déjà connue(s) ou incomplète(s).` +
+    (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation pour les importer.` : '');
   await logSync(supabase, 'ok', log);
   return { ok: true, created, traineesLinked, skipped, past, log };
 }

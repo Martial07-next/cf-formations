@@ -5,6 +5,9 @@ import { DigiformaSyncPanel } from '@/components/digiforma-sync-panel';
 import { CongesSyncPanel } from '@/components/conges-sync-panel';
 import { congesConfigured } from '@/lib/conges-sync';
 
+// Synchronisation Digiforma (bouton) : jusqu'à 60 s.
+export const maxDuration = 60;
+
 export default async function IntegrationsPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();

@@ -16,7 +16,12 @@ export function DigiformaSyncPanel({
   function handleSync() {
     setResult(null);
     startTransition(async () => {
-      setResult(await syncDigiformaNow());
+      try {
+        setResult(await syncDigiformaNow());
+      } catch {
+        // Délai dépassé ou coupure : jamais de chargement sans fin.
+        setResult({ ok: false, error: 'La synchronisation n’a pas pu aller au bout (délai dépassé). Relance-la : ce qui est déjà importé est conservé.' });
+      }
     });
   }
 
