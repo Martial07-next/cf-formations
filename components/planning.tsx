@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { askConfirm } from '@/lib/confirm-dialog';
+import { TemplatePicker } from '@/components/template-picker';
 import type { CatalogMatch } from '@/lib/catalog-match';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -942,7 +944,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
 
       {canEdit && (
         <dialog
@@ -1198,6 +1200,8 @@ export type ToAssign = {
   program: { id: string; title: string } | null;
   /** Déjà sur le planning (raison) : non proposé. */
   covered: string | null;
+  /** Retiré à la main de la liste (peut être remis). */
+  dismissed?: boolean;
   /** Formation du catalogue reconnue d'après le nom du module. */
   match: CatalogMatch | null;
 };
@@ -1208,7 +1212,7 @@ export type ToAssign = {
  * ce qui est déjà sur le planning (même stagiaires, parcours déjà posé) est
  * masqué ; stagiaires fictifs et mis de côté : à la corbeille.
  */
-export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog: { id: string; title: string }[]; week: string | null }) {
+export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog: { id: string; title: string; category: string | null; duration_hours: number }[]; week: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1218,6 +1222,25 @@ export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; c
   const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
   const open = items.filter((i) => !i.covered);
   const done = items.filter((i) => i.covered);
+  const dismiss = async (key: string, on: boolean) => {
+    setBusy(key);
+    setError(null);
+    const { dismissDigiformaModule } = await import('@/app/digiforma/actions');
+    const r = await dismissDigiformaModule(key, on);
+    setBusy(null);
+    if (!r.ok) setError(r.error);
+    else router.refresh();
+  };
+  const removeSession = async (item: ToAssign) => {
+    if (!(await askConfirm(`Supprimer la session « ${item.title} » ? Elle ne sera pas recréée par la synchronisation.`, { danger: true }))) return;
+    setBusy(item.id);
+    setError(null);
+    const { deleteDigiformaSession } = await import('@/app/digiforma/actions');
+    const r = await deleteDigiformaSession(item.id);
+    setBusy(null);
+    if (!r.ok) setError(r.error);
+    else router.refresh();
+  };
   const place = async (item: ToAssign) => {
     setBusy(item.id);
     setError(null);
@@ -1271,22 +1294,27 @@ export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; c
                       <span className={`to-assign-flag ${s.match?.confidence || 'none'}`}>
                         {s.match?.confidence === 'sure' ? 'Formation reconnue' : s.match?.confidence === 'doute' ? 'À vérifier' : 'Aucune formation reconnue'}
                       </span>
-                      <select aria-label={`Formation du catalogue pour ${s.title}`} value={chosen[s.id] ?? s.match?.templateId ?? ''} onChange={(e) => setChosen((c) => ({ ...c, [s.id]: e.target.value }))}>
-                        <option value="">Garder le nom Digiforma</option>
-                        {catalog.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-                      </select>
+                      <TemplatePicker templates={catalog} value={chosen[s.id] ?? s.match?.templateId ?? ''} onChange={(id) => setChosen((c) => ({ ...c, [s.id]: id }))} />
                     </label>
                   )}
                   {s.kind === 'module' ? (
                     <span className="to-assign-go">
+                      <button type="button" className="small ghost" disabled={!!busy} title="Introuvable ou inutile : retirer de la liste" onClick={() => dismiss(s.id, true)}>
+                        Retirer
+                      </button>
                       <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s)}>
                         {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
                       </button>
                     </span>
                   ) : (
-                    <Link href={`/sessions/${s.id}`} className="btn small to-assign-go">
-                      Choisir la salle <ChevronRight size={14} aria-hidden />
-                    </Link>
+                    <span className="to-assign-go">
+                      <button type="button" className="small ghost danger" disabled={!!busy} title="Session introuvable : la supprimer" onClick={() => removeSession(s)}>
+                        <Trash2 size={13} aria-hidden /> Supprimer
+                      </button>
+                      <Link href={`/sessions/${s.id}`} className="btn small">
+                        Choisir la salle <ChevronRight size={14} aria-hidden />
+                      </Link>
+                    </span>
                   )}
                 </li>
               );
@@ -1296,11 +1324,18 @@ export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; c
       ))}
       {done.length > 0 && (
         <details className="to-assign-more">
-          <summary>Déjà sur le planning ({done.length}) : non proposés</summary>
+          <summary>Non proposés ({done.length}) : déjà sur le planning, sans stagiaire, stage ou retirés</summary>
           <ul>
             {done.map((s) => (
               <li key={s.id}>
-                <strong>{s.title}</strong> <span className="hint">{d(s.start_at)} · {s.covered}</span>
+                <span>
+                  <strong>{s.title}</strong> <span className="hint">{d(s.start_at)} · {s.covered}</span>
+                </span>
+                {s.dismissed && (
+                  <button type="button" className="small ghost" disabled={!!busy} onClick={() => dismiss(s.id, false)}>
+                    Remettre
+                  </button>
+                )}
               </li>
             ))}
           </ul>

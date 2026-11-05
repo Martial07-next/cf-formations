@@ -749,3 +749,25 @@ export async function digiformaCandidates(sessionId: string): Promise<{ ok: true
     });
   return { ok: true, list };
 }
+
+/**
+ * Corriger la formation du catalogue d'une session (erreur à l'import, mauvais
+ * choix) ; « rename » reprend aussi l'intitulé du catalogue.
+ */
+export async function setSessionTemplate(sessionId: string, templateId: string | null, rename: boolean): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  let title: string | null = null;
+  if (templateId) {
+    const { data: tpl } = await supabase.from('templates').select('id, title').eq('id', templateId).maybeSingle();
+    if (!tpl) return { ok: false, error: 'Formation introuvable dans le catalogue.' };
+    title = (tpl as any).title;
+  }
+  const { error } = await supabase
+    .from('sessions')
+    .update({ template_id: templateId, ...(rename && title ? { title } : {}) })
+    .eq('id', sessionId);
+  if (error) return { ok: false, error: error.message };
+  refreshSession(sessionId);
+  return { ok: true };
+}

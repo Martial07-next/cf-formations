@@ -22,3 +22,24 @@ export async function placeDigiformaModule(key: string, templateId: string | nul
   if (r.ok) revalidatePath('/');
   return r;
 }
+
+/** Retirer un module de la liste « à placer » (introuvable, inutile) ou le remettre. */
+export async function dismissDigiformaModule(key: string, on: boolean): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('digiforma_modules').update({ covered_by: on ? 'dismissed' : null }).eq('key', key);
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 58 (supabase/migration_phase58.sql) dans Supabase.' };
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/** Supprimer une session créée depuis Digiforma qu'on ne retrouve pas (salle jamais choisie). */
+export async function deleteDigiformaSession(sessionId: string): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  await supabase.from('digiforma_modules').update({ placed_session_id: null, covered_by: 'dismissed' }).eq('placed_session_id', sessionId);
+  const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/');
+  return { ok: true };
+}

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -52,6 +52,18 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
 
   // Sessions planifiées, avec des modules à venir (ou la session entière si l'API n'a pas de modules).
+  // « Dates et prix » (sessions planifiées / en cours) : modules nommés, prioritaires sur les créneaux.
+  for (const s of listed.sessions) {
+    if (Date.now() > deadline - 15_000) break;
+    if (listed.hasStatus && !isPlannedStatus(s.status)) continue;
+    if (s.modules.some((m) => m.name)) continue;
+    try {
+      const fromDates = await digiformaDateModules(s.id);
+      if (fromDates?.length) s.modules = fromDates;
+    } catch {
+      // champ absent ou refusé : on garde les créneaux
+    }
+  }
   const seenStatus = new Map<string, number>();
   let notPlanned = 0;
   let past = 0;
@@ -295,7 +307,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         // Parcours (GEIQ, POEC, personnalisé) déjà posé cette semaine sur le planning.
         const prog = programFor(s.name, (r.trainees as DigiformaTrainee[]) || []);
         const cov = prog ? coveredBy(prog, r.start_at, r.end_at) : null;
-        const { error: ce } = await supabase.from('digiforma_modules').update({ covered_by: cov }).eq('key', r.key);
+        const { error: ce } = await supabase.from('digiforma_modules').update({ covered_by: cov }).eq('key', r.key).or('covered_by.is.null,covered_by.neq.dismissed');
         if (!ce && cov) covered++;
         continue;
       }
@@ -322,7 +334,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     if (autoProgram && programId) {
       const { data: still } = await supabase.from('digiforma_modules').select('*').eq('df_session_id', s.id).is('placed_session_id', null);
       for (const m of (still as any[]) || []) {
-        if (m.covered_by || Date.now() > deadline) continue;
+        if (m.covered_by || Date.now() > deadline) continue; // déjà couvert, ou retiré à la main
         // Aucun vrai stagiaire prévu (fictifs, corbeille, absents de ces créneaux) : pas de module.
         if (!((m.trainees as DigiformaTrainee[]) || []).some((t) => !isPlaceholder(t) && !ignoredTrainees.has(t))) continue;
         const mm = matchModule(m.name || s.name, s.name, catalog);

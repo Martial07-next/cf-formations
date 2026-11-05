@@ -330,6 +330,8 @@ export async function digiformaStructure(): Promise<string> {
   if (st.abT && !st.abDirect) lines.push(`${st.abT} : ${(f[st.abT] || []).join(', ')}`);
   if (ms.sub?.type) lines.push(`${ms.sub.type} : ${(f[ms.sub.type] || []).join(', ')}`);
   if (ms.subNames) lines.push(`Sous-sessions ${ms.subNames.field} (${ms.subNames.type}) : nom ${ms.subNames.name || 'aucun'}, créneaux ${ms.subNames.slotList || 'aucun'} · champs : ${(f[ms.subNames.type] || []).join(', ')}`);
+  const ds = await datesShape();
+  if (ds) lines.push(`Dates et prix (dates → ${ds.type}) : ${ds.usable ? 'module lu ici' : 'pas de module'} · champs : ${(f[ds.type] || []).join(', ')}`);
   const progT = f[`${sessT}.program#type`]?.[0];
   if (progT) lines.push(`Programme (${progT}) : ${(f[progT] || []).join(', ')}`);
   if (ms.slots?.type) lines.push(`${ms.slots.type} : ${(f[ms.slots.type] || []).join(', ')}`);
@@ -602,4 +604,92 @@ async function slotAttendancePart(): Promise<string> {
   if (ctT === (f.Trainee ? 'Trainee' : 'Student')) return `att: ${ms.slots.field} { id ct: ${ctField} { id } }`;
   const tr = pick(f[ctT], ['trainee', 'student', 'participant']);
   return tr ? `att: ${ms.slots.field} { id ct: ${ctField} { one: ${tr} { id } } }` : '';
+}
+
+
+/* ------------------------------------------------------------------------
+ * « Dates et prix » de Digiforma (TrainingSession.dates) : chaque ligne de
+ * date peut porter le module de formation. Détecté dans le schéma.
+ * ---------------------------------------------------------------------- */
+
+async function datesShape() {
+  const f = await schemaFields();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  if (!(f[sessT] || []).includes('dates')) return null;
+  const t = f[`${sessT}.dates#type`]?.[0] || null;
+  if (!t) return null;
+  const leaf = f[`${t}#leaf`] || [];
+  const obj = (f[t] || []).filter((n) => !leaf.includes(n));
+  const startF = pick(leaf, ['startDate', 'date', 'start', 'day', 'from', 'beginDate']);
+  if (!startF) return { type: t, leaf, obj, usable: false as const };
+  // Nom du module : champ texte, ou objet lié (sous-session, module, programme) qui a un nom.
+  const nameLeaf = pick(leaf, ['name', 'title', 'label', 'moduleName', 'subsessionName', 'description']);
+  const nameObj = nameLeaf ? null : ['subsession', 'module', 'subProgram', 'program', 'trainingModule'].find((n) => obj.includes(n) && (f[`${f[`${t}.${n}#type`]?.[0]}#leaf`] || []).includes('name')) || null;
+  return {
+    type: t,
+    leaf,
+    obj,
+    usable: Boolean(nameLeaf || nameObj),
+    start: sel('startDate', startF),
+    end: sel('endDate', pick(leaf, ['endDate', 'end', 'to', 'date', 'day'])),
+    startTime: sel('startTime', pick(leaf, ['startTime', 'startHour', 'fromTime'])),
+    endTime: sel('endTime', pick(leaf, ['endTime', 'endHour', 'toTime'])),
+    name: nameLeaf ? sel('name', nameLeaf) : nameObj ? `nm: ${nameObj} { name }` : '',
+    id: pick(leaf, ['id']),
+  };
+}
+
+/** Lignes « Dates et prix » d'une session → modules (si elles portent le module). */
+export async function digiformaDateModules(sessionId: string): Promise<DigiformaModule[] | null> {
+  const ds = await datesShape();
+  const sh = await sessionShape();
+  if (!ds || !ds.usable || !sh.oneField) return null;
+  const data = await digiformaFetch(
+    `query($id: ID!) { session: ${sh.oneField}(id: $id) { dts: dates { ${[ds.id ? sel('id', ds.id) : '', ds.start, ds.end, ds.startTime, ds.endTime, ds.name].filter(Boolean).join(' ')} } } }`,
+    { id: sessionId }
+  );
+  const rows = ((data?.session?.dts || []) as any[])
+    .map((d, i) => ({
+      key: String(d.id ?? `d${i}-${d.startDate || ''}`),
+      name: (d.name ?? d.nm?.name ?? null) as string | null,
+      start: d.startDate || null,
+      end: d.endDate || d.startDate || null,
+      startTime: d.startTime || null,
+      endTime: d.endTime || null,
+    }))
+    .filter((d) => d.start);
+  if (!rows.some((r) => r.name)) return null;
+  return slotBlocks(rows as DigiformaModule[]);
+}
+
+/** Diagnostic : exemple réel d'un parcours (GEIQ…) en cours, pour voir où Digiforma range ses modules. */
+export async function digiformaSample(): Promise<string> {
+  const f = await schemaFields();
+  const sh = await sessionShape();
+  if (!sh.listField || !sh.oneField) return '';
+  const list = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.status} } }`);
+  const pickOne =
+    (list?.sessions || []).find((x: any) => /geiq/i.test(x.name || '') && /ongoing|en cours/i.test(String(x.status || ''))) ||
+    (list?.sessions || []).find((x: any) => /geiq|poec|parcours/i.test(x.name || ''));
+  if (!pickOne) return 'Exemple : aucune session GEIQ trouvée.';
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const part = (field: string) => {
+    const t = f[`${sessT}.${field}#type`]?.[0];
+    if (!t) return '';
+    const leaf = (f[`${t}#leaf`] || []).filter((n) => !/html|url|signature|image|logo/i.test(n)).slice(0, 25);
+    const objs = (f[t] || []).filter((n) => !(f[`${t}#leaf`] || []).includes(n)).filter((n) => (f[`${f[`${t}.${n}#type`]?.[0]}#leaf`] || []).includes('name')).slice(0, 6);
+    return `${field} { ${leaf.join(' ')} ${objs.map((o) => `${o} { name }`).join(' ')} }`;
+  };
+  const data = await digiformaFetch(
+    `query($id: ID!) { session: ${sh.oneField}(id: $id) { id name ${part('dates')} ${part('trainingSessionSlots')} ${part('subsessions')} } }`,
+    { id: pickOne.id }
+  );
+  const sx = data?.session || {};
+  const cut = (v: any) => JSON.stringify((v || []).slice(0, 4));
+  return [
+    `Exemple : ${sx.name} (${pickOne.status || '?'})`,
+    `dates (${(sx.dates || []).length}) : ${cut(sx.dates)}`,
+    `créneaux (${(sx.trainingSessionSlots || []).length}) : ${cut(sx.trainingSessionSlots)}`,
+    `sous-sessions (${(sx.subsessions || []).length}) : ${cut(sx.subsessions)}`,
+  ].join('\n');
 }

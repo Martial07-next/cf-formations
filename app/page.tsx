@@ -170,7 +170,7 @@ export default async function Page({
           return q.lt('start_at', periodTo).gte('end_at', periodFrom).order('start_at').limit(200);
         };
         const [mods0, held] = await Promise.all([
-          modsQuery(true).then((r) => r) as any,
+          modsQuery(false).then((r) => r) as any,
           holdingIds.length
             ? supabase
                 .from('sessions')
@@ -243,9 +243,11 @@ export default async function Page({
               if (byName.templateId && byName.score >= 0.55) program = { id: byName.templateId, title: byName.title || '' };
             }
             // Déjà sur le planning : session aux mêmes jours avec les mêmes stagiaires, ou parcours déjà posé cette semaine.
-            let covered: string | null = null;
+            let covered: string | null = m.covered_by === 'dismissed' ? 'Retiré de la liste' : null;
             // Personne de réel sur ces jours, ou stage / vacances : rien à placer en salle.
-            if (isCompanyPeriod(m.name || '')) covered = 'Stage en entreprise : période du parcours, pas de salle';
+            if (covered) {
+              // retiré à la main : rien d'autre à vérifier
+            } else if (isCompanyPeriod(m.name || '')) covered = 'Stage en entreprise : période du parcours, pas de salle';
             else if (isOffPeriod(m.name || '')) covered = 'Pas de formation ces jours-là (vacances, fermeture…)';
             else if (!real.length) covered = all.length ? 'Aucun vrai stagiaire prévu (fictifs ou corbeille seulement)' : 'Aucun stagiaire prévu sur ces créneaux';
             const bySession = real.length ? sessPeople.find((x) => sameDays(x.start_at, x.end_at, m.start_at, m.end_at) && x.people.count(real) >= half(real.length)) : null;
@@ -269,6 +271,7 @@ export default async function Page({
               fake: fake.map((t) => ({ key: personKey(t), name: personName(t) || 'Sans nom' })),
               program,
               covered,
+              dismissed: m.covered_by === 'dismissed',
             };
           });
         return [
@@ -286,6 +289,7 @@ export default async function Page({
             fake: [],
             program: null,
             covered: null,
+            dismissed: false,
           })),
         ].sort((p, q) => p.start_at.localeCompare(q.start_at));
       })()

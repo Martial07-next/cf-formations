@@ -1,6 +1,7 @@
 'use client';
 
 import { searchTrainees } from '@/lib/trainee-search';
+import { SessionTemplateSwitch } from '@/components/session-template-switch';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -83,6 +84,7 @@ export function SessionDetailView({
   digiformaEnabled,
   isOwnTrainer = false,
   canEditSession = false,
+  catalog = [],
   canEditStartTimes = false,
   modules = [],
   traineeModules = {},
@@ -133,6 +135,8 @@ export function SessionDetailView({
   isOwnTrainer?: boolean;
   /** Peut modifier la session (bureau, admin, référent cadre) ; isAdmin = gestion complète. */
   canEditSession?: boolean;
+  /** Catalogue (changer la formation de la session). */
+  catalog?: { id: string; title: string; category: string | null; duration_hours: number }[];
   /** Référent cadre : peut seulement changer l'heure de début, jour par jour. */
   canEditStartTimes?: boolean;
   modules?: SessionModule[];
@@ -653,10 +657,14 @@ export function SessionDetailView({
       <div className="panel" id="infos">
         <div className="panel-head">
           <h2>Informations</h2>
-          {template && (
-            <span className="hint">
-              Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
-            </span>
+          {canEditSession && catalog.length ? (
+            <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+          ) : (
+            template && (
+              <span className="hint">
+                Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
+              </span>
+            )
           )}
         </div>
         <SessionForm
@@ -723,10 +731,14 @@ export function SessionDetailView({
       <div className="panel" id="infos">
         <div className="panel-head">
           <h2>Informations</h2>
-          {template && (
-            <span className="hint">
-              Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
-            </span>
+          {canEditSession && catalog.length ? (
+            <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+          ) : (
+            template && (
+              <span className="hint">
+                Catalogue : {template.category ? `${template.category} › ` : ''}{template.title} · {formatHours(Number(template.duration_hours))}
+              </span>
+            )
           )}
         </div>
         <SessionForm

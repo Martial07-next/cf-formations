@@ -80,6 +80,8 @@ export async function testDigiformaConnection(): Promise<DigiformaTestResult> {
     try {
       const { digiformaStructure } = await import('@/lib/digiforma');
       structure = await digiformaStructure();
+      const { digiformaSample } = await import('@/lib/digiforma');
+      structure += `\n\n${await digiformaSample().catch((e: any) => `Exemple illisible : ${e.message}`)}`;
     } catch (e: any) {
       structure = `Structure illisible : ${e.message}`;
     }

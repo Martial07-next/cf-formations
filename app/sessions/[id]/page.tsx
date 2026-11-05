@@ -721,6 +721,7 @@ export default async function SessionDetailPage({
           digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}
           template={template}
+          catalog={editable ? (((await supabase.from('templates').select('id, title, category, duration_hours').order('title')).data as any[]) || []) : []}
           rooms={[...((rooms as any[]) || [])].sort(compareRooms)}
           trainers={(trainers as any) || []}
           enrolled={enrolled}

@@ -2251,3 +2251,5 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .name-with-trash{display:inline-flex;align-items:center;gap:4px}
 .name-with-trash .icon{width:28px;height:28px;min-height:28px;opacity:.55}
 .name-with-trash .icon:hover{opacity:1;color:#9a2c0b}
+.tpl-switch{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tpl-switch.editing{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:560px}
