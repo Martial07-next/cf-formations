@@ -7,7 +7,7 @@ import { placeModuleRow } from '@/lib/digiforma-place';
 import { People, isPlaceholder } from '@/lib/digiforma-people';
 
 export type SyncResult =
-  | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
+  | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string; remaining: number }
   | { ok: false; error: string };
 
 /** Modules suivis : ceux qui commencent dans les 6 prochains mois. */
@@ -53,10 +53,13 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 
   // Sessions planifiées, avec des modules à venir (ou la session entière si l'API n'a pas de modules).
   // « Dates et prix » (sessions planifiées / en cours) : modules nommés, prioritaires sur les créneaux.
+  let dateReads = 0;
   for (const s of listed.sessions) {
-    if (Date.now() > deadline - 15_000) break;
+    if (Date.now() > deadline - 25_000 || dateReads >= 10) break;
     if (listed.hasStatus && !isPlannedStatus(s.status)) continue;
     if (s.modules.some((m) => m.name)) continue;
+    if (!/geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(s.name)) continue;
+    dateReads++;
     try {
       const fromDates = await digiformaDateModules(s.id);
       if (fromDates?.length) s.modules = fromDates;
@@ -109,7 +112,20 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
   // Les plus proches d'abord (si le temps manque, la suite est reprise au prochain passage).
   const firstOf = (x: { modules: Mod[]; stages: Mod[] }) => (x.modules[0] || x.stages[0]).start_at;
-  todo.sort((a, b) => firstOf(a).localeCompare(firstOf(b)));
+  // Relues à tour de rôle : jamais relues d'abord, puis les plus anciennes (sinon les mêmes passent toujours devant).
+  const lastSeen = new Map<string, string>();
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data: seen } = await supabase.from('digiforma_modules').select('df_session_id, synced_at').order('synced_at').range(from, from + 999);
+    for (const r of (seen as any[]) || []) if (!lastSeen.has(r.df_session_id) || r.synced_at > lastSeen.get(r.df_session_id)!) lastSeen.set(r.df_session_id, r.synced_at);
+    if (!seen || seen.length < 1000) break;
+  }
+  todo.sort((a, b) => (lastSeen.get(a.id) || '').localeCompare(lastSeen.get(b.id) || '') || firstOf(a).localeCompare(firstOf(b)));
+  // Détails Digiforma lus quatre par quatre (en parallèle), dans l'ordre ci-dessus.
+  const details = new Map<string, Promise<any>>();
+  const prefetch = (i: number) => {
+    for (let k = i; k < Math.min(todo.length, i + 4); k++) if (!details.has(todo[k].id)) details.set(todo[k].id, digiformaSessionDetail(todo[k].id).catch(() => null));
+  };
+  const processed = new Set<string>();
 
   // Sessions déjà sur le planning (même formation, mêmes dates) : le module y est relié, pas reproposé.
   const { data: tplRows } = await supabase.from('templates').select('id, title');
@@ -219,17 +235,15 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let programsLinked = 0;
   let autoPlaced = 0;
   let stagePeriods = 0;
-  for (const s of todo) {
+  for (const [idx, s] of todo.entries()) {
     if (Date.now() > deadline) {
       remaining++;
       continue;
     }
-    let detail: { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> };
-    try {
-      detail = await digiformaSessionDetail(s.id);
-    } catch {
-      continue;
-    }
+    prefetch(idx);
+    const detail: { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> } | null = await details.get(s.id);
+    processed.add(s.id); // lue (même en échec) : ses modules ne sont pas purgés
+    if (!detail) continue;
     const rows = s.modules.map((m) => {
       const own = detail.byModule[m.key.slice(s.id.length + 1).split('~')[0]];
       // Présence par créneau (Digiforma) : seulement les stagiaires prévus ces jours-là.
@@ -354,6 +368,12 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const legacyIds = ((legacy as any[]) || []).map((x) => x.id);
   if (legacyIds.length) await supabase.from('sessions').delete().in('id', legacyIds);
 
+  if (!remaining) {
+    const { data: openRows } = await supabase.from('digiforma_modules').select('key, df_session_id').is('placed_session_id', null);
+    const gone = ((openRows as any[]) || []).filter((r) => !processed.has(r.df_session_id)).map((r) => r.key);
+    for (let i = 0; i < gone.length; i += 200) await supabase.from('digiforma_modules').delete().in('key', gone.slice(i, i + 200)).or('covered_by.is.null,covered_by.neq.dismissed');
+  }
+
   // Modules passés jamais placés : plus utiles.
   await supabase.from('digiforma_modules').delete().is('placed_session_id', null).lt('end_at', `${today}T00:00:00`);
 
@@ -399,7 +419,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (listed.hasModules ? '' : ' Aucun champ « modules » trouvé dans l’API : sessions entières utilisées.') +
     (seenRegStatus.size ? ` Statuts d'inscription (clients) : ${[...seenRegStatus].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '');
   await logSync(supabase, 'ok', log);
-  return { ok: true, created: modulesSaved, traineesLinked: addedLater, skipped: notPlanned, past, log };
+  return { ok: true, created: modulesSaved, traineesLinked: addedLater, skipped: notPlanned, past, log, remaining };
 }
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */

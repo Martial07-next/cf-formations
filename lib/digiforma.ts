@@ -366,7 +366,7 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
     // Créneau : nom de son module (sous-session) ; sinon son propre nom.
-    name: m.mod?.name || m.name || null,
+    name: String(m.mod?.name || m.name || '').trim() || null,
     start: m.startDate || null,
     end: m.endDate || m.startDate || null,
     startTime: m.startTime || null,
@@ -402,7 +402,7 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
           const info = bySlot.get(String(x.id));
           const modOff = x.mod ? x.mod.off === true || /entreprise|company|stage|work|alternance|terrain/i.test(String(x.mod.modality ?? '')) : false;
           const modRemote = x.mod ? /distan|remote|e.?learning|foad|online|virtual|visio/i.test(String(x.mod.modality ?? '')) : false;
-          return { ...mapDated(x, i), name: x.mod?.name || info?.name || x.name || null, offsite: modOff || Boolean(info?.off), remote: modRemote || Boolean(info?.remote) };
+          return { ...mapDated(x, i), name: String(x.mod?.name || info?.name || x.name || '').trim() || null, offsite: modOff || Boolean(info?.off), remote: modRemote || Boolean(info?.remote) };
         })
         .filter((m: any) => m.start);
       const modules = subsList.length ? subsList : slotBlocks(slotsList);
@@ -651,7 +651,7 @@ export async function digiformaDateModules(sessionId: string): Promise<Digiforma
   const rows = ((data?.session?.dts || []) as any[])
     .map((d, i) => ({
       key: String(d.id ?? `d${i}-${d.startDate || ''}`),
-      name: (d.name ?? d.nm?.name ?? null) as string | null,
+      name: (String(d.name ?? d.nm?.name ?? '').trim() || null) as string | null,
       start: d.startDate || null,
       end: d.endDate || d.startDate || null,
       startTime: d.startTime || null,

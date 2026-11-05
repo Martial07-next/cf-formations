@@ -13,14 +13,23 @@ export function DigiformaSyncPanel({
   const [result, setResult] = useState<SyncResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const [progress, setProgress] = useState<string | null>(null);
   function handleSync() {
     setResult(null);
     startTransition(async () => {
       try {
-        setResult(await syncDigiformaNow());
+        // Plusieurs lots si besoin (chaque lot ≈ 40 s) : jusqu'à ce que toutes les sessions soient relues.
+        let last: SyncResult | null = null;
+        for (let lot = 1; lot <= 8; lot++) {
+          setProgress(lot > 1 ? `Lot ${lot}…` : null);
+          last = await syncDigiformaNow();
+          if (!last.ok || !('remaining' in last) || !last.remaining) break;
+        }
+        setResult(last);
       } catch {
-        // Délai dépassé ou coupure : jamais de chargement sans fin.
         setResult({ ok: false, error: 'La synchronisation n’a pas pu aller au bout (délai dépassé). Relance-la : ce qui est déjà importé est conservé.' });
+      } finally {
+        setProgress(null);
       }
     });
   }
@@ -61,7 +70,7 @@ export function DigiformaSyncPanel({
 
       <button className="primary" onClick={handleSync} disabled={isPending}>
         <RefreshCw size={15} className={isPending ? 'spin' : ''} />
-        {isPending ? 'Synchronisation…' : 'Synchroniser maintenant'}
+        {isPending ? `Synchronisation${progress ? ` · ${progress}` : '…'}` : 'Synchroniser maintenant'}
       </button>
     </div>
   );
