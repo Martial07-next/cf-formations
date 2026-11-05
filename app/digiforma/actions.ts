@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { addNewTrainees } from '@/lib/digiforma-sync';
 import { markHolidaysAccounted } from '@/lib/holiday-shifts';
-import { isPlaceholder, personKey } from '@/lib/digiforma-people';
+import { People, isPlaceholder } from '@/lib/digiforma-people';
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -50,26 +50,13 @@ export async function placeDigiformaModule(key: string, templateId: string | nul
     .single();
   if (insError || !created) return { ok: false, error: 'Création impossible, réessaie.' };
   await markHolidaysAccounted(supabase, created.id).catch(() => null);
-  // Stagiaires réels seulement : ni fictifs (« Apprenant A »), ni ceux mis à la corbeille ; jamais de doublon.
-  const { data: ign } = await supabase.from('digiforma_ignored').select('value').eq('kind', 'trainee');
-  const ignored = new Set(((ign as any[]) || []).map((x) => x.value));
-  const real = (((m as any).trainees as any[]) || []).filter((t) => !isPlaceholder(t) && !ignored.has(personKey(t)));
+  // Stagiaires réels seulement : ni fictifs (« Apprenant A »), ni ceux de la corbeille (page Stagiaires) ; jamais de doublon.
+  const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
+  const trashed = new People();
+  for (const t of (trashedRows as any[]) || []) trashed.add(t);
+  const real = (((m as any).trainees as any[]) || []).filter((t) => !isPlaceholder(t) && !trashed.has(t));
   await addNewTrainees(supabase, created as any, real);
   await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).eq('key', key);
   revalidatePath('/');
   return { ok: true, sessionId: created.id };
-}
-
-/** Corbeille Digiforma : un module ou un stagiaire mis de côté (ou restauré). */
-export async function setDigiformaIgnored(kind: 'module' | 'trainee', value: string, label: string, on: boolean): Promise<Result> {
-  const profile = await requireManager();
-  if (!profile) return FORBIDDEN;
-  if (!['module', 'trainee'].includes(kind) || !value) return { ok: false, error: 'Élément invalide.' };
-  const supabase = await createClient();
-  const { error } = on
-    ? await supabase.from('digiforma_ignored').upsert({ kind, value: value.slice(0, 300), label: label.slice(0, 200), created_by: (profile as any).id ?? null }, { onConflict: 'kind,value' })
-    : await supabase.from('digiforma_ignored').delete().eq('kind', kind).eq('value', value);
-  if (error) return { ok: false, error: 'Exécute d’abord la migration 59 (supabase/migration_phase59.sql) dans Supabase.' };
-  revalidatePath('/');
-  return { ok: true };
 }

@@ -420,8 +420,15 @@ export async function searchTrainees(q: string): Promise<{ id: string; full_name
   const supabase = await createClient();
   // Classement par pertinence, sans accents, nom / prénom dans n'importe quel ordre.
   const all: any[] = [];
+  let trash = true;
   for (let from = 0; from < 50000; from += 1000) {
-    const { data } = await supabase.from('trainees').select('id, full_name, first_name, last_name, company').order('id').range(from, from + 999);
+    const base = () => supabase.from('trainees').select('id, full_name, first_name, last_name, company').order('id').range(from, from + 999);
+    // Sans les fiches à la corbeille (migration 60).
+    let { data, error } = trash ? await base().is('trashed_at', null) : await base();
+    if (error && trash) {
+      trash = false;
+      ({ data } = await base());
+    }
     if (!data?.length) break;
     all.push(...data);
     if (data.length < 1000) break;

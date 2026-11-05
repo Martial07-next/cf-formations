@@ -270,3 +270,55 @@ export async function importTraineesFromText(formData: FormData): Promise<PasteI
   if (sessionId) revalidatePath(`/sessions/${sessionId}`);
   return { ok: true, created, matched, enrolled, errors };
 }
+
+// ---- Corbeille (migration 60) ------------------------------------------------
+
+const TRASH_MIGRATION = 'Exécute d’abord la migration 60 (supabase/migration_phase60.sql) dans Supabase.';
+
+/** Mettre des fiches à la corbeille (ou les restaurer). */
+export async function trashTrainees(ids: string[], on: boolean, reason = 'Mise à la corbeille'): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const list = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 2000);
+  if (!list.length) return { ok: true, count: 0 };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('trainees')
+    .update(on ? { trashed_at: new Date().toISOString(), trashed_reason: reason.slice(0, 200) } : { trashed_at: null, trashed_reason: null })
+    .in('id', list);
+  if (error) return { ok: false, error: TRASH_MIGRATION };
+  revalidatePath('/stagiaires');
+  return { ok: true, count: list.length };
+}
+
+/** Fiches fictives (« Apprenant A », « Stagiaire 2 », « Test »…) encore actives : toutes à la corbeille. */
+export async function trashPlaceholderTrainees(): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { isPlaceholder } = await import('@/lib/digiforma-people');
+  const found: string[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data, error } = await supabase.from('trainees').select('id, first_name, last_name, full_name').is('trashed_at', null).order('id').range(from, from + 999);
+    if (error) return { ok: false, error: TRASH_MIGRATION };
+    if (!data?.length) break;
+    for (const t of data as any[]) {
+      const first = t.first_name ?? null;
+      const last = t.last_name ?? (first ? null : t.full_name);
+      if (isPlaceholder({ firstName: first, lastName: last ?? t.full_name })) found.push(t.id);
+    }
+    if (data.length < 1000) break;
+  }
+  if (!found.length) return { ok: true, count: 0 };
+  return trashTrainees(found, true, 'Fiche fictive (nom générique)');
+}
+
+/** Vider la corbeille : suppression définitive des fiches choisies (déjà à la corbeille). */
+export async function purgeTrainees(ids: string[]): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const list = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 2000);
+  if (!list.length) return { ok: true, count: 0 };
+  const supabase = await createClient();
+  const { error } = await supabase.from('trainees').delete().in('id', list).not('trashed_at', 'is', null);
+  if (error) return { ok: false, error: 'Suppression impossible : une fiche est sans doute liée à des documents signés. Garde-la à la corbeille.' };
+  revalidatePath('/stagiaires');
+  return { ok: true, count: list.length };
+}

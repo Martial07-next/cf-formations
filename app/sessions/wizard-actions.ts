@@ -98,8 +98,14 @@ export async function searchTrainees(query: string, exclude: string[] = []): Pro
     .map((w) => w.replace(/[\\%_,()]/g, ''));
   if (!words.length) return [];
   const supabase = await createClient();
-  let q = supabase.from('trainees').select('id, full_name, company');
-  for (const w of words) q = q.or(`full_name.ilike.%${w}%,company.ilike.%${w}%`);
-  const { data } = await q.order('full_name').limit(30);
+  const build = (trash: boolean) => {
+    let q = supabase.from('trainees').select('id, full_name, company');
+    for (const w of words) q = q.or(`full_name.ilike.%${w}%,company.ilike.%${w}%`);
+    // Sans les fiches à la corbeille (migration 60).
+    if (trash) q = q.is('trashed_at', null);
+    return q.order('full_name').limit(30);
+  };
+  let { data, error } = await build(true);
+  if (error) ({ data } = await build(false));
   return ((data as any[]) || []).filter((t) => !exclude.includes(t.id)).slice(0, 8);
 }

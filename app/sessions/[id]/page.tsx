@@ -47,8 +47,15 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 /** Tout l'annuaire des stagiaires (l'API renvoie 1000 lignes maximum par requête). */
 async function allTraineesOf(supabase: Awaited<ReturnType<typeof createClient>>) {
   const out: any[] = [];
+  // Sans les fiches à la corbeille (migration 60), si elle est faite.
+  let trash = true;
   for (let from = 0; from < 20000; from += 1000) {
-    const { data } = await supabase.from('trainees').select('id, full_name, email, company').order('full_name').range(from, from + 999);
+    const base = () => supabase.from('trainees').select('id, full_name, email, company').order('full_name').range(from, from + 999);
+    let { data, error } = trash ? await base().is('trashed_at', null) : await base();
+    if (error && trash) {
+      trash = false;
+      ({ data, error } = await base());
+    }
     out.push(...(data || []));
     if (!data || data.length < 1000) break;
   }

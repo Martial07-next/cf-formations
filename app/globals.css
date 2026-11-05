@@ -2238,3 +2238,16 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .to-assign-more summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center}
 .to-assign-more ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
 .to-assign-more li{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;flex-wrap:wrap}
+
+/* Corbeille des stagiaires */
+.trash-alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.trash-alert > span{flex:1;min-width:220px}
+.trash-list ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.trash-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.trash-list li.on{border-color:var(--cf-mint-strong);background:var(--cf-mint-soft)}
+.trash-list li .check-line > span{display:flex;flex-direction:column;gap:2px}
+.trash-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.trash-tabs{display:flex;gap:6px;margin:0 0 12px}
+.name-with-trash{display:inline-flex;align-items:center;gap:4px}
+.name-with-trash .icon{width:28px;height:28px;min-height:28px;opacity:.55}
+.name-with-trash .icon:hover{opacity:1;color:#9a2c0b}

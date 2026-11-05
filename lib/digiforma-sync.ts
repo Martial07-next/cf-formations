@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
-import { isPlaceholder, personKey } from '@/lib/digiforma-people';
+import { People, isPlaceholder } from '@/lib/digiforma-people';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
@@ -27,9 +27,10 @@ const HORIZON_DAYS = 183;
 export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
   const deadline = Date.now() + budgetMs;
   seenRegStatus.clear();
-  // Corbeille (migration 59) : stagiaires mis de côté, jamais ajoutés.
-  const { data: ign } = await supabase.from('digiforma_ignored').select('value').eq('kind', 'trainee');
-  ignoredTrainees = new Set(((ign as any[]) || []).map((x) => x.value));
+  // Corbeille de la page Stagiaires (migration 60) : ces personnes ne sont jamais ajoutées.
+  const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
+  ignoredTrainees = new People();
+  for (const t of (trashedRows as any[]) || []) ignoredTrainees.add(t);
   const today = new Date().toISOString().slice(0, 10);
   const horizon = new Date(Date.now() + HORIZON_DAYS * 86400000).toISOString().slice(0, 10);
 
@@ -300,11 +301,11 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 }
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
-let ignoredTrainees = new Set<string>();
+let ignoredTrainees = new People();
 
 export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remoteAll: DigiformaTrainee[]): Promise<number> {
   // Jamais de stagiaire fictif (« Apprenant A ») ni mis à la corbeille.
-  const remote = remoteAll.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(personKey(t)));
+  const remote = remoteAll.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(t));
   if (!remote.length) return 0;
   const { data: links } = await supabase.from('session_trainees').select('trainee_id, trainees(email, full_name, first_name, last_name)').eq('session_id', row.id);
   const emails = new Set<string>();

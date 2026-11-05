@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, Trash2 } from 'lucide-react';
 import { Pagination } from '@/components/pagination';
 import { nameFields } from '@/lib/trainee-name';
 import { searchTrainees } from '@/lib/trainee-search';
@@ -9,6 +9,8 @@ import { CrudTable } from '@/components/crud-table';
 import { createTrainee, deleteTrainee, updateTrainee } from './actions';
 import { QuickImportPanel } from '@/components/quick-import-panel';
 import { PasteImport } from '@/components/paste-import';
+import { PlaceholderAlert, TrashList, TrashRowButton } from '@/components/trainee-trash';
+import { isPlaceholder } from '@/lib/digiforma-people';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
 export const maxDuration = 60;
@@ -23,7 +25,7 @@ function cleanQuery(q: string) {
 export default async function StagiairesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; entreprise?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; entreprise?: string; page?: string; corbeille?: string }>;
 }) {
   const sp = await searchParams;
   const q = cleanQuery(sp.q || '');
@@ -35,9 +37,16 @@ export default async function StagiairesPage({
   // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
   if (!canManage(profile?.role)) redirect('/');
 
-  const SELECT = 'id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))';
-  const withCompany = <Q extends { is: any; eq: any }>(query: Q): Q =>
-    company === '__none' ? query.is('company', null) : company ? query.eq('company', company) : query;
+  const BASE_SELECT = 'id, full_name, first_name, last_name, email, company, session_trainees(status, sessions(id, title, start_at, end_at))';
+  // Corbeille (migration 60) : fiches mises de côté, absentes de la liste.
+  const hasTrash = !(await supabase.from('trainees').select('trashed_at').limit(1)).error;
+  const inTrash = hasTrash && sp.corbeille === '1';
+  const SELECT = inTrash ? `${BASE_SELECT}, trashed_at, trashed_reason` : BASE_SELECT;
+  const withCompany = <Q extends { is: any; eq: any; not: any }>(query: Q): Q => {
+    let qq = company === '__none' ? query.is('company', null) : company ? query.eq('company', company) : query;
+    if (hasTrash) qq = inTrash ? qq.not('trashed_at', 'is', null) : qq.is('trashed_at', null);
+    return qq;
+  };
 
   // Recherche : classée par pertinence (sans accents, nom / prénom dans n'importe quel ordre).
   const load = async (): Promise<{ data: any[]; count: number }> => {
@@ -74,6 +83,34 @@ export default async function StagiairesPage({
   const companies = [...new Set((companyRows || []).map((r: any) => (r.company as string).trim()).filter(Boolean))];
   const total = count ?? 0;
 
+  // Corbeille : nombre de fiches, et fiches fictives encore actives (« Apprenant A »…).
+  let trashCount = 0;
+  let fakes: string[] = [];
+  if (hasTrash) {
+    const { count: tc } = await supabase.from('trainees').select('id', { count: 'exact', head: true }).not('trashed_at', 'is', null);
+    trashCount = tc ?? 0;
+    if (!inTrash && !q && page === 1) {
+      for (let from = 0; from < 50000; from += 1000) {
+        const { data } = await supabase.from('trainees').select('first_name, last_name, full_name').is('trashed_at', null).order('id').range(from, from + 999);
+        if (!data?.length) break;
+        for (const t of data as any[]) {
+          if (isPlaceholder({ firstName: t.first_name ?? null, lastName: t.last_name ?? t.full_name })) fakes.push(t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim());
+        }
+        if (data.length < 1000) break;
+      }
+    }
+  }
+  const trashRows = inTrash
+    ? (trainees || []).map((t: any) => ({
+        id: t.id as string,
+        name: nameFields(t).last_name ? `${nameFields(t).last_name} ${nameFields(t).first_name || ''}`.trim() : t.full_name,
+        company: t.company ?? null,
+        reason: t.trashed_reason ?? null,
+        at: t.trashed_at ?? null,
+        sessions: (t.session_trainees || []).length,
+      }))
+    : [];
+
   // Important : on pré-calcule ici le contenu affiché (un élément React, pas
   // une fonction) car un Server Component ne peut pas passer de fonction à un
   // Client Component (CrudTable) : seuls des éléments/données sérialisables le peuvent.
@@ -88,7 +125,12 @@ export default async function StagiairesPage({
     return {
       ...t,
       ...n,
-      name_cell: <Link href={`/stagiaires/${t.id}`}>{n.last_name}</Link>,
+      name_cell: (
+        <span className="name-with-trash">
+          <Link href={`/stagiaires/${t.id}`}>{n.last_name}</Link>
+          {hasTrash && <TrashRowButton id={t.id} name={`${n.last_name} ${n.first_name || ''}`.trim()} />}
+        </span>
+      ),
       first_cell: n.first_name || <span className="hint">-</span>,
       done_cell: done,
       next_cell: next ? (
@@ -117,6 +159,23 @@ export default async function StagiairesPage({
             </div>
           )}
         </header>
+        {hasTrash && (
+          <nav className="trash-tabs" aria-label="Annuaire ou corbeille">
+            <Link href="/stagiaires" className={`btn small${inTrash ? ' ghost' : ' primary'}`}>Annuaire</Link>
+            <Link href="/stagiaires?corbeille=1" className={`btn small${inTrash ? ' primary' : ' ghost'}`}>
+              <Trash2 size={14} aria-hidden /> Corbeille{trashCount ? ` (${trashCount})` : ''}
+            </Link>
+          </nav>
+        )}
+        {inTrash ? (
+          <>
+            <p className="hint">Fiches mises de côté (fictives ou sans rapport) : absentes de l’annuaire et des recherches, jamais réimportées depuis Digiforma. Restaure-les ou supprime-les définitivement.</p>
+            <TrashList rows={trashRows} />
+            {total > PAGE_SIZE && <Pagination basePath="/stagiaires" params={{ corbeille: '1' }} page={page} pageSize={PAGE_SIZE} total={total} />}
+          </>
+        ) : (
+        <>
+        <PlaceholderAlert count={fakes.length} examples={[...new Set(fakes)].slice(0, 3)} />
         {canManage(profile?.role) && <PasteImport />}
         {canManage(profile?.role) && <QuickImportPanel digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)} />}
 
@@ -163,6 +222,8 @@ export default async function StagiairesPage({
         />
         {total > PAGE_SIZE && (
           <Pagination basePath="/stagiaires" params={{ q: sp.q, entreprise: company }} page={page} pageSize={PAGE_SIZE} total={total} />
+        )}
+        </>
         )}
       </section>
     </main>

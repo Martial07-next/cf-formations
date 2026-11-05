@@ -184,10 +184,10 @@ export default async function Page({
         const mods = mods0.error ? await modsQuery(false) : mods0;
         const modRows = (mods.data as any[]) || [];
 
-        // Corbeille (migration 59) : modules et stagiaires mis de côté.
-        const { data: ign } = await supabase.from('digiforma_ignored').select('kind, value, label');
-        const ignoredModules = new Set(((ign as any[]) || []).filter((x) => x.kind === 'module').map((x) => x.value));
-        const ignoredPeople = new Set(((ign as any[]) || []).filter((x) => x.kind === 'trainee').map((x) => x.value));
+        // Corbeille de la page Stagiaires (migration 60) : ces personnes ne sont jamais proposées.
+        const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
+        const trashed = new People();
+        for (const t of (trashedRows as any[]) || []) trashed.add(t);
 
         // Ce qui est déjà sur le planning cette semaine : sessions (avec stagiaires), parcours et leurs évènements.
         const [{ data: weekSessions }, { data: progRows }, { data: progEvents }] = await Promise.all([
@@ -221,12 +221,11 @@ export default async function Page({
         const half = (n: number) => Math.max(1, Math.ceil(n / 2));
 
         const moduleItems = modRows
-          .filter((m) => !ignoredModules.has(m.key))
           .map((m) => {
             const all = (Array.isArray(m.trainees) ? m.trainees : []) as any[];
             // Stagiaires réels : sans les fictifs (« Apprenant A ») ni ceux mis à la corbeille.
-            const real = all.filter((t) => !isPlaceholder(t) && !ignoredPeople.has(personKey(t)));
-            const fake = all.filter((t) => isPlaceholder(t) || ignoredPeople.has(personKey(t)));
+            const real = all.filter((t) => !isPlaceholder(t) && !trashed.has(t));
+            const fake = all.filter((t) => isPlaceholder(t) || trashed.has(t));
             // Parcours du planning : la moitié au moins de ses stagiaires réels, sinon le même nom.
             let program: { id: string; title: string } | null = null;
             if (real.length) {
@@ -542,7 +541,6 @@ export default async function Page({
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
         toAssign={await toAssignQuery}
         toAssignWeek={currentView === 'month' ? null : isoDate(weekStart)}
-        toAssignTrash={canManage(profile?.role) ? await supabase.from('digiforma_ignored').select('kind, value, label').order('created_at', { ascending: false }).limit(300).then((r) => ((r.data as any[]) || []) as { kind: 'module' | 'trainee'; value: string; label: string | null }[]) : []}
       />
     </main>
   );
