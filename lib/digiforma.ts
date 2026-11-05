@@ -81,11 +81,15 @@ let schemaCache: Promise<Record<string, string[]>> | null = null;
 
 async function schemaFields(): Promise<Record<string, string[]>> {
   if (!schemaCache) {
-    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name } } } }`)
+    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name type { kind ofType { kind ofType { kind } } } } } } }`)
       .then((data) => {
         const out: Record<string, string[]> = {};
-        for (const t of data.__schema.types as { name: string; fields: { name: string }[] | null }[]) {
-          if (t.fields) out[t.name] = t.fields.map((f) => f.name);
+        const leafKind = (ty: any): boolean => (ty?.kind === 'NON_NULL' || ty?.kind === 'LIST' ? leafKind(ty.ofType) : ty?.kind === 'SCALAR' || ty?.kind === 'ENUM');
+        for (const t of data.__schema.types as { name: string; fields: { name: string; type: any }[] | null }[]) {
+          if (!t.fields) continue;
+          out[t.name] = t.fields.map((f) => f.name);
+          // Champs simples (texte, nombre, énumération) : sélectionnables sans sous-champs.
+          out[`${t.name}#leaf`] = t.fields.filter((f) => leafKind(f.type)).map((f) => f.name);
         }
         out.__query = out[data.__schema.queryType?.name || 'Query'] || out.Query || out.RootQueryType || [];
         return out;
@@ -128,6 +132,7 @@ async function sessionShape() {
     start: sel('startDate', pick(sf, ['startDate', 'startAt', 'start', 'beginDate', 'dateStart', 'firstDate'])),
     end: sel('endDate', pick(sf, ['endDate', 'endAt', 'end', 'finishDate', 'dateEnd', 'lastDate'])),
     trainees: pick(sf, ['trainees', 'students', 'participants']),
+    status: sel('status', pick(f[`${f.TrainingSession ? 'TrainingSession' : 'Session'}#leaf`], ['status', 'state', 'stage', 'pipelineState', 'sessionStatus', 'planningStatus'])),
   };
 }
 
@@ -177,14 +182,24 @@ export async function digiformaFetchSessionTrainees(digiformaRef: string): Promi
 }
 
 /** Sessions Digiforma sans leurs stagiaires (requête légère, pour trier avant d'importer). */
-export async function digiformaListSessionDates(): Promise<Omit<DigiformaSession, 'trainees'>[]> {
+export async function digiformaListSessionDates(): Promise<{ hasStatus: boolean; sessions: (Omit<DigiformaSession, 'trainees'> & { status: string | null })[] }> {
   const sh = await sessionShape();
   if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
-  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} } }`);
-  return (data?.sessions || []).map((s: any) => ({
-    id: String(s.id),
-    name: s.name || 'Session Digiforma',
-    startAt: s.startDate || null,
-    endAt: s.endDate || null,
-  }));
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} } }`);
+  return {
+    hasStatus: Boolean(sh.status),
+    sessions: (data?.sessions || []).map((s: any) => ({
+      id: String(s.id),
+      name: s.name || 'Session Digiforma',
+      startAt: s.startDate || null,
+      endAt: s.endDate || null,
+      status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? JSON.stringify(s.status) : s.status),
+    })),
+  };
+}
+
+/** Session « planifiée » sur Digiforma (statut planifié / confirmé). */
+export function isPlannedStatus(v: string | null): boolean {
+  const t = (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /planifi|planned|scheduled|confirm/.test(t);
 }

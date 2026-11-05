@@ -200,6 +200,7 @@ export function Planning({
   poecTitles = {},
   createdBy = {},
   alerts = null,
+  toAssign = [],
   mine = null,
   nowKey = '',
   renderedAt = 0,
@@ -239,6 +240,8 @@ export function Planning({
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
   alerts?: React.ReactNode;
+  /** Sessions importées de Digiforma, sans salle : listées sous le planning (pas dans la grille). */
+  toAssign?: ToAssign[];
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
   nowKey?: string;
   /** Formateur : ses formations, affichées en premier. */
@@ -294,16 +297,19 @@ export function Planning({
   }
   const [workshopRoom, setWorkshopRoom] = useState<Room | null>(null);
 
+  const holdingIds = useMemo(() => new Set(rooms.filter((r) => r.is_holding).map((r) => r.id)), [rooms]);
   const shown = useMemo(
     () =>
       sessions.filter((s) => {
+        // Sessions « À affecter » (Digiforma, sans salle) : dans la section sous le planning, pas dans la grille.
+        if (holdingIds.has(s.room_id)) return false;
         if (trainerFilter === 'none' ? s.trainer_id : trainerFilter && !trainersOf(dayTrainers, s).includes(trainerFilter)) return false;
         if (statusFilter && s.status !== statusFilter) return false;
         if (!query) return true;
         const trainer = one(s.trainers)?.full_name ?? '';
         return `${s.title} ${trainer}`.toLowerCase().includes(query.toLowerCase());
       }),
-    [sessions, query, trainerFilter, statusFilter, dayTrainers]
+    [sessions, query, trainerFilter, statusFilter, dayTrainers, holdingIds]
   );
 
   // Formateurs présents sur la période (légende des couleurs).
@@ -932,6 +938,8 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} />}
+
       {canEdit && (
         <dialog
           ref={dialogRef}
@@ -1165,5 +1173,35 @@ function HolidayTag({ day, compact = false }: { day: string; compact?: boolean }
     <span className={`holiday-tag${h.worked ? ' worked' : ''}`} title={h.worked ? `${h.label} : jour férié travaillé (décision de la direction dans CF Congés)` : `${h.label} : jour férié, pas de formation (sessions décalées au jour ouvré suivant)`}>
       {compact ? (h.worked ? 'Férié travaillé' : 'Férié') : h.worked ? `${h.label} · travaillé` : `Férié · ${h.label}`}
     </span>
+  );
+}
+
+export type ToAssign = { id: string; title: string; start_at: string; end_at: string; digiforma_ref: string | null; validated: number };
+
+/** Sessions planifiées sur Digiforma, importées sans salle : à placer depuis leur fiche. */
+function ToAssignSection({ items }: { items: ToAssign[] }) {
+  const d = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Paris' });
+  return (
+    <section className="panel to-assign" aria-labelledby="to-assign-title">
+      <div className="panel-head">
+        <h2 id="to-assign-title"><Inbox size={17} aria-hidden /> Sessions Digiforma à placer <span className="to-assign-count">{items.length}</span></h2>
+      </div>
+      <p className="hint" style={{ marginTop: 0 }}>Importées de Digiforma (sessions planifiées). Ouvre la fiche pour choisir la salle et le formateur : la session rejoint alors le planning.</p>
+      <ul className="to-assign-list">
+        {items.map((s) => (
+          <li key={s.id}>
+            <span className="to-assign-main">
+              <strong>{s.title}</strong>
+              <small>
+                {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {s.validated} stagiaire{s.validated > 1 ? 's' : ''}
+              </small>
+            </span>
+            <Link href={`/sessions/${s.id}`} className="btn small primary">
+              Choisir la salle <ChevronRight size={14} aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

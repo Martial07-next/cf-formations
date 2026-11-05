@@ -29,11 +29,10 @@ export function DigiformaSyncPanel({
     <div className="panel">
       <h2>Relais Digiforma → planning</h2>
       <p className="panel-intro">
-        Chaque matin, la plateforme récupère les sessions Digiforma <strong>enregistrées et pas encore passées</strong>{' '}
-        et les place directement sur le planning, dans la colonne <strong>« À affecter »</strong>, avec le statut{' '}
-        <span className="status-pill planifiee">En attente</span> et leurs stagiaires. Les sessions déjà terminées
-        sont ignorées, et une session déjà importée n'est jamais écrasée. Il reste à leur choisir une vraie salle
-        depuis leur fiche.
+        Chaque matin, la plateforme récupère les sessions <strong>planifiées</strong> sur Digiforma et pas encore
+        passées, avec leurs stagiaires. Elles apparaissent <strong>sous le planning</strong>, dans la section
+        « Sessions Digiforma à placer » : ouvre leur fiche pour choisir la salle et le formateur. Les sessions
+        terminées ou non planifiées sont ignorées, et une session déjà importée n'est jamais écrasée.
       </p>
 
       <div className="counters" style={{ margin: '14px 0' }}>

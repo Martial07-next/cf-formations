@@ -2194,3 +2194,12 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
   .wiz-list li > button.small:not(.icon){flex:1 1 auto;margin-left:22px}
 }
 @media (max-width:640px){.smart-info{display:block}.smart-info svg{vertical-align:-2px;margin-right:4px}}
+
+/* Sessions Digiforma à placer (sous le planning). */
+.to-assign{margin-top:18px;border-color:#f0d9a8;background:#fffcf4}
+.to-assign-count{background:#fde7c7;color:#7a4300;border-radius:999px;padding:1px 9px;font-size:12.5px}
+.to-assign-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+.to-assign-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.to-assign-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.to-assign-main small{color:var(--muted);font-size:12.5px;text-transform:capitalize}
+@media (max-width:640px){.to-assign-list{grid-template-columns:1fr}.to-assign-list li{flex-direction:column;align-items:stretch}}

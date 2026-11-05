@@ -1,6 +1,6 @@
 import { markHolidaysAccounted } from '@/lib/holiday-shifts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaFetchSessionTrainees, digiformaListSessionDates } from '@/lib/digiforma';
+import { digiformaFetchSessionTrainees, digiformaListSessionDates, isPlannedStatus } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 
 export type SyncResult =
@@ -28,9 +28,11 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
 
   let sessions;
+  let listed;
   try {
     // Requête légère (sans les stagiaires) : les stagiaires ne sont chargés que pour les sessions à importer.
-    sessions = await digiformaListSessionDates();
+    listed = await digiformaListSessionDates();
+    sessions = listed.sessions;
   } catch (e: any) {
     await logSync(supabase, 'error', e.message);
     return { ok: false, error: `Digiforma : ${e.message}` };
@@ -49,11 +51,22 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let past = 0;
   let heldBack = 0;
   let remaining = 0;
+  let notPlanned = 0;
+  const seenStatus = new Map<string, number>();
 
   for (const s of sessions) {
     if (known.has(s.id)) {
       skipped++;
       continue;
+    }
+    // Seulement les sessions planifiées sur Digiforma.
+    if (listed.hasStatus) {
+      const st = s.status || '(vide)';
+      seenStatus.set(st, (seenStatus.get(st) || 0) + 1);
+      if (!isPlannedStatus(s.status)) {
+        notPlanned++;
+        continue;
+      }
     }
     const start = s.startAt ? new Date(s.startAt) : null;
     const end = s.endAt ? new Date(s.endAt) : null;
@@ -117,7 +130,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     `${created} session(s) à venir ajoutée(s) au planning, ${traineesLinked} inscription(s) stagiaire ` +
     `(dont ${heldBack} en attente pour conflit de créneau), ${past} session(s) passée(s) ignorée(s), ` +
     `${skipped} déjà connue(s) ou incomplète(s).` +
-    (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation pour les importer.` : '');
+    (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation pour les importer.` : '') +
+    (listed.hasStatus
+      ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
+      : ' Statut Digiforma introuvable : sessions avec des dates importées.');
   await logSync(supabase, 'ok', log);
   return { ok: true, created, traineesLinked, skipped, past, log };
 }

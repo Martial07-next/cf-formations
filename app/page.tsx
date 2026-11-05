@@ -14,6 +14,7 @@ import { dossierBadges } from '@/lib/dossier-badges';
 import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
+import type { ToAssign } from '@/components/planning';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -146,6 +147,28 @@ export default async function Page({
         return sessionAlerts((data as any[]) || [], today, noDf);
       })()
     : Promise.resolve([] as SessionAlert[]);
+  // Sessions importées de Digiforma, sans salle (« À affecter ») : section sous le planning.
+  const holdingIds = ((rooms as any[]) || []).filter((r) => r.is_holding).map((r) => r.id as string);
+  const toAssignQuery: Promise<ToAssign[]> =
+    canManage(profile?.role) && holdingIds.length
+      ? (async () => {
+          const { data } = await supabase
+            .from('sessions')
+            .select('id, title, start_at, end_at, digiforma_ref, session_trainees(status)')
+            .in('room_id', holdingIds)
+            .gte('end_at', new Date().toISOString())
+            .order('start_at')
+            .limit(200);
+          return ((data as any[]) || []).map((s) => ({
+            id: s.id,
+            title: s.title,
+            start_at: s.start_at,
+            end_at: s.end_at,
+            digiforma_ref: s.digiforma_ref ?? null,
+            validated: ((s.session_trainees as any[]) || []).filter((t) => t.status === 'validee').length,
+          }));
+        })()
+      : Promise.resolve([]);
   // Formateur : ses formations (en cours et à venir) en tête du planning.
   const myTrainerId = profile?.trainer_id || null;
   const mineQuery: Promise<MySession[] | null> = myTrainerId
@@ -405,6 +428,7 @@ export default async function Page({
         nowKey={parisNowKey()}
         mine={await mineQuery.then((list) => (list ? <MySessions sessions={list} nowKey={parisNowKey()} /> : null))}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
+        toAssign={await toAssignQuery}
       />
     </main>
   );
