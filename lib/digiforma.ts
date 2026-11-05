@@ -64,22 +64,6 @@ export type DigiformaTrainee = {
   email: string | null;
 };
 
-/**
- * Liste tous les stagiaires connus de Digiforma (indépendamment de toute session).
- * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect).
- */
-export async function digiformaListTrainees(): Promise<DigiformaTrainee[]> {
-  const data = await digiformaFetch(`{ trainees { id firstName lastName email } }`);
-  const trainees = data?.trainees || [];
-  return trainees.map((t: any) => ({
-    id: String(t.id),
-    fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
-      firstName: t.firstName || null,
-      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
-    email: t.email || null,
-  }));
-}
-
 export type DigiformaSession = {
   id: string;
   name: string;
@@ -88,60 +72,106 @@ export type DigiformaSession = {
   trainees: DigiformaTrainee[];
 };
 
-/**
- * Liste les sessions de formation Digiforma, avec leurs stagiaires inscrits.
- * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect) -
- * en particulier le nom exact des champs de dates, qui varie souvent d'une API à l'autre.
+/*
+ * Les noms de champs varient selon les comptes Digiforma (ex. « firstname »
+ * et non « firstName ») : on lit le schéma une fois, puis on construit les
+ * requêtes avec les noms réels, renommés (alias GraphQL) vers nos noms à nous.
  */
+let schemaCache: Promise<Record<string, string[]>> | null = null;
+
+async function schemaFields(): Promise<Record<string, string[]>> {
+  if (!schemaCache) {
+    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name } } } }`)
+      .then((data) => {
+        const out: Record<string, string[]> = {};
+        for (const t of data.__schema.types as { name: string; fields: { name: string }[] | null }[]) {
+          if (t.fields) out[t.name] = t.fields.map((f) => f.name);
+        }
+        out.__query = out[data.__schema.queryType?.name || 'Query'] || out.Query || out.RootQueryType || [];
+        return out;
+      })
+      .catch((e) => {
+        schemaCache = null;
+        throw e;
+      });
+  }
+  return schemaCache;
+}
+
+/** Premier nom présent dans le schéma parmi les candidats. */
+const pick = (fields: string[] | undefined, candidates: string[]) => candidates.find((c) => (fields || []).includes(c)) || null;
+/** « alias: champ » si le champ existe, sinon rien. */
+const sel = (alias: string, field: string | null) => (field ? (field === alias ? alias : `${alias}: ${field}`) : '');
+
+async function traineeSelection(): Promise<string> {
+  const f = await schemaFields();
+  const tf = f.Trainee || f.Student || f.Participant;
+  return [
+    'id',
+    sel('firstName', pick(tf, ['firstname', 'firstName', 'first_name'])),
+    sel('lastName', pick(tf, ['lastname', 'lastName', 'last_name', 'birthName'])),
+    sel('email', pick(tf, ['email', 'mail'])),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function sessionShape() {
+  const f = await schemaFields();
+  const listField = pick(f.__query, ['trainingSessions', 'sessions', 'trainingSessionList']);
+  const oneField = pick(f.__query, ['trainingSession', 'session']);
+  const sf = f.TrainingSession || f.Session;
+  return {
+    listField,
+    oneField,
+    name: sel('name', pick(sf, ['name', 'title', 'label'])),
+    start: sel('startDate', pick(sf, ['startDate', 'startAt', 'start', 'beginDate', 'dateStart', 'firstDate'])),
+    end: sel('endDate', pick(sf, ['endDate', 'endAt', 'end', 'finishDate', 'dateEnd', 'lastDate'])),
+    trainees: pick(sf, ['trainees', 'students', 'participants']),
+  };
+}
+
+function mapTrainee(t: any): DigiformaTrainee {
+  return {
+    id: String(t.id),
+    fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
+    firstName: t.firstName || null,
+    lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
+    email: t.email || null,
+  };
+}
+
+/** Liste tous les stagiaires connus de Digiforma (indépendamment de toute session). */
+export async function digiformaListTrainees(): Promise<DigiformaTrainee[]> {
+  const f = await schemaFields();
+  const root = pick(f.__query, ['trainees', 'students']);
+  if (!root) throw new Error('Digiforma : liste des stagiaires introuvable dans l’API de ce compte.');
+  const data = await digiformaFetch(`{ trainees: ${root} { ${await traineeSelection()} } }`);
+  return (data?.trainees || []).map(mapTrainee);
+}
+
+/** Liste les sessions de formation Digiforma, avec leurs stagiaires inscrits. */
 export async function digiformaListTrainingSessions(): Promise<DigiformaSession[]> {
-  const data = await digiformaFetch(`
-    {
-      trainingSessions {
-        id
-        name
-        startDate
-        endDate
-        trainees { id firstName lastName email }
-      }
-    }
-  `);
-  const sessions = data?.trainingSessions || [];
-  return sessions.map((s: any) => ({
+  const sh = await sessionShape();
+  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
+  const trainees = sh.trainees ? `trainees: ${sh.trainees} { ${await traineeSelection()} }` : '';
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${trainees} } }`);
+  return (data?.sessions || []).map((s: any) => ({
     id: String(s.id),
     name: s.name || 'Session Digiforma',
     startAt: s.startDate || null,
     endAt: s.endDate || null,
-    trainees: (s.trainees || []).map((t: any) => ({
-      id: String(t.id),
-      fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
-      firstName: t.firstName || null,
-      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
-      email: t.email || null,
-    })),
+    trainees: (s.trainees || []).map(mapTrainee),
   }));
 }
 
-/**
- * Récupère les stagiaires inscrits à une session Digiforma donnée (par son id/référence).
- * NOTE : requête à ajuster selon le schéma réel de votre compte (voir digiformaIntrospect).
- */
+/** Récupère les stagiaires inscrits à une session Digiforma donnée (par son id/référence). */
 export async function digiformaFetchSessionTrainees(digiformaRef: string): Promise<DigiformaTrainee[]> {
+  const sh = await sessionShape();
+  if (!sh.oneField || !sh.trainees) throw new Error('Digiforma : stagiaires d’une session introuvables dans l’API de ce compte.');
   const data = await digiformaFetch(
-    `query($id: ID!) {
-      trainingSession(id: $id) {
-        id
-        trainees { id firstName lastName email }
-      }
-    }`,
+    `query($id: ID!) { session: ${sh.oneField}(id: $id) { id trainees: ${sh.trainees} { ${await traineeSelection()} } } }`,
     { id: digiformaRef }
   );
-
-  const trainees = data?.trainingSession?.trainees || [];
-  return trainees.map((t: any) => ({
-    id: String(t.id),
-    fullName: [t.firstName, t.lastName].filter(Boolean).join(' ') || t.email || 'Stagiaire Digiforma',
-      firstName: t.firstName || null,
-      lastName: t.lastName || (t.firstName ? '' : t.email || 'Stagiaire Digiforma'),
-    email: t.email || null,
-  }));
+  return (data?.session?.trainees || []).map(mapTrainee);
 }
