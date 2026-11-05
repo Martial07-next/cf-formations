@@ -217,7 +217,19 @@ export function isPlannedStatus(v: string | null): boolean {
  * les modules, avec leurs propres dates, qui se placent sur le planning).
  * ---------------------------------------------------------------------- */
 
-export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[] };
+export type DigiformaModule = {
+  key: string;
+  name: string | null;
+  start: string;
+  end: string;
+  startTime: string | null;
+  endTime: string | null;
+  slotIds?: string[];
+  /** Pas de stagiaire en salle ce jour-là (entreprise, stage) d'après Digiforma. */
+  offsite?: boolean;
+  /** À distance (e-learning, distanciel) : pas de salle. */
+  remote?: boolean;
+};
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
 
 /** Champs d'un type « daté » (sous-session, créneau) : nom, début, fin, heures, stagiaires. */
@@ -261,22 +273,37 @@ async function moduleShape() {
   const sub = firstDated(['subsessions', 'subSessions', 'childSessions', 'trainingModules', 'sessionModules', 'modules']);
   const slots = firstDated(['trainingSessionSlots', 'slots', 'dates', 'sessionDates', 'days']);
   // Module du créneau (Digiforma : TrainingSessionSlot.subsession) : nom du module de chaque jour.
-  let slotModule: { field: string; id: string | null; name: string | null } | null = null;
+  let slotModule: { field: string; id: string | null; name: string | null; off: string | null; modality: string | null } | null = null;
   if (slots?.type) {
     const sf = f[slots.type] || [];
     const sl = f[`${slots.type}#leaf`] || [];
     const field = ['subsession', 'subSession', 'module', 'trainingModule'].find((n) => sf.includes(n) && !sl.includes(n)) || null;
     const t = field ? f[`${slots.type}.${field}#type`]?.[0] || null : null;
-    if (field && t) slotModule = { field, id: pick(f[`${t}#leaf`], ['id']), name: pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']) };
+    if (field && t)
+      slotModule = {
+        field,
+        id: pick(f[`${t}#leaf`], ['id']),
+        name: pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']),
+        off: pick(f[`${t}#leaf`], ['noTraineeOnClassroom']),
+        modality: pick(f[`${t}#leaf`], ['modality']),
+      };
   }
   // Sous-sessions sans dates propres (GEIQ) : leur nom + la liste de leurs créneaux → module de chaque jour.
-  let subNames: { field: string; type: string; id: string | null; name: string | null; slotList: string | null } | null = null;
+  let subNames: { field: string; type: string; id: string | null; name: string | null; slotList: string | null; off: string | null; modality: string | null } | null = null;
   const subField = ['subsessions', 'subSessions', 'childSessions'].find((n) => objFields.includes(n)) || null;
   const subT = typeOf(subField);
   if (subField && subT) {
     const lf = f[`${subT}#leaf`] || [];
     const slotList = slots?.type ? (f[subT] || []).find((n) => f[`${subT}.${n}#type`]?.[0] === slots.type) || null : null;
-    subNames = { field: subField, type: subT, id: pick(lf, ['id']), name: pick(lf, ['name', 'customName', 'title', 'label', 'code']), slotList };
+    subNames = {
+      field: subField,
+      type: subT,
+      id: pick(lf, ['id']),
+      name: pick(lf, ['name', 'customName', 'title', 'label', 'code']),
+      slotList,
+      off: pick(lf, ['noTraineeOnClassroom']),
+      modality: pick(lf, ['modality']),
+    };
   }
   return { sub, slots, slotModule, subNames };
 }
@@ -316,7 +343,11 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
   const part = (alias: string, d: NonNullable<typeof ms.sub>, withName: boolean) =>
     `${alias}: ${d.field} { ${[d.id ? sel('id', d.id) : '', withName ? d.name : '', d.start, d.end, d.startTime, d.endTime].filter(Boolean).join(' ')} }`;
-  const slotMod = ms.slotModule && (ms.slotModule.id || ms.slotModule.name) ? `mod: ${ms.slotModule.field} { ${[ms.slotModule.id ? sel('id', ms.slotModule.id) : '', ms.slotModule.name ? sel('name', ms.slotModule.name) : ''].join(' ')} }` : '';
+  const smd = ms.slotModule;
+  const slotMod =
+    smd && (smd.id || smd.name)
+      ? `mod: ${smd.field} { ${[smd.id ? sel('id', smd.id) : '', smd.name ? sel('name', smd.name) : '', smd.off ? `off: ${smd.off}` : '', smd.modality ? `modality: ${smd.modality}` : ''].join(' ')} }`
+      : '';
   const slots = ms.slots
     ? `slots: ${ms.slots.field} { ${[ms.slots.id ? sel('id', ms.slots.id) : '', ms.slots.name, ms.slots.start, ms.slots.end, ms.slots.startTime, ms.slots.endTime, slotMod].filter(Boolean).join(' ')} }`
     : '';
@@ -326,7 +357,9 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
     ? `subs: ${ms.sub.field} { ${[ms.sub.id ? sel('id', ms.sub.id) : '', ms.sub.name, ms.sub.start, ms.sub.end, ms.sub.startTime, ms.sub.endTime].filter(Boolean).join(' ')} ${ms.sub.type === sessTypeName && slots ? slots : ''} }`
     : '';
   const sn = ms.subNames && ms.subNames.name && ms.subNames.slotList ? ms.subNames : null;
-  const subNamesPart = sn ? `subn: ${sn.field} { ${sn.id ? sel('id', sn.id) : ''} name: ${sn.name} sl: ${sn.slotList} { id } }` : '';
+  const subNamesPart = sn
+    ? `subn: ${sn.field} { ${sn.id ? sel('id', sn.id) : ''} name: ${sn.name} ${sn.off ? `off: ${sn.off}` : ''} ${sn.modality ? `modality: ${sn.modality}` : ''} sl: ${sn.slotList} { id } }`
+    : '';
   const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} ${subNamesPart} } }`);
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
@@ -353,9 +386,23 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
       });
       // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
       // Créneau → module : par sa sous-session, sinon par la liste des créneaux de chaque sous-session.
-      const bySlot = new Map<string, string>();
-      for (const sub of s.subn || []) for (const sl of sub.sl || []) if (sub.name) bySlot.set(String(sl.id), String(sub.name));
-      const slotsList = (s.slots || []).map((x: any, i: number) => ({ ...mapDated(x, i), name: x.mod?.name || bySlot.get(String(x.id)) || x.name || null })).filter((m: any) => m.start);
+      const bySlot = new Map<string, { name: string | null; off: boolean; remote: boolean }>();
+      for (const sub of s.subn || []) {
+        const info = {
+          name: sub.name ? String(sub.name) : null,
+          off: sub.off === true || /entreprise|company|stage|work|alternance|terrain/i.test(String(sub.modality ?? '')),
+          remote: /distan|remote|e.?learning|foad|online|virtual|visio/i.test(String(sub.modality ?? '')),
+        };
+        for (const sl of sub.sl || []) bySlot.set(String(sl.id), info);
+      }
+      const slotsList = (s.slots || [])
+        .map((x: any, i: number) => {
+          const info = bySlot.get(String(x.id));
+          const modOff = x.mod ? x.mod.off === true || /entreprise|company|stage|work|alternance|terrain/i.test(String(x.mod.modality ?? '')) : false;
+          const modRemote = x.mod ? /distan|remote|e.?learning|foad|online|virtual|visio/i.test(String(x.mod.modality ?? '')) : false;
+          return { ...mapDated(x, i), name: x.mod?.name || info?.name || x.name || null, offsite: modOff || Boolean(info?.off), remote: modRemote || Boolean(info?.remote) };
+        })
+        .filter((m: any) => m.start);
       const modules = subsList.length ? subsList : slotBlocks(slotsList);
       return {
         fromSubsessions: subsList.length > 0,
@@ -404,6 +451,8 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
         startTime: sl.startTime,
         endTime: sl.endTime,
         slotIds: [sl.key],
+        offsite: sl.offsite,
+        remote: sl.remote,
       });
   }
   return out;

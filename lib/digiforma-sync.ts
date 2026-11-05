@@ -56,7 +56,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let notPlanned = 0;
   let past = 0;
   let stages = 0;
-  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[] };
+  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean };
   const todo: { id: string; name: string; startAt: string | null; endAt: string | null; modules: Mod[]; stages: Mod[] }[] = [];
   // Sous-sessions des parcours (GEIQ…) : déjà prises comme modules de leur session parente.
   const subIds = new Set(
@@ -79,15 +79,17 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       }
     }
     const raw = s.modules.length
-      ? s.modules.map((m) => ({ key: `${s.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [] }))
+      ? s.modules.map((m) => ({ key: `${s.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote) }))
       : s.startAt && s.endAt && new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime() <= 6 * 86400000
-        ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true, slotIds: [] as string[] }]
+        ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true, slotIds: [] as string[], offsite: false, remote: false }]
         : [];
     const inRange = (m: { start_at: string; end_at: string }) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at;
     // Stage / période en entreprise : un évènement du parcours (période de stage), pas un module en salle.
-    const stageBlocks = raw.filter((m) => isCompanyPeriod(m.name || '') && inRange(m));
-    // Vacances, fermeture, absence… : rien à placer.
-    const notStage = raw.filter((m) => !isCompanyPeriod(m.name || '') && !isOffPeriod(m.name || ''));
+    // (nom « stage… », ou sous-session Digiforma « pas de stagiaire en salle » / modalité entreprise).
+    const isStage = (m: { name: string | null; offsite?: boolean }) => isCompanyPeriod(m.name || '') || Boolean(m.offsite);
+    const stageBlocks = raw.filter((m) => isStage(m) && inRange(m));
+    // Vacances, fermeture, absence, distanciel… : rien à placer en salle.
+    const notStage = raw.filter((m) => !isStage(m) && !isOffPeriod(m.name || '') && !m.remote);
     stages += stageBlocks.length;
     const upcoming = notStage.filter(inRange);
     past += raw.length - upcoming.length;
