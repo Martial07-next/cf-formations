@@ -2199,8 +2199,18 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .to-assign{margin-top:18px;border-color:#f0d9a8;background:#fffcf4}
 .to-assign-count{background:#fde7c7;color:#7a4300;border-radius:999px;padding:1px 9px;font-size:12.5px}
 .to-assign-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
-.to-assign-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.to-assign-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .to-assign-main{display:flex;flex-direction:column;gap:2px;min-width:0}
 .to-assign-main small{color:var(--muted);font-size:12.5px}
 .to-assign-main small.to-assign-parent{font-weight:700;color:var(--ok-ink)}
 @media (max-width:640px){.to-assign-list{grid-template-columns:1fr}.to-assign-list li{flex-direction:column;align-items:stretch}}
+
+.to-assign-list{grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
+.to-assign-main{flex:1 1 200px}
+.to-assign-match{display:flex;flex-direction:column;gap:4px;flex:1 1 220px;min-width:0;font-size:12px}
+.to-assign-match select{width:100%;min-height:34px;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface)}
+.to-assign-flag{align-self:flex-start;border-radius:999px;padding:1px 8px;font-weight:800;font-size:11px}
+.to-assign-flag.sure{background:var(--cf-mint-soft);color:var(--ok-ink)}
+.to-assign-flag.doute{background:#fde7c7;color:#7a4300}
+.to-assign-flag.none{background:var(--surface-2);color:var(--muted)}
+@media (max-width:640px){.to-assign-list{grid-template-columns:1fr}}

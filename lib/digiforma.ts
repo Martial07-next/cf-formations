@@ -204,7 +204,9 @@ export async function digiformaListSessionDates(): Promise<{ hasStatus: boolean;
 /** Session « planifiée » sur Digiforma (statut planifié / confirmé). */
 export function isPlannedStatus(v: string | null): boolean {
   const t = (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /planifi|planned|scheduled|confirm/.test(t);
+  // Planifiée, ou déjà en cours (parcours d'un an commencé, avec des modules à venir).
+  if (/annul|cancel|abandon|termin|finish|done|archiv|draft|brouillon|lost|perdu|prospect|devis|quote/.test(t)) return false;
+  return /planifi|planned|scheduled|confirm|en.?cours|ongoing|in.?progress|started|running|current|open/.test(t);
 }
 
 
@@ -216,29 +218,47 @@ export function isPlannedStatus(v: string | null): boolean {
 export type DigiformaModule = { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null };
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[] };
 
-async function moduleShape() {
-  const f = await schemaFields();
-  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
-  const leaf = f[`${sessT}#leaf`] || [];
-  const objFields = (f[sessT] || []).filter((n) => !leaf.includes(n));
-  const field =
-    pick(objFields, ['modules', 'trainingModules', 'sessionModules', 'subsessions', 'subSessions', 'steps', 'sequences', 'slots', 'trainingSessionSlots', 'dates', 'sessionDates', 'days']) ||
-    objFields.find((n) => /modul|sub.?session|slot|creneau|sequence|step|date/i.test(n)) ||
-    null;
-  const modT = field ? f[`${sessT}.${field}#type`]?.[0] || null : null;
-  const ml = modT ? f[`${modT}#leaf`] : undefined;
-  const mf = modT ? f[modT] : undefined;
+/** Champs d'un type « daté » (sous-session, créneau) : nom, début, fin, heures, stagiaires. */
+function datedShape(f: Record<string, string[]>, type: string | null) {
+  const ml = type ? f[`${type}#leaf`] : undefined;
+  const mf = type ? f[type] : undefined;
+  const startF = pick(ml, ['startDate', 'startAt', 'start', 'beginDate', 'dateStart', 'date', 'day']);
   return {
-    field,
-    type: modT,
+    type,
+    dated: Boolean(startF),
     id: pick(ml, ['id', 'uuid']),
-    name: sel('name', pick(ml, ['name', 'title', 'label'])),
-    start: sel('startDate', pick(ml, ['startDate', 'startAt', 'start', 'beginDate', 'dateStart', 'date', 'day'])),
+    name: sel('name', pick(ml, ['name', 'customName', 'title', 'label'])),
+    start: sel('startDate', startF),
     end: sel('endDate', pick(ml, ['endDate', 'endAt', 'end', 'finishDate', 'dateEnd', 'date', 'day'])),
     startTime: sel('startTime', pick(ml, ['startTime', 'startHour', 'from', 'beginTime'])),
     endTime: sel('endTime', pick(ml, ['endTime', 'endHour', 'to', 'finishTime'])),
     trainees: pick(mf, ['trainees', 'students', 'participants']),
   };
+}
+
+/**
+ * Où sont les « modules » datés d'une session Digiforma :
+ *  · sous-sessions (parcours, GEIQ…) : un module = une sous-session ;
+ *  · sinon créneaux (dates) : regroupés en blocs de jours qui se suivent.
+ * Le champ « modules » de Digiforma (e-learning, sans dates) est ignoré.
+ */
+async function moduleShape() {
+  const f = await schemaFields();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const leaf = f[`${sessT}#leaf`] || [];
+  const objFields = (f[sessT] || []).filter((n) => !leaf.includes(n));
+  const typeOf = (field: string | null) => (field ? f[`${sessT}.${field}#type`]?.[0] || null : null);
+  const firstDated = (cands: string[]) => {
+    for (const c of cands) {
+      if (!objFields.includes(c)) continue;
+      const sh = datedShape(f, typeOf(c));
+      if (sh.dated) return { field: c, ...sh };
+    }
+    return null;
+  };
+  const sub = firstDated(['subsessions', 'subSessions', 'childSessions', 'trainingModules', 'sessionModules', 'modules']);
+  const slots = firstDated(['trainingSessionSlots', 'slots', 'dates', 'sessionDates', 'days']);
+  return { sub, slots };
 }
 
 /** Structure Digiforma détectée (diagnostic, Administration → Intégrations). */
@@ -251,40 +271,64 @@ export async function digiformaStructure(): Promise<string> {
     `Requêtes : sessions = ${sh.listField || '?'}, session = ${sh.oneField || '?'}`,
     `${sessT} : ${(f[sessT] || []).join(', ')}`,
     `Statut utilisé : ${sh.status || 'aucun'} · dates : ${sh.start || '?'} / ${sh.end || '?'}`,
-    `Modules : ${ms.field ? `${ms.field} (${ms.type})` : 'aucun champ trouvé'}`,
+    `Modules (sous-sessions) : ${ms.sub ? `${ms.sub.field} (${ms.sub.type}) · ${ms.sub.name || '-'} ${ms.sub.start} ${ms.sub.end} ${ms.sub.trainees ? '· stagiaires' : ''}` : 'aucun'}`,
+    `Créneaux : ${ms.slots ? `${ms.slots.field} (${ms.slots.type}) · ${ms.slots.start} ${ms.slots.startTime} ${ms.slots.endTime}` : 'aucun'}`,
   ];
-  if (ms.type) lines.push(`${ms.type} : ${(f[ms.type] || []).join(', ')}`);
+  if (ms.sub?.type) lines.push(`${ms.sub.type} : ${(f[ms.sub.type] || []).join(', ')}`);
+  if (ms.slots?.type) lines.push(`${ms.slots.type} : ${(f[ms.slots.type] || []).join(', ')}`);
   return lines.join('\n');
 }
 
-/** Sessions Digiforma avec leurs modules (sans stagiaires : requête légère). */
+/** Sessions Digiforma avec leurs modules datés (sans stagiaires : requête légère). */
 export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasModules: boolean; sessions: DigiformaSessionModules[] }> {
   const sh = await sessionShape();
   const ms = await moduleShape();
   if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
-  const mods = ms.field ? `modules: ${ms.field} { ${[ms.id ? sel('id', ms.id) : '', ms.name, ms.start, ms.end, ms.startTime, ms.endTime].filter(Boolean).join(' ')} }` : '';
-  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${mods} } }`);
+  const part = (alias: string, d: NonNullable<typeof ms.sub>, withName: boolean) =>
+    `${alias}: ${d.field} { ${[d.id ? sel('id', d.id) : '', withName ? d.name : '', d.start, d.end, d.startTime, d.endTime].filter(Boolean).join(' ')} }`;
+  const subs = ms.sub ? part('subs', ms.sub, true) : '';
+  const slots = ms.slots ? part('slots', ms.slots, false) : '';
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} } }`);
+  const mapDated = (m: any, i: number) => ({
+    key: String(m.id ?? `${i}-${m.startDate || ''}`),
+    name: m.name || null,
+    start: m.startDate || null,
+    end: m.endDate || m.startDate || null,
+    startTime: m.startTime || null,
+    endTime: m.endTime || null,
+  });
   return {
     hasStatus: Boolean(sh.status),
-    hasModules: Boolean(ms.field),
-    sessions: (data?.sessions || []).map((s: any) => ({
-      id: String(s.id),
-      name: s.name || 'Session Digiforma',
-      status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? '' : s.status),
-      startAt: s.startDate || null,
-      endAt: s.endDate || null,
-      modules: (s.modules || [])
-        .map((m: any, i: number) => ({
-          key: String(m.id ?? `${i}-${m.startDate || ''}`),
-          name: m.name || null,
-          start: m.startDate || null,
-          end: m.endDate || m.startDate || null,
-          startTime: m.startTime || null,
-          endTime: m.endTime || null,
-        }))
-        .filter((m: any) => m.start),
-    })),
+    hasModules: Boolean(ms.sub || ms.slots),
+    sessions: (data?.sessions || []).map((s: any) => {
+      const subsList = (s.subs || []).map(mapDated).filter((m: any) => m.start);
+      // Sans sous-session : créneaux regroupés en blocs de jours consécutifs (un bloc = un module).
+      const modules = subsList.length ? subsList : slotBlocks((s.slots || []).map(mapDated).filter((m: any) => m.start));
+      return {
+        id: String(s.id),
+        name: s.name || 'Session Digiforma',
+        status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? '' : s.status),
+        startAt: s.startDate || null,
+        endAt: s.endDate || null,
+        modules,
+      };
+    }),
   };
+}
+
+/** Créneaux → blocs de jours qui se suivent (week-end compris), avec les heures du premier et du dernier créneau. */
+function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
+  const sorted = [...slots].sort((a, b) => `${a.start}${a.startTime || ''}`.localeCompare(`${b.start}${b.startTime || ''}`));
+  const out: DigiformaModule[] = [];
+  const day = (v: string) => new Date(v.slice(0, 10) + 'T12:00:00Z').getTime();
+  for (const sl of sorted) {
+    const last = out[out.length - 1];
+    if (last && day(sl.start) - day(last.end) <= 3 * 86400000) {
+      last.end = sl.end || sl.start;
+      last.endTime = sl.endTime;
+    } else out.push({ key: `bloc-${sl.start.slice(0, 10)}`, name: null, start: sl.start, end: sl.end || sl.start, startTime: sl.startTime, endTime: sl.endTime });
+  }
+  return out;
 }
 
 /** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
@@ -293,11 +337,11 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
   const ms = await moduleShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
   const tSel = await traineeSelection();
-  const modPart = ms.field && ms.trainees ? `modules: ${ms.field} { ${ms.id ? sel('id', ms.id) : ''} ${ms.start} trainees: ${ms.trainees} { ${tSel} } }` : '';
+  const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } }` : '';
   const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
   const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${modPart} } }`, { id });
   const byModule: Record<string, DigiformaTrainee[]> = {};
-  (data?.session?.modules || []).forEach((m: any, i: number) => {
+  (data?.session?.subs || []).forEach((m: any, i: number) => {
     byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = (m.trainees || []).map(mapTrainee);
   });
   return { trainees: (data?.session?.trainees || []).map(mapTrainee), byModule };

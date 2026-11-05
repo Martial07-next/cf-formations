@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import type { CatalogMatch } from '@/lib/catalog-match';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight, X, Inbox, Wrench, CalendarOff, CalendarPlus, CalendarDays, FolderCheck, Receipt, Hourglass, ClipboardCheck, FileClock, AlertTriangle, Keyboard, Building2, Link2 } from 'lucide-react';
@@ -938,7 +939,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} catalog={templates.map((t) => ({ id: t.id, title: t.title }))} />}
 
       {canEdit && (
         <dialog
@@ -1186,6 +1187,8 @@ export type ToAssign = {
   start_at: string;
   end_at: string;
   trainees: number;
+  /** Formation du catalogue reconnue d'après le nom du module. */
+  match: CatalogMatch | null;
 };
 
 /**
@@ -1193,9 +1196,11 @@ export type ToAssign = {
  * durer un an, seuls les modules de la semaine se placent), et sessions déjà
  * créées dont la salle reste à choisir.
  */
-function ToAssignSection({ items }: { items: ToAssign[] }) {
+function ToAssignSection({ items, catalog }: { items: ToAssign[]; catalog: { id: string; title: string }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  // Formation choisie pour chaque module (par défaut : celle reconnue).
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const d = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
   const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
@@ -1203,7 +1208,9 @@ function ToAssignSection({ items }: { items: ToAssign[] }) {
     setBusy(key);
     setError(null);
     const { placeDigiformaModule } = await import('@/app/digiforma/actions');
-    const r = await placeDigiformaModule(key);
+    const item = items.find((i) => i.id === key);
+    const templateId = chosen[key] ?? item?.match?.templateId ?? '';
+    const r = await placeDigiformaModule(key, templateId || null);
     setBusy(null);
     if (!r.ok) setError(r.error);
     else router.push(`/sessions/${r.sessionId}`);
@@ -1221,12 +1228,29 @@ function ToAssignSection({ items }: { items: ToAssign[] }) {
         {items.map((s) => (
           <li key={s.kind + s.id}>
             <span className="to-assign-main">
-              <strong>{s.title}</strong>
-              {s.parent && <small className="to-assign-parent">{s.parent}</small>}
+              <strong>{s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title}</strong>
+              <small className="to-assign-parent">
+                {s.kind === 'module' ? `Digiforma : ${s.title}${s.parent && s.parent !== s.title ? ` · ${s.parent}` : ''}` : s.parent}
+              </small>
               <small>
                 {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
               </small>
             </span>
+            {s.kind === 'module' && (
+              <label className="to-assign-match">
+                <span className={`to-assign-flag ${s.match?.confidence || 'none'}`}>
+                  {s.match?.confidence === 'sure' ? 'Formation reconnue' : s.match?.confidence === 'doute' ? 'À vérifier' : 'Aucune formation reconnue'}
+                </span>
+                <select
+                  aria-label={`Formation du catalogue pour ${s.title}`}
+                  value={chosen[s.id] ?? s.match?.templateId ?? ''}
+                  onChange={(e) => setChosen((c) => ({ ...c, [s.id]: e.target.value }))}
+                >
+                  <option value="">Garder le nom Digiforma</option>
+                  {catalog.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+              </label>
+            )}
             {s.kind === 'module' ? (
               <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s.id)}>
                 {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}

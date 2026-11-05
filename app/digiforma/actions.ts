@@ -13,7 +13,7 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
  * module, stagiaires à jour au dernier passage), puis sa fiche s'ouvre pour
  * choisir la salle et le formateur.
  */
-export async function placeDigiformaModule(key: string): Promise<Result<{ sessionId: string }>> {
+export async function placeDigiformaModule(key: string, templateId: string | null = null): Promise<Result<{ sessionId: string }>> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { data: m, error } = await supabase.from('digiforma_modules').select('*').eq('key', key).maybeSingle();
@@ -23,11 +23,19 @@ export async function placeDigiformaModule(key: string): Promise<Result<{ sessio
   const { data: holding } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
   if (!holding) return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
 
-  const title = (m as any).whole_session || !(m as any).name ? (m as any).df_session_name : `${(m as any).name}`;
+  // Formation du catalogue choisie (reconnue d'après le nom du module) : son intitulé et ses réglages.
+  let tpl: { id: string; title: string } | null = null;
+  if (templateId) {
+    const { data } = await supabase.from('templates').select('id, title').eq('id', templateId).maybeSingle();
+    tpl = (data as any) || null;
+  }
+  const dfTitle = (m as any).whole_session || !(m as any).name ? (m as any).df_session_name : `${(m as any).name}`;
+  const title = tpl?.title || dfTitle;
   const { data: created, error: insError } = await supabase
     .from('sessions')
     .insert({
       title: title || 'Session Digiforma',
+      ...(tpl ? { template_id: tpl.id } : {}),
       room_id: holding.id,
       start_at: (m as any).start_at,
       end_at: (m as any).end_at,

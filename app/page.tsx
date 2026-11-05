@@ -15,6 +15,7 @@ import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
+import { matchCatalog } from '@/lib/catalog-match';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -151,6 +152,7 @@ export default async function Page({
   const holdingIds = ((rooms as any[]) || []).filter((r) => r.is_holding).map((r) => r.id as string);
   const periodFrom = isoDate(new Date(Math.max(rangeStart.getTime(), Date.now()))) + 'T00:00:00';
   const periodTo = isoDate(rangeEnd) + 'T00:00:00';
+  const catalog = ((templates as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
   const toAssignQuery: Promise<ToAssign[]> = canManage(profile?.role)
     ? (async () => {
         const [mods, held] = await Promise.all([
@@ -175,6 +177,8 @@ export default async function Page({
         ]);
         return [
           ...((mods.data as any[]) || []).map((m) => ({
+            // Nom du catalogue de la plateforme, d'après le nom du module (et de la session Digiforma).
+            match: matchCatalog(m.whole_session ? m.df_session_name || '' : m.name || m.df_session_name || '', catalog, m.df_session_name || ''),
             kind: 'module' as const,
             id: m.key as string,
             title: (m.whole_session ? m.df_session_name : m.name || m.df_session_name) || 'Module Digiforma',
@@ -184,6 +188,7 @@ export default async function Page({
             trainees: Array.isArray(m.trainees) ? m.trainees.length : 0,
           })),
           ...((held.data as any[]) || []).map((x) => ({
+            match: null,
             kind: 'session' as const,
             id: x.id as string,
             title: x.title as string,
