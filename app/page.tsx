@@ -15,7 +15,7 @@ import { parisNowKey, parisToday } from '@/lib/session-lock';
 import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAlert } from '@/lib/session-alerts';
 import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
-import { matchCatalog } from '@/lib/catalog-match';
+import { matchModule } from '@/lib/catalog-match';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -158,15 +158,17 @@ export default async function Page({
   const catalog = ((templates as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
   const toAssignQuery: Promise<ToAssign[]> = canManage(profile?.role)
     ? (async () => {
-        const [mods, held] = await Promise.all([
-          supabase
+        // Modules couverts par un parcours déjà posé (migration 58) : non proposés.
+        const modsQuery = (withCovered: boolean) => {
+          let q = supabase
             .from('digiforma_modules')
             .select('key, df_session_name, name, start_at, end_at, trainees, whole_session')
-            .is('placed_session_id', null)
-            .lt('start_at', periodTo)
-            .gte('end_at', periodFrom)
-            .order('start_at')
-            .limit(200),
+            .is('placed_session_id', null);
+          if (withCovered) q = q.is('covered_by', null);
+          return q.lt('start_at', periodTo).gte('end_at', periodFrom).order('start_at').limit(200);
+        };
+        const [mods0, held] = await Promise.all([
+          modsQuery(true).then((r) => r) as any,
           holdingIds.length
             ? supabase
                 .from('sessions')
@@ -178,10 +180,11 @@ export default async function Page({
                 .limit(200)
             : Promise.resolve({ data: [] as any[] }),
         ]);
+        const mods = mods0.error ? await modsQuery(false) : mods0;
         return [
           ...((mods.data as any[]) || []).map((m) => ({
             // Nom du catalogue de la plateforme, d'après le nom du module (et de la session Digiforma).
-            match: matchCatalog(m.whole_session ? m.df_session_name || '' : m.name || m.df_session_name || '', catalog, m.df_session_name || ''),
+            match: matchModule(m.whole_session ? m.df_session_name || '' : m.name || m.df_session_name || '', m.df_session_name || '', catalog),
             kind: 'module' as const,
             id: m.key as string,
             title: (m.whole_session ? m.df_session_name : m.name || m.df_session_name) || 'Module Digiforma',

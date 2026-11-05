@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
-import { matchCatalog } from '@/lib/catalog-match';
+import { matchCatalog, matchModule } from '@/lib/catalog-match';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string }
@@ -48,6 +48,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const seenStatus = new Map<string, number>();
   let notPlanned = 0;
   let past = 0;
+  let stages = 0;
   const todo: { id: string; name: string; modules: { key: string; name: string | null; start_at: string; end_at: string; whole: boolean }[] }[] = [];
   // Sous-sessions des parcours (GEIQ…) : déjà prises comme modules de leur session parente.
   const subIds = new Set(
@@ -74,7 +75,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       : s.startAt && s.endAt && new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime() <= 6 * 86400000
         ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true }]
         : [];
-    const upcoming = raw.filter((m) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at);
+    // Stage / période en entreprise : pas de salle à réserver, jamais proposé.
+    const notStage = raw.filter((m) => !isCompanyPeriod(m.name || ''));
+    stages += raw.length - notStage.length;
+    const upcoming = notStage.filter((m) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at);
     past += raw.length - upcoming.length;
     if (upcoming.length) todo.push({ id: s.id, name: s.name, modules: upcoming });
   }
@@ -113,6 +117,49 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     if (!e) return 0;
     return list.filter((t) => (t.email && e.emails.has(t.email.trim().toLowerCase())) || e.names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))).length;
   };
+  const { data: progRows } = await supabase.from('poec_programs').select('id, title, start_date, end_date').gte('end_date', today);
+  const programs = ((progRows as any[]) || []).map((p) => ({ id: p.id as string, title: p.title as string }));
+  const progPeople = new Map<string, { emails: Set<string>; names: Set<string> }>();
+  if (programs.length) {
+    const { data: pt } = await supabase.from('poec_trainees').select('program_id, trainees(email, full_name, first_name, last_name)').in('program_id', programs.map((p) => p.id));
+    for (const r of (pt as any[]) || []) {
+      const t = Array.isArray(r.trainees) ? r.trainees[0] : r.trainees;
+      if (!t) continue;
+      const e = progPeople.get(r.program_id) || { emails: new Set<string>(), names: new Set<string>() };
+      if (t.email) e.emails.add(String(t.email).trim().toLowerCase());
+      for (const n of [t.full_name, `${t.first_name || ''} ${t.last_name || ''}`]) if (n && n.trim()) e.names.add(nameKey(n));
+      progPeople.set(r.program_id, e);
+    }
+  }
+  const { data: evRows } = await supabase.from('planning_events').select('id, poec_id, start_date, end_date').not('poec_id', 'is', null).gte('end_date', today);
+  const progEvents = ((evRows as any[]) || []) as { id: string; poec_id: string; start_date: string; end_date: string }[];
+  const { data: progSessRows } = await supabase.from('sessions').select('id, poec_id, start_at, end_at').not('poec_id', 'is', null).gte('end_at', `${today}T00:00:00`);
+  const progSessions = ((progSessRows as any[]) || []) as { id: string; poec_id: string; start_at: string; end_at: string }[];
+  /** Parcours du planning correspondant à une session Digiforma : même nom, ou la moitié de ses stagiaires. */
+  const programFor = (dfName: string, trainees: DigiformaTrainee[]): string | null => {
+    const byTitle = matchCatalog(dfName, programs, '');
+    if (byTitle.templateId && byTitle.score >= 0.55) return byTitle.templateId;
+    if (!trainees.length) return null;
+    let best: { id: string; n: number } | null = null;
+    for (const p of programs) {
+      const e = progPeople.get(p.id);
+      if (!e) continue;
+      const n = trainees.filter((t) => (t.email && e.emails.has(t.email.trim().toLowerCase())) || e.names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))).length;
+      if (n >= Math.max(1, Math.ceil(trainees.length / 2)) && (!best || n > best.n)) best = { id: p.id, n };
+    }
+    return best?.id || null;
+  };
+  /** Le parcours a déjà une session ou un évènement ces jours-là : le module est couvert. */
+  const coveredBy = (programId: string, start: string, end: string): string | null => {
+    const a = start.slice(0, 10);
+    const b = end.slice(0, 10);
+    const ev = progEvents.find((e) => e.poec_id === programId && e.start_date <= b && e.end_date >= a);
+    if (ev) return `event:${ev.id}`;
+    const se = progSessions.find((x) => x.poec_id === programId && x.start_at.slice(0, 10) <= b && x.end_at.slice(0, 10) >= a);
+    return se ? `session:${se.id}` : null;
+  };
+  let covered = 0;
+
   let linked = 0;
   const findOnPlanning = (name: string, parent: string, start: string, end: string, trainees: DigiformaTrainee[] = []): string | null => {
     const sameDays = planned.filter((p) => !alreadyLinked.has(p.id) && p.start_at.slice(0, 10) <= end.slice(0, 10) && p.end_at.slice(0, 10) >= start.slice(0, 10));
@@ -125,7 +172,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         .sort((a, b) => b.n - a.n);
       if (byPeople.length === 1 || (byPeople.length > 1 && byPeople[0].n > byPeople[1].n)) return byPeople[0].p.id;
     }
-    const m = matchCatalog(name, catalog, parent);
+    const m = matchModule(name, parent, catalog);
     const byTemplate = m.templateId && m.confidence !== 'none' ? sameDays.filter((p) => p.template_id === m.templateId) : [];
     if (byTemplate.length === 1) return byTemplate[0].id;
     const byTitle = sameDays
@@ -171,7 +218,14 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     for (const r of rows) {
       if (!open.has(r.key)) continue;
       const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at, (r.trainees as DigiformaTrainee[]) || []);
-      if (!hit) continue;
+      if (!hit) {
+        // Parcours (GEIQ, POEC, personnalisé) déjà posé cette semaine sur le planning.
+        const prog = programFor(s.name, (r.trainees as DigiformaTrainee[]) || []);
+        const cov = prog ? coveredBy(prog, r.start_at, r.end_at) : null;
+        const { error: ce } = await supabase.from('digiforma_modules').update({ covered_by: cov }).eq('key', r.key);
+        if (!ce && cov) covered++;
+        continue;
+      }
       const { error: le } = await supabase.from('digiforma_modules').update({ placed_session_id: hit }).eq('key', r.key);
       if (!le) {
         alreadyLinked.add(hit);
@@ -225,7 +279,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const log =
     `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s) ou en cours` +
     (asModule ? ` (${asModule} sous-session(s) de parcours GEIQ / POEC prises comme modules)` : '') +
-    `. ${linked} module(s) déjà sur le planning, reliés (non reproposés). ` +
+    `. ${linked} module(s) déjà sur le planning, reliés, et ${covered} couvert(s) par un parcours déjà posé cette semaine (non reproposés). ` +
+    (stages ? `${stages} période(s) de stage en entreprise ignorée(s). ` : '') +
     (legacyIds.length ? `${legacyIds.length} ancienne(s) session(s) entière(s) « À affecter » retirée(s). ` : '') +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
@@ -277,4 +332,10 @@ async function logSync(supabase: SupabaseClient, status: 'ok' | 'error', log: st
 /** Nom comparable : sans accents, minuscules, mots triés (« Léa MARTIN » = « MARTIN Lea »). */
 function nameKey(v: string) {
   return v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[\s-]+/).filter(Boolean).sort().join(' ');
+}
+
+/** Stage / période en entreprise (POEC, GEIQ) : rien à placer en salle. */
+function isCompanyPeriod(name: string) {
+  const t = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /\bstage\b|en entreprise|periode (en )?entreprise|immersion|pmsmp|\bpae\b|\bafest\b/.test(t);
 }
