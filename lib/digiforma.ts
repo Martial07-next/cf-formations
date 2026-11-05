@@ -557,7 +557,7 @@ export function registrationOf(v: unknown): 'validee' | 'en_attente' | 'exclu' {
   const t = String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (!t) return 'validee';
   if (/annul|cancel|abandon|withdraw|lost|perdu|refus|declin/.test(t)) return 'exclu';
-  if (/confirm|valid|accept|won|gagn|inscrit|registered|enrolled|ongoing|finished|termin/.test(t)) return 'validee';
+  if (/confirm|valid|accept|won|gagn|inscrit|registered|enrolled|ongoing|finished|termin|complet/.test(t)) return 'validee';
   return 'en_attente'; // indécis, en attente, à confirmer, devis…
 }
 
@@ -568,7 +568,9 @@ export const seenRegStatus = new Map<string, number>();
 function applyStatus(trainees: DigiformaTrainee[], block: any, rawTrainees: any[]): DigiformaTrainee[] {
   const byId = new Map<string, 'validee' | 'en_attente' | 'exclu'>();
   for (const r of block?.regs || []) {
-    const st = registrationOf(r.regStatus);
+    // Digiforma : « pipelineState » du client vaut 0 ; le statut réel est « crmStatus » (WON, UNDECIDED, CANCELLED, COMPLETED).
+    const pick2 = (v: unknown) => (v == null || /^\s*\d*\s*$/.test(String(v)) ? null : v);
+    const st = registrationOf(pick2(r.regStatus2) ?? pick2(r.regStatus));
     seenRegStatus.set(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`, (seenRegStatus.get(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`) || 0) + 1);
     for (const w of [...(r.who || []), ...((r.ct || []).map((c: any) => c.one).filter(Boolean)), ...(r.one ? [r.one] : [])]) {
       const prev = byId.get(String(w.id));

@@ -158,6 +158,7 @@ export default async function Page({
   const periodFrom = isoDate(new Date(Math.max(weekStart.getTime(), new Date(isoDate(new Date()) + 'T00:00:00Z').getTime()))) + 'T00:00:00';
   const periodTo = isoDate(weekEnd) + 'T00:00:00';
   const catalog = ((templates as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
+  let toAssignPrograms: { id: string; title: string }[] = [];
   const toAssignQuery: Promise<ToAssign[]> = canManage(profile?.role)
     ? (async () => {
         // Modules couverts par un parcours déjà posé (migration 58) : non proposés.
@@ -218,6 +219,7 @@ export default async function Page({
           }
           return { id: p.id as string, title: p.title as string, people: pp };
         });
+        toAssignPrograms = programs.map((p) => ({ id: p.id, title: p.title })).sort((a, b) => a.title.localeCompare(b.title, 'fr'));
         const sameDays = (a1: string, b1: string, a2: string, b2: string) => a1.slice(0, 10) <= b2.slice(0, 10) && b1.slice(0, 10) >= a2.slice(0, 10);
         const half = (n: number) => Math.max(1, Math.ceil(n / 2));
 
@@ -267,7 +269,7 @@ export default async function Page({
               start_at: m.start_at as string,
               end_at: m.end_at as string,
               trainees: real.length,
-              people: real.map((t) => ({ key: personKey(t), name: personName(t) })),
+              people: real.map((t) => ({ key: personKey(t), name: personName(t), waiting: t.status === 'en_attente' })),
               fake: fake.map((t) => ({ key: personKey(t), name: personName(t) || 'Sans nom' })),
               program,
               covered,
@@ -554,6 +556,7 @@ export default async function Page({
         mine={await mineQuery.then((list) => (list ? <MySessions sessions={list} nowKey={parisNowKey()} /> : null))}
         alerts={<SessionAlerts alerts={await alertsQuery} todayIso={today} />}
         toAssign={await toAssignQuery}
+        toAssignPrograms={toAssignPrograms}
         toAssignWeek={currentView === 'month' ? null : isoDate(weekStart)}
       />
     </main>

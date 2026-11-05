@@ -2253,3 +2253,32 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .name-with-trash .icon:hover{opacity:1;color:#9a2c0b}
 .tpl-switch{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .tpl-switch.editing{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:560px}
+
+/* Modules Digiforma à placer : cartes (v2). */
+.to-assign-head{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.to-assign-head h2{margin:0;display:flex;align-items:center;gap:8px}
+.to-assign-head .hint{margin:0}
+.to-assign-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px;align-items:stretch}
+.ta-card{display:flex;flex-direction:column;gap:5px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-width:0}
+.ta-card.is-session{background:var(--surface-2)}
+.ta-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.ta-title{font-size:15px;line-height:1.3;overflow-wrap:break-word;min-width:0}
+.ta-top .to-assign-flag{flex-shrink:0;margin-top:1px}
+.ta-origin{color:var(--ok-ink);font-weight:700;font-size:12px}
+.ta-note{color:#7a4300;font-size:12px}
+.ta-when{color:var(--muted);font-size:12.5px}
+.ta-waiting{color:#9a4a0b}
+.to-assign-person.waiting{background:#fff4e0;border-color:#f0c97a;color:#6e4a00}
+.to-assign-person{padding:1px 9px}
+.ta-foot{margin-top:auto;padding-top:8px;display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line)}
+.ta-choices{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ta-choice{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;padding:6px 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font:inherit;cursor:pointer;min-height:0;min-width:0}
+.ta-choice:hover{border-color:var(--cf-mint-strong)}
+.ta-choice span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.ta-choice strong{font-size:12.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:100%}
+.ta-choice em{font-style:normal;font-size:11.5px;font-weight:700;color:var(--ok-ink)}
+.ta-program select{width:100%;border:0;background:transparent;padding:0;min-height:0;font:inherit;font-size:12.5px;font-weight:700;color:var(--ink)}
+.ta-picker{grid-column:1 / -1;display:flex;gap:6px;align-items:flex-start}
+.ta-picker > :first-child{flex:1;min-width:0}
+.ta-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+@media (max-width:640px){.to-assign-grid{grid-template-columns:1fr}.ta-choices{grid-template-columns:1fr}.ta-actions > *{flex:1}}

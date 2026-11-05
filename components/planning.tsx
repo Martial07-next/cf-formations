@@ -205,6 +205,7 @@ export function Planning({
   alerts = null,
   toAssign = [],
   toAssignWeek = null,
+  toAssignPrograms = [],
   mine = null,
   nowKey = '',
   renderedAt = 0,
@@ -248,6 +249,8 @@ export function Planning({
   toAssign?: ToAssign[];
   /** Lundi de la semaine des modules (vue semaine / jour) ; null en vue mois (regroupés par semaine). */
   toAssignWeek?: string | null;
+  /** Parcours de la plateforme (choix du parcours d'un module). */
+  toAssignPrograms?: { id: string; title: string }[];
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
   nowKey?: string;
   /** Formateur : ses formations, affichées en premier. */
@@ -944,7 +947,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} programs={toAssignPrograms} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
 
       {canEdit && (
         <dialog
@@ -1193,7 +1196,7 @@ export type ToAssign = {
   end_at: string;
   /** Stagiaires réels (sans les fictifs ni la corbeille). */
   trainees: number;
-  people: { key: string; name: string }[];
+  people: { key: string; name: string; waiting?: boolean }[];
   /** Stagiaires fictifs (« Apprenant A ») ou mis à la corbeille. */
   fake: { key: string; name: string }[];
   /** Parcours de la plateforme (POEC, GEIQ, personnalisé) de ces stagiaires. */
@@ -1212,110 +1215,148 @@ export type ToAssign = {
  * ce qui est déjà sur le planning (même stagiaires, parcours déjà posé) est
  * masqué ; stagiaires fictifs et mis de côté : à la corbeille.
  */
-export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; catalog: { id: string; title: string; category: string | null; duration_hours: number }[]; week: string | null }) {
+export function ToAssignSection({
+  items,
+  catalog,
+  programs = [],
+  week,
+}: {
+  items: ToAssign[];
+  catalog: { id: string; title: string; category: string | null; duration_hours: number }[];
+  programs?: { id: string; title: string }[];
+  week: string | null;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Formation choisie pour chaque module (par défaut : celle reconnue).
+  // Choix par module : formation du catalogue (par défaut celle reconnue) et parcours (par défaut celui détecté).
   const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [chosenProgram, setChosenProgram] = useState<Record<string, string>>({});
+  const [picking, setPicking] = useState<string | null>(null);
   const d = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
   const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
   const open = items.filter((i) => !i.covered);
   const done = items.filter((i) => i.covered);
-  const dismiss = async (key: string, on: boolean) => {
+  const tplOf = (s: ToAssign) => chosen[s.id] ?? s.match?.templateId ?? '';
+  const progOf = (s: ToAssign) => chosenProgram[s.id] ?? s.program?.id ?? '';
+
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string; sessionId?: string }>, after?: (r: any) => void) => {
     setBusy(key);
     setError(null);
-    const { dismissDigiformaModule } = await import('@/app/digiforma/actions');
-    const r = await dismissDigiformaModule(key, on);
+    const r = await fn();
     setBusy(null);
-    if (!r.ok) setError(r.error);
+    if (!r.ok) setError(r.error || 'Action impossible.');
+    else if (after) after(r);
     else router.refresh();
   };
-  const removeSession = async (item: ToAssign) => {
-    if (!(await askConfirm(`Supprimer la session « ${item.title} » ? Elle ne sera pas recréée par la synchronisation.`, { danger: true }))) return;
-    setBusy(item.id);
-    setError(null);
-    const { deleteDigiformaSession } = await import('@/app/digiforma/actions');
-    const r = await deleteDigiformaSession(item.id);
-    setBusy(null);
-    if (!r.ok) setError(r.error);
-    else router.refresh();
-  };
-  const place = async (item: ToAssign) => {
-    setBusy(item.id);
-    setError(null);
-    const { placeDigiformaModule } = await import('@/app/digiforma/actions');
-    const templateId = chosen[item.id] ?? item.match?.templateId ?? '';
-    const r = await placeDigiformaModule(item.id, templateId || null, item.program?.id || null);
-    setBusy(null);
-    if (!r.ok) setError(r.error);
-    else router.push(`/sessions/${r.sessionId}`);
+  const place = (s: ToAssign) =>
+    run(s.id, async () => (await import('@/app/digiforma/actions')).placeDigiformaModule(s.id, tplOf(s) || null, progOf(s) || null), (r) => router.push(`/sessions/${r.sessionId}`));
+  const dismiss = (key: string, on: boolean) => run(key, async () => (await import('@/app/digiforma/actions')).dismissDigiformaModule(key, on));
+  const removeSession = async (s: ToAssign) => {
+    if (!(await askConfirm(`Supprimer la session « ${s.title} » ? Elle ne sera pas recréée par la synchronisation.`, { danger: true }))) return;
+    run(s.id, async () => (await import('@/app/digiforma/actions')).deleteDigiformaSession(s.id));
   };
 
   return (
     <section className="panel to-assign" aria-labelledby="to-assign-title">
-      <div className="panel-head">
+      <div className="to-assign-head">
         <h2 id="to-assign-title">
-          <Inbox size={17} aria-hidden /> Modules Digiforma à placer{week ? ` · ${weekLabel(week)}` : ' · par semaine'} <span className="to-assign-count">{open.length}</span>
+          <Inbox size={17} aria-hidden /> Modules Digiforma à placer{week ? ` · ${weekLabel(week)}` : ''}
+          <span className="to-assign-count">{open.length}</span>
         </h2>
+        <p className="hint">
+          Modules des sessions en cours sur Digiforma qui ont lieu cette semaine, avec leurs vrais stagiaires. Déjà posés, sans stagiaire, stages et retirés : en bas.
+        </p>
       </div>
-      <p className="hint" style={{ marginTop: 0 }}>
-        Modules des sessions planifiées ou en cours sur Digiforma qui ont lieu cette semaine. Ce qui est déjà sur le planning (mêmes stagiaires, ou parcours déjà posé) est masqué ; les stagiaires fictifs (« Apprenant A »…) et ceux mis à la corbeille de la page Stagiaires sont ignorés. « Placer » crée la session (rattachée au parcours s’il y en a un) : choisis ensuite la salle et le formateur.
-      </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {open.length === 0 && <p className="empty" style={{ margin: 0 }}>Rien à placer cette semaine : tout est déjà sur le planning.</p>}
       {weekGroups(open, week).map((g) => (
         <div key={g.monday} className="to-assign-week">
           {!week && <h3 className="to-assign-week-title">{weekLabel(g.monday)}</h3>}
-          <ul className="to-assign-list">
+          <ul className="to-assign-grid">
             {g.items.map((s) => {
-              const shown = s.kind === 'module' && s.match?.title && (chosen[s.id] ?? s.match.templateId) === s.match.templateId ? s.match.title : s.title;
-              const origin = [s.title, s.parent].filter((x, i, a) => x && x !== shown && a.indexOf(x) === i).join(' · ');
+              const isModule = s.kind === 'module';
+              const tplId = tplOf(s);
+              const tpl = catalog.find((t) => t.id === tplId) || null;
+              // Parcours (GEIQ…) sans nom de module sur Digiforma : à signaler (pas une formation simple).
+              const unnamed = isModule && (!s.parent || s.title === s.parent) && (Boolean(s.program) || /geiq|poec|parcours|alternance/i.test(s.title));
+              const title = tpl && tplId === s.match?.templateId ? tpl.title : tpl ? tpl.title : s.title;
+              const origin = isModule ? [s.title !== title ? s.title : null, s.parent && s.parent !== s.title ? s.parent : null].filter(Boolean).join(' · ') : '';
+              const waiting = s.people.filter((p) => p.waiting).length;
               return (
-                <li key={s.kind + s.id}>
-                  <span className="to-assign-main">
-                    <strong>{shown}</strong>
-                    {origin && <small className="to-assign-parent">Digiforma : {origin}</small>}
-                    {s.program && <small className="to-assign-program">Parcours : {s.program.title}</small>}
-                    <small>
-                      {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
-                    </small>
-                    {s.people.length > 0 && (
-                      <span className="to-assign-people">
-                        {s.people.map((p) => (
-                          <span key={p.key} className="to-assign-person">{p.name}</span>
-                        ))}
+                <li key={s.kind + s.id} className={`ta-card${isModule ? '' : ' is-session'}`}>
+                  <div className="ta-top">
+                    <strong className="ta-title">{title}</strong>
+                    {isModule && (
+                      <span className={`to-assign-flag ${tpl ? (tplId === s.match?.templateId ? s.match?.confidence || 'none' : 'sure') : 'none'}`}>
+                        {tpl ? (tplId === s.match?.templateId ? (s.match?.confidence === 'sure' ? 'Reconnue' : 'À vérifier') : 'Choisie') : 'Sans formation'}
                       </span>
                     )}
-                    {s.fake.length > 0 && <small className="to-assign-fake">{s.fake.length} ignoré{s.fake.length > 1 ? 's' : ''} (fictif ou à la corbeille) : {s.fake.map((p) => p.name).join(', ')}</small>}
-                  </span>
-                  {s.kind === 'module' && (
-                    <label className="to-assign-match">
-                      <span className={`to-assign-flag ${s.match?.confidence || 'none'}`}>
-                        {s.match?.confidence === 'sure' ? 'Formation reconnue' : s.match?.confidence === 'doute' ? 'À vérifier' : 'Aucune formation reconnue'}
-                      </span>
-                      <TemplatePicker templates={catalog} value={chosen[s.id] ?? s.match?.templateId ?? ''} onChange={(id) => setChosen((c) => ({ ...c, [s.id]: id }))} />
-                    </label>
-                  )}
-                  {s.kind === 'module' ? (
-                    <span className="to-assign-go">
-                      <button type="button" className="small ghost" disabled={!!busy} title="Introuvable ou inutile : retirer de la liste" onClick={() => dismiss(s.id, true)}>
-                        Retirer
-                      </button>
-                      <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s)}>
-                        {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
-                      </button>
-                    </span>
-                  ) : (
-                    <span className="to-assign-go">
-                      <button type="button" className="small ghost danger" disabled={!!busy} title="Session introuvable : la supprimer" onClick={() => removeSession(s)}>
-                        <Trash2 size={13} aria-hidden /> Supprimer
-                      </button>
-                      <Link href={`/sessions/${s.id}`} className="btn small">
-                        Choisir la salle <ChevronRight size={14} aria-hidden />
-                      </Link>
+                  </div>
+                  {origin && <small className="ta-origin">Digiforma : {origin}</small>}
+                  {unnamed && <small className="ta-note">Module non nommé sur Digiforma : choisis la formation ci-dessous.</small>}
+                  <small className="ta-when">
+                    {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
+                    {waiting > 0 && <b className="ta-waiting"> · {waiting} indécis</b>}
+                  </small>
+                  {s.people.length > 0 && (
+                    <span className="to-assign-people">
+                      {s.people.map((p) => (
+                        <span key={p.key} className={`to-assign-person${p.waiting ? ' waiting' : ''}`} title={p.waiting ? 'Inscription indécise sur Digiforma : sera en attente' : undefined}>{p.name}</span>
+                      ))}
                     </span>
                   )}
+                  {s.fake.length > 0 && <small className="to-assign-fake">{s.fake.length} ignoré{s.fake.length > 1 ? 's' : ''} : {s.fake.map((p) => p.name).join(', ')}</small>}
+
+                  <div className="ta-foot">
+                    {isModule && (
+                      <div className="ta-choices">
+                        {picking === s.id ? (
+                          <div className="ta-picker">
+                            <TemplatePicker
+                              templates={catalog}
+                              value={tplId}
+                              onChange={(id) => {
+                                setChosen((c) => ({ ...c, [s.id]: id }));
+                                setPicking(null);
+                              }}
+                            />
+                            <button type="button" className="small ghost" onClick={() => setPicking(null)}>Fermer</button>
+                          </div>
+                        ) : (
+                          <button type="button" className="ta-choice" onClick={() => setPicking(s.id)} title="Rechercher une formation du catalogue">
+                            <span>Formation</span>
+                            <strong>{tpl ? tpl.title : 'Garder le nom Digiforma'}</strong>
+                            <em>Changer</em>
+                          </button>
+                        )}
+                        {programs.length > 0 && (
+                          <label className="ta-choice ta-program">
+                            <span>Parcours</span>
+                            <select value={progOf(s)} onChange={(e) => setChosenProgram((c) => ({ ...c, [s.id]: e.target.value }))}>
+                              <option value="">Aucun</option>
+                              {programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                    )}
+                    <div className="ta-actions">
+                      {isModule ? (
+                        <>
+                          <button type="button" className="small ghost" disabled={!!busy} title="Introuvable ou inutile : retirer de la liste" onClick={() => dismiss(s.id, true)}>Retirer</button>
+                          <button type="button" className="small primary" disabled={busy === s.id} onClick={() => place(s)}>
+                            {busy === s.id ? 'Création…' : <>Placer <ChevronRight size={14} aria-hidden /></>}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" className="small ghost danger" disabled={!!busy} onClick={() => removeSession(s)}><Trash2 size={13} aria-hidden /> Supprimer</button>
+                          <Link href={`/sessions/${s.id}`} className="btn small primary">Choisir la salle <ChevronRight size={14} aria-hidden /></Link>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </li>
               );
             })}
@@ -1332,9 +1373,7 @@ export function ToAssignSection({ items, catalog, week }: { items: ToAssign[]; c
                   <strong>{s.title}</strong> <span className="hint">{d(s.start_at)} · {s.covered}</span>
                 </span>
                 {s.dismissed && (
-                  <button type="button" className="small ghost" disabled={!!busy} onClick={() => dismiss(s.id, false)}>
-                    Remettre
-                  </button>
+                  <button type="button" className="small ghost" disabled={!!busy} onClick={() => dismiss(s.id, false)}>Remettre</button>
                 )}
               </li>
             ))}

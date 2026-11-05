@@ -18,7 +18,10 @@ export async function placeDigiformaModule(key: string, templateId: string | nul
   const { data: m, error } = await supabase.from('digiforma_modules').select('*').eq('key', key).maybeSingle();
   if (error) return { ok: false, error: 'Exécute d’abord la migration 57 (supabase/migration_phase57.sql) dans Supabase.' };
   if (!m) return { ok: false, error: 'Module introuvable : relance la synchronisation Digiforma.' };
-  const r = await placeModuleRow(supabase, m, templateId, programId || (m as any).program_id || null);
+  const prog = programId || (m as any).program_id || null;
+  const r = await placeModuleRow(supabase, m, templateId, prog);
+  // Parcours choisi : retenu pour tous les modules de cette session Digiforma (semaines suivantes, stages).
+  if (r.ok && prog) await supabase.from('digiforma_modules').update({ program_id: prog }).eq('df_session_id', (m as any).df_session_id);
   if (r.ok) revalidatePath('/');
   return r;
 }

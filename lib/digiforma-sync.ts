@@ -272,10 +272,14 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     let autoProgram = false;
     const span = s.startAt && s.endAt ? (new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime()) / 86400000 : 0;
     const namedParcours = /geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(s.name);
-    if (namedParcours || span > 28) {
+    const { count: hasPrior } = await supabase.from('digiforma_modules').select('key', { count: 'exact', head: true }).eq('df_session_id', s.id).not('program_id', 'is', null);
+    if (namedParcours || span > 28 || (hasPrior ?? 0) > 0) {
       const real = detail.trainees.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(t));
       const byRef = programs.find((p) => p.digiforma_ref === s.id);
-      programId = byRef?.id || programFor(s.name, real);
+      // Parcours déjà retenu pour cette session (choisi à la main en plaçant un module).
+      const { data: prior } = await supabase.from('digiforma_modules').select('program_id').eq('df_session_id', s.id).not('program_id', 'is', null).limit(1);
+      const priorId = ((prior as any[]) || [])[0]?.program_id || null;
+      programId = byRef?.id || priorId || programFor(s.name, real);
       // Création : seulement si le nom dit clairement que c'est un parcours (GEIQ, POEC…).
       if (!programId && hasProgRef && namedParcours) {
         const starts = s.modules.map((m) => m.start_at.slice(0, 10)).sort();
