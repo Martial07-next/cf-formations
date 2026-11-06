@@ -2282,3 +2282,6 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .ta-picker > :first-child{flex:1;min-width:0}
 .ta-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 @media (max-width:640px){.to-assign-grid{grid-template-columns:1fr}.ta-choices{grid-template-columns:1fr}.ta-actions > *{flex:1}}
+.infos-tools{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.session-gear svg{transition:transform .3s}
+.session-gear:hover svg{transform:rotate(60deg)}

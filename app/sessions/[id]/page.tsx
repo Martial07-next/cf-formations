@@ -1,4 +1,5 @@
 import { SessionStatus } from '@/components/session-status';
+import { withoutSessionOnly } from '@/lib/template-edit';
 import { PapersCarousel } from '@/components/papers-carousel';
 import { SessionDeparts } from '@/components/departs/session-departs';
 import { DEPART_SELECT, departureAllowed, type EarlyDeparture } from '@/lib/departs';
@@ -721,7 +722,8 @@ export default async function SessionDetailPage({
           digiformaEnabled={Boolean(process.env.DIGIFORMA_API_TOKEN)}
           session={session as any}
           template={template}
-          catalog={editable ? (((await supabase.from('templates').select('id, title, category, duration_hours').order('title')).data as any[]) || []) : []}
+          personalised={Boolean((tplOpt as any)?.session_only)}
+          catalog={editable ? await withoutSessionOnly(supabase, ((await supabase.from('templates').select('id, title, category, duration_hours').order('title')).data as any[]) || []) : []}
           rooms={[...((rooms as any[]) || [])].sort(compareRooms)}
           trainers={(trainers as any) || []}
           enrolled={enrolled}

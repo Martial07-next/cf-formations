@@ -64,7 +64,7 @@ type FolderOption = { id: string; label: string };
 
 type ModuleRow = { name: string; h: string; m: string };
 
-function TemplateFields({
+export function TemplateFields({
   t,
   folders,
   folder,

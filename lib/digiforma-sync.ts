@@ -4,6 +4,7 @@ import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
 import { placeModuleRow } from '@/lib/digiforma-place';
+import { withoutSessionOnly } from '@/lib/template-edit';
 import { People, isPlaceholder } from '@/lib/digiforma-people';
 
 export type SyncResult =
@@ -129,7 +130,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 
   // Sessions déjà sur le planning (même formation, mêmes dates) : le module y est relié, pas reproposé.
   const { data: tplRows } = await supabase.from('templates').select('id, title');
-  const catalog = ((tplRows as any[]) || []).map((t) => ({ id: t.id as string, title: t.title as string }));
+  const catalog = (await withoutSessionOnly(supabase, (tplRows as any[]) || [])).map((t) => ({ id: t.id as string, title: t.title as string }));
   const { data: holdRows } = await supabase.from('rooms').select('id').eq('is_holding', true);
   const holdIds = new Set(((holdRows as any[]) || []).map((r) => r.id));
   const { data: planRows } = await supabase

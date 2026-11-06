@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { TemplateCatalog } from '@/components/template-catalog';
+import { withoutSessionOnly } from '@/lib/template-edit';
 
 export default async function ModelesPage() {
   const supabase = await createClient();
@@ -42,7 +43,8 @@ export default async function ModelesPage() {
   const { data: depOpts } = await supabase.from('templates').select('id, early_departure');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
-  const rows = (templates || []).map((t: any) => ({
+  // Paramètres propres à une session (migration 62) : pas dans le catalogue.
+  const rows = (await withoutSessionOnly(supabase, (templates as any[]) || [])).map((t: any) => ({
     ...t,
     sessions_count: Array.isArray(t.sessions) ? t.sessions[0]?.count ?? 0 : 0,
     modules: [...(t.template_modules || [])]

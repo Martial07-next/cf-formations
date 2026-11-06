@@ -1,6 +1,7 @@
 'use client';
 
 import { searchTrainees } from '@/lib/trainee-search';
+import { SessionSettingsButton } from '@/components/session-settings';
 import { SessionTemplateSwitch } from '@/components/session-template-switch';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
@@ -85,6 +86,7 @@ export function SessionDetailView({
   isOwnTrainer = false,
   canEditSession = false,
   catalog = [],
+  personalised = false,
   canEditStartTimes = false,
   modules = [],
   traineeModules = {},
@@ -137,6 +139,8 @@ export function SessionDetailView({
   canEditSession?: boolean;
   /** Catalogue (changer la formation de la session). */
   catalog?: { id: string; title: string; category: string | null; duration_hours: number }[];
+  /** Paramètres propres à la session (roue crantée, migration 62). */
+  personalised?: boolean;
   /** Référent cadre : peut seulement changer l'heure de début, jour par jour. */
   canEditStartTimes?: boolean;
   modules?: SessionModule[];
@@ -658,7 +662,14 @@ export function SessionDetailView({
         <div className="panel-head">
           <h2>Informations</h2>
           {canEditSession && catalog.length ? (
-            <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+            <span className="infos-tools">
+              {personalised ? (
+                <span className="hint">Formation personnalisée : paramètres propres à la session</span>
+              ) : (
+                <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+              )}
+              <SessionSettingsButton sessionId={session.id} personalised={personalised} trainers={trainers as any} />
+            </span>
           ) : (
             template && (
               <span className="hint">
@@ -732,7 +743,14 @@ export function SessionDetailView({
         <div className="panel-head">
           <h2>Informations</h2>
           {canEditSession && catalog.length ? (
-            <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+            <span className="infos-tools">
+              {personalised ? (
+                <span className="hint">Formation personnalisée : paramètres propres à la session</span>
+              ) : (
+                <SessionTemplateSwitch sessionId={session.id} catalog={catalog} currentId={(session as any).template_id ?? null} sessionTitle={session.title} />
+              )}
+              <SessionSettingsButton sessionId={session.id} personalised={personalised} trainers={trainers as any} />
+            </span>
           ) : (
             template && (
               <span className="hint">

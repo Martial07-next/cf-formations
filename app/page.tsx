@@ -16,6 +16,7 @@ import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAler
 import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
+import { withoutSessionOnly } from '@/lib/template-edit';
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
 import { MySessions, type MySession } from '@/components/my-sessions';
@@ -48,7 +49,7 @@ export default async function Page({
   });
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
-  const [{ data: rooms }, { data: trainers }, { data: templates }] = await Promise.all([
+  const [{ data: rooms }, { data: trainers }, { data: templates0 }] = await Promise.all([
     supabase.from('rooms').select('id, name, capacity, is_holding, status, location').order('name'),
     supabase.from('trainers').select('*').order('full_name'),
     supabase
@@ -56,6 +57,9 @@ export default async function Page({
       .select('id, title, category, duration_hours, max_trainees, template_trainers(trainer_id), template_modules(name, duration_hours, position)')
       .order('title'),
   ]);
+
+  // Paramètres propres à une session (migration 62) : hors catalogue.
+  const templates = await withoutSessionOnly(supabase, (templates0 as any[]) || []);
 
   const safeDate = (v: string | undefined, suffix = '') => {
     if (!v) return null;
