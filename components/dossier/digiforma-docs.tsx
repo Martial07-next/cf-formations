@@ -210,7 +210,7 @@ export function DigiformaDocs({
             return (
               <div key={l.id} className={`df-link${done[l.id] ? ' done' : ''}`}>
                 <a className="btn primary" href={l.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={15} aria-hidden /> {several ? l.label : 'Documents à remplir sur Digiforma'}
+                  <ExternalLink size={15} aria-hidden /> {several ? l.label : 'Accès formateur Digiforma'}
                 </a>
                 <label className={`check-line${done[l.id] ? ' done' : ''}`}>
                   <input type="checkbox" checked={Boolean(done[l.id])} disabled={!canFill || isPending} onChange={(e) => toggle(l, e.target.checked)} />

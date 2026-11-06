@@ -392,9 +392,9 @@ export default async function SessionDetailPage({
   const sessionDays = weekdaysBetween(session.start_at, session.end_at);
   const todayIndex = sessionDays.indexOf(parisNowKey().slice(0, 10));
 
-  // Blocs de travail (vêtements, autorisations, dossier) : juste après les stagiaires.
-  const workPanels = (
-      <>
+  // Papiers stagiaires (droit à l'image, livrets, vêtements, départs anticipés) : sous la facturation.
+  const papersPanel = (
+    <>
           <PapersCarousel
             slides={[
               ...(!trackError
@@ -473,6 +473,12 @@ export default async function SessionDetailPage({
                 : []),
             ]}
           />
+    </>
+  );
+
+  // Blocs de travail (dossier) : juste après les stagiaires.
+  const workPanels = (
+      <>
 
           {dossierError ? (
             editable && (
@@ -749,6 +755,8 @@ export default async function SessionDetailPage({
             doneByName={billing.doneBy ? staff.find((p) => p.id === billing.doneBy)?.full_name || null : null}
           />
         )}
+
+        {papersPanel}
 
         {editable && <SessionHistory items={(activity as any) || []} staff={staff} sessionId={session.id} isAdmin={profile?.role === 'admin'} />}
       </section>
