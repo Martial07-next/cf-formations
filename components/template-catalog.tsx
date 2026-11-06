@@ -2,6 +2,7 @@
 
 import { submitWith } from '@/lib/form-submit';
 import { departureAllowed } from '@/lib/departs';
+import { irveRequired } from '@/lib/irve-grid';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
 import { FontsKit } from '@/components/fonts-kit';
@@ -53,6 +54,7 @@ type Template = {
   objectifs_recyclage?: string | null;
   duration_hours_recyclage?: number | null;
   early_departure?: boolean | null;
+  grille_irve?: boolean | null;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -342,6 +344,11 @@ export function TemplateFields({
         <label className="check-line">
           <input type="checkbox" name="early_departure" defaultChecked={departureAllowed(t?.early_departure, t?.title || '')} />
           Départ anticipé possible (attestation et décharge de responsabilité par QR code) · décoché d’office pour l’IRVE
+        </label>
+        <input type="hidden" name="irve_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="grille_irve" defaultChecked={irveRequired(null, t?.grille_irve, t?.title || '')} />
+          Grille d’évaluation pratique IRVE remplie par le formateur · cochée d’office pour l’IRVE
         </label>
         <input type="hidden" name="auth_present" value="1" />
         <div className="autor-kinds" role="group" aria-label="Autorisations à faire remplir aux stagiaires">

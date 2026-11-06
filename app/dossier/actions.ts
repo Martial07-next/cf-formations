@@ -479,8 +479,8 @@ export async function setDigiformaLinkDone(sessionId: string, linkId: string, do
 
 // ---- Fiches à plusieurs, en direct (migration 47) ----------------------------
 
-type FormKind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation';
-const FORM_KINDS: FormKind[] = ['tour_de_table', 'appreciation', 'reussite', 'habilitation'];
+type FormKind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation' | 'irve_grille';
+const FORM_KINDS: FormKind[] = ['tour_de_table', 'appreciation', 'reussite', 'habilitation', 'irve_grille'];
 export type FormPatch = { path: string[]; value: unknown };
 
 /**
@@ -552,6 +552,36 @@ export async function saveHabilitation(sessionId: string, data: unknown, complet
   if (error) {
     return { ok: false, error: /kind_check|schema cache|does not exist/i.test(error.message) ? 'Exécute d’abord la migration 51 (supabase/migration_phase51.sql) dans Supabase.' : error.message };
   }
+  refresh(sessionId);
+  return { ok: true };
+}
+
+// ---- Grille d'évaluation pratique IRVE (migration 63) -------------------------
+
+const IRVE_MIGRATION = 'Exécute d’abord la migration 63 (supabase/migration_phase63.sql) dans Supabase.';
+
+/** Grille IRVE remplie par le formateur (enregistrement complet, si la sauvegarde en direct n'est pas disponible). */
+export async function saveIrve(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const json = JSON.stringify(data ?? {});
+  if (json.length > 800_000) return { ok: false, error: 'Grille trop longue.' };
+  const now = new Date().toISOString();
+  const { error } = await r.supabase.from('session_forms').upsert(
+    { session_id: sessionId, kind: 'irve_grille', data: JSON.parse(json), completed, completed_at: completed ? now : null, updated_by: r.profile.id, updated_at: now },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) return { ok: false, error: /kind_check|schema cache|does not exist/i.test(error.message) ? IRVE_MIGRATION : error.message };
+  refresh(sessionId);
+  return { ok: true };
+}
+
+/** Grille IRVE pour cette session : oui, non, ou comme la formation (null). */
+export async function setSessionIrve(sessionId: string, value: boolean | null): Promise<Result> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { error } = await supabase.from('sessions').update({ grille_irve: value }).eq('id', sessionId);
+  if (error) return { ok: false, error: /grille_irve|schema cache/i.test(error.message) ? IRVE_MIGRATION : error.message };
   refresh(sessionId);
   return { ok: true };
 }

@@ -19,6 +19,7 @@ import {
   X,
   Award,
   IdCard,
+  ClipboardCheck,
 } from 'lucide-react';
 import {
   ensureSignToken,
@@ -42,7 +43,9 @@ import { HabilitationEditor, type HabSession } from '@/components/dossier/habili
 import { habDone, type HabData } from '@/lib/habilitation';
 import { titleOk, type TitleFile } from '@/lib/titres';
 import { reussiteCount, reussiteDone, type ReussiteData } from '@/lib/reussite';
-import { setSessionAppreciation } from '@/app/dossier/actions';
+import { setSessionAppreciation, setSessionIrve } from '@/app/dossier/actions';
+import { IrveEditor } from '@/components/dossier/irve-editor';
+import { irveCount, irveDone, type IrveData } from '@/lib/irve-grid';
 import { appreciationDone, type AppreciationData } from '@/lib/appreciation';
 import { DocumentList, DocumentUploader, FILLED_BY_LABEL } from '@/components/dossier/document-manager';
 import { HALF_LABEL, currentSlot, slotKey, type DossierDocument, type DossierEntry, type Half, type Slot } from '@/lib/dossier';
@@ -87,6 +90,7 @@ export function DossierPanel({
   titleRequired = false,
   me = null,
   habilitation = null,
+  irve = null,
 }: {
   sessionId: string;
   title: string;
@@ -121,6 +125,8 @@ export function DossierPanel({
   titleRequired?: boolean;
   /** Certificats d'habilitation électrique (migration 51) : symboles de la formation. */
   habilitation?: { session: Omit<HabSession, 'sessionId' | 'trainees'>; data: HabData | null } | null;
+  /** Grille d'évaluation pratique IRVE (migration 63) ; null si la migration manque. */
+  irve?: { sessionFlag: boolean | null; templateFlag: boolean | null; on: boolean; data: IrveData | null; dates: string; trainer: string } | null;
   /** Personne connectée : présence sur les fiches remplies à plusieurs. */
   me?: { id: string; name: string } | null;
   /** Fiches d'appréciation individuelle (null si la migration 21 manque). */
@@ -236,6 +242,16 @@ export function DossierPanel({
   const habCount = trainees.filter((t) => habData?.trainees?.[t.id]?.avis).length;
   const habIsDone = habOn && habDone(habData, trainees.map((t) => t.id));
 
+  // Grille d'évaluation pratique IRVE (remplie par le formateur).
+  const irveRef = useRef<HTMLDialogElement>(null);
+  const [irveOpen, setIrveOpen] = useState(false);
+  const [irveData, setIrveData] = useState<IrveData | null>(irve?.data || null);
+  useEffect(() => setIrveData(irve?.data || null), [irve]);
+  const irveOn = Boolean(irve?.on);
+  const irveIds = trainees.map((t) => t.id);
+  const irveFilled = irveCount(irveData, irveIds).done;
+  const irveIsDone = irveOn && irveDone(irveData, irveIds);
+
   const faiSession = appreciation
     ? {
         sessionId,
@@ -269,8 +285,9 @@ export function DossierPanel({
     (faiDone ? 1 : 0) +
     (arDone ? 1 : 0) +
     (habIsDone ? 1 : 0) +
+    (irveIsDone ? 1 : 0) +
     (dfOn && dfDone ? 1 : 0);
-  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (arOn ? 1 : 0) + (habOn ? 1 : 0) + (dfOn ? 1 : 0) } };
+  const progress = { documents: { done: docsDone, needed: requiredDocs.length + (tdt ? 1 : 0) + (faiOn ? 1 : 0) + (arOn ? 1 : 0) + (habOn ? 1 : 0) + (irveOn ? 1 : 0) + (dfOn ? 1 : 0) } };
   // Signatures attendues : stagiaires présents par demi-journée (modules) + formateur.
   const emargement = useMemo(() => {
     let needed = 0;
@@ -790,6 +807,59 @@ export function DossierPanel({
           </div>
         </div>
       )}
+      {irve && (irveOn || canManage) && (
+        <div className="doc-list" style={{ marginBottom: 6 }}>
+          <div className={`doc-item${irveOn ? '' : ' doc-off'}`}>
+            <ClipboardCheck size={16} aria-hidden />
+            <span className="doc-item-main">
+              <strong>Grille d’évaluation pratique IRVE</strong>
+              <small className="hint">
+                {irveOn
+                  ? `Une grille par stagiaire, remplie par le formateur pendant la mise en situation · ${irveFilled}/${trainees.length} complète${irveFilled > 1 ? 's' : ''}`
+                  : 'Non demandée pour cette session'}
+              </small>
+            </span>
+            {canManage && (
+              <select
+                className="input"
+                aria-label="Grille IRVE pour cette session"
+                value={irve.sessionFlag === null ? 'auto' : irve.sessionFlag ? 'oui' : 'non'}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  startTransition(async () => {
+                    const res = await setSessionIrve(sessionId, v === 'auto' ? null : v === 'oui');
+                    if (!res.ok) setError(res.error);
+                  });
+                }}
+              >
+                <option value="auto">Selon la formation ({(irve.templateFlag ?? /\birve\b/i.test(title)) ? 'oui' : 'non'})</option>
+                <option value="oui">Oui pour cette session</option>
+                <option value="non">Pas besoin pour cette session</option>
+              </select>
+            )}
+            {irveOn &&
+              (irveIsDone ? (
+                <span className="badge validee"><CheckCircle2 size={12} aria-hidden /> Terminé</span>
+              ) : irveFilled || Object.keys(irveData?.trainees || {}).length ? (
+                <span className="badge en_attente">En cours</span>
+              ) : (
+                <span className="badge brouillon">À remplir</span>
+              ))}
+            {irveOn && (
+              <button
+                type="button"
+                className={`small${canFill && !irveIsDone ? ' primary' : ''}`}
+                onClick={() => {
+                  setIrveOpen(true);
+                  irveRef.current?.showModal();
+                }}
+              >
+                {canFill && !irveIsDone ? <><PenLine size={14} aria-hidden /> Remplir</> : 'Ouvrir'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {arSession && (
         <div className="doc-list" style={{ marginBottom: 6 }}>
           <div className="doc-item">
@@ -960,6 +1030,20 @@ export function DossierPanel({
             me={me}
             onClose={() => habRef.current?.close()}
             onSaved={(data) => setHabData(data)}
+          />
+        )}
+      </dialog>
+
+      {/* Grille d'évaluation pratique IRVE */}
+      <dialog ref={irveRef} className="modal modal-full" aria-label="Grille d’évaluation pratique IRVE" onClose={() => { setIrveOpen(false); router.refresh(); }}>
+        {irveOpen && irve && irveOn && (
+          <IrveEditor
+            session={{ sessionId, title, dates: irve.dates, trainer: irve.trainer, defaultDate: lastDay || '', trainees }}
+            initialData={irveData}
+            canEdit={canFill}
+            me={me}
+            onClose={() => irveRef.current?.close()}
+            onSaved={(data) => setIrveData(data)}
           />
         )}
       </dialog>
