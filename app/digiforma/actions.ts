@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getCurrentProfile } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { runDigiformaSync } from '@/lib/digiforma-sync';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { placeModuleRow } from '@/lib/digiforma-place';
 
@@ -45,4 +47,41 @@ export async function deleteDigiformaSession(sessionId: string): Promise<Result>
   if (error) return { ok: false, error: error.message };
   revalidatePath('/');
   return { ok: true };
+}
+
+/** Écart minimum entre deux synchronisations automatiques (ouverture / actualisation du planning). */
+const AUTO_SYNC_MINUTES = 2;
+
+/**
+ * Synchronisation Digiforma lancée par l'ouverture ou l'actualisation du
+ * planning, en arrière-plan. Une seule à la fois pour toute l'équipe (verrou
+ * en base sur la date de la dernière synchronisation) et au plus une toutes
+ * les 2 minutes : plusieurs onglets ouverts ne la lancent pas en double.
+ * Durée limitée : ce qui n'a pas pu être lu est repris au passage suivant.
+ */
+export async function autoSyncDigiforma(): Promise<{ ran: boolean; changed: number }> {
+  const none = { ran: false, changed: 0 };
+  if (!process.env.DIGIFORMA_API_TOKEN) return none;
+  const profile = await getCurrentProfile();
+  if (!profile) return none;
+  try {
+    const admin = createAdminClient();
+    const threshold = new Date(Date.now() - AUTO_SYNC_MINUTES * 60000).toISOString();
+    const { data, error } = await admin
+      .from('app_settings')
+      .update({ digiforma_last_sync: new Date().toISOString() })
+      .eq('id', true)
+      .or(`digiforma_last_sync.is.null,digiforma_last_sync.lt.${threshold}`)
+      .select('id');
+    if (error || !data?.length) return none;
+    const r = await runDigiformaSync(admin, 25_000);
+    if (r.ok && r.changed) {
+      revalidatePath('/');
+      revalidatePath('/sessions');
+    }
+    return { ran: true, changed: r.ok ? r.changed : 0 };
+  } catch {
+    // Jamais bloquant : l'erreur est visible dans Administration › Intégrations.
+    return none;
+  }
 }

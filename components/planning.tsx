@@ -1209,6 +1209,8 @@ export type ToAssign = {
   geiq?: boolean;
   /** Formation du catalogue reconnue d'après le nom du module. */
   match: CatalogMatch | null;
+  /** Salle et intervenant indiqués sur Digiforma (repris en plaçant le module). */
+  place?: string | null;
 };
 
 /**
@@ -1300,6 +1302,7 @@ export function ToAssignSection({
                   </div>
                   {origin && <small className="ta-origin">Digiforma : {origin}</small>}
                   {unnamed && <small className="ta-note">Module non nommé sur Digiforma : choisis la formation ci-dessous.</small>}
+                  {s.place && <small className="ta-place">Sur Digiforma : {s.place}</small>}
                   <small className="ta-when">
                     {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
                     {waiting > 0 && <b className="ta-waiting"> · {waiting} indécis</b>}

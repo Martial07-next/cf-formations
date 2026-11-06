@@ -5,6 +5,7 @@ import { companyKey } from '@/lib/company';
 import { congesConfigured, syncCongesIfStale } from '@/lib/conges-sync';
 import { applyHolidayShiftsIfStale } from '@/lib/holiday-shifts';
 import { Planning } from '@/components/planning';
+import { DigiformaAutoSync } from '@/components/digiforma-auto-sync';
 import { compareRooms } from '@/lib/buildings';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations, reservationStatus } from '@/lib/reservations';
@@ -285,6 +286,7 @@ export default async function Page({
               program,
               covered,
               dismissed: m.covered_by === 'dismissed',
+              place: [m.df_room ? `salle ${m.df_room}` : null, Array.isArray(m.df_trainers) && m.df_trainers[0]?.name ? m.df_trainers.map((t: any) => t.name).join(', ') : null].filter(Boolean).join(' · ') || null,
               // GEIQ : parcours GEIQ, ou session Digiforma GEIQ (même si le module vient d'une session à part).
               geiq: GEIQ_RE.test(program?.title || '') || GEIQ_RE.test(m.df_session_name || '') || programs.some((p) => GEIQ_RE.test(p.title) && real.length > 0 && p.people.count(real) >= Math.max(1, Math.ceil(real.length / 2))),
             };
@@ -534,6 +536,7 @@ export default async function Page({
 
   return (
     <main>
+      <DigiformaAutoSync showStatus={canManage(profile?.role)} />
       <Planning
         view={currentView}
         canEdit={canManage(profile?.role)}

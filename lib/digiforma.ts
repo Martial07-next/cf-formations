@@ -229,7 +229,12 @@ export type DigiformaModule = {
   offsite?: boolean;
   /** À distance (e-learning, distanciel) : pas de salle. */
   remote?: boolean;
+  /** Salle indiquée sur Digiforma (la plus fréquente des créneaux), sinon celle de la session. */
+  room?: string | null;
+  /** Intervenants indiqués sur Digiforma (créneaux, sinon session), du plus présent au moins présent. */
+  trainers?: DigiformaPerson[];
 };
+export type DigiformaPerson = { name: string; email: string | null };
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
 
 /** Champs d'un type « daté » (sous-session, créneau) : nom, début, fin, heures, stagiaires. */
@@ -308,6 +313,80 @@ async function moduleShape() {
   return { sub, slots, slotModule, subNames };
 }
 
+/*
+ * Salle et intervenants : sur chaque créneau (TrainingSessionSlot.room,
+ * .trainingSessionInstructors) et sur la session. Les champs sont lus dans le
+ * schéma ; si l'API les refuse, la synchronisation continue sans eux.
+ */
+let placeFieldsBroken = false;
+
+async function placeParts(type: string | null): Promise<string> {
+  if (!type || placeFieldsBroken) return '';
+  const f = await schemaFields();
+  const fields = f[type] || [];
+  const leaf = f[`${type}#leaf`] || [];
+  const typeOf = (field: string) => f[`${type}.${field}#type`]?.[0] || null;
+  const parts: string[] = [];
+  const roomF = pick(fields, ['room', 'classroom', 'trainingRoom']);
+  if (roomF) {
+    if (leaf.includes(roomF)) parts.push(`rm: ${roomF}`);
+    else {
+      const rt = typeOf(roomF);
+      const n = rt ? pick(f[`${rt}#leaf`], ['name', 'label', 'title', 'code']) : null;
+      if (n) parts.push(`rm: ${roomF} { n: ${n} }`);
+    }
+  }
+  const insF = pick(fields, ['trainingSessionInstructors', 'instructors', 'trainers']);
+  const it = insF && !leaf.includes(insF) ? typeOf(insF) : null;
+  if (insF && it) {
+    const who = (t: string) => {
+      const l = f[`${t}#leaf`] || [];
+      const fn = pick(l, ['firstname', 'firstName', 'first_name']);
+      const ln = pick(l, ['lastname', 'lastName', 'last_name']);
+      const full = !fn && !ln ? pick(l, ['fullName', 'name']) : null;
+      const em = pick(l, ['email', 'mail']);
+      const sub = [fn ? `fn: ${fn}` : '', ln ? `ln: ${ln}` : '', full ? `full: ${full}` : '', em ? `em: ${em}` : ''].filter(Boolean).join(' ');
+      return sub;
+    };
+    const direct = who(it);
+    if (/fn:|ln:|full:/.test(direct)) parts.push(`ins: ${insF} { ${direct} }`);
+    else {
+      const inner = ['instructor', 'trainer', 'user', 'person'].find((n) => (f[it] || []).includes(n) && !(f[`${it}#leaf`] || []).includes(n));
+      const jt = inner ? f[`${it}.${inner}#type`]?.[0] : null;
+      const nested = jt ? who(jt) : '';
+      if (inner && /fn:|ln:|full:/.test(nested)) parts.push(`ins: ${insF} { one: ${inner} { ${nested} } }`);
+    }
+  }
+  return parts.join(' ');
+}
+
+const roomOf = (x: any): string | null => {
+  const v = typeof x?.rm === 'string' ? x.rm : x?.rm?.n;
+  return v && String(v).trim() ? String(v).trim() : null;
+};
+const peopleOf = (x: any): DigiformaPerson[] =>
+  ((x?.ins as any[]) || [])
+    .map((i) => i?.one || i)
+    .map((p) => ({ name: String(p?.full || [p?.fn, p?.ln].filter(Boolean).join(' ') || '').trim(), email: p?.em ? String(p.em).trim() : null }))
+    .filter((p) => p.name || p.email);
+
+/** Salle la plus fréquente et intervenants (du plus présent au moins présent) d'une liste de créneaux. */
+function placeOf(list: { room?: string | null; trainers?: DigiformaPerson[] }[]): { room: string | null; trainers: DigiformaPerson[] } {
+  const rooms = new Map<string, number>();
+  const ppl = new Map<string, { p: DigiformaPerson; n: number }>();
+  for (const x of list) {
+    if (x.room) rooms.set(x.room, (rooms.get(x.room) || 0) + 1);
+    for (const t of x.trainers || []) {
+      const k = (t.email || t.name).toLowerCase();
+      const e = ppl.get(k);
+      if (e) e.n++;
+      else ppl.set(k, { p: t, n: 1 });
+    }
+  }
+  const room = [...rooms].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  return { room, trainers: [...ppl.values()].sort((a, b) => b.n - a.n).map((e) => e.p) };
+}
+
 /** Structure Digiforma détectée (diagnostic, Administration → Intégrations). */
 export async function digiformaStructure(): Promise<string> {
   const f = await schemaFields();
@@ -335,6 +414,7 @@ export async function digiformaStructure(): Promise<string> {
   const progT = f[`${sessT}.program#type`]?.[0];
   if (progT) lines.push(`Programme (${progT}) : ${(f[progT] || []).join(', ')}`);
   if (ms.slots?.type) lines.push(`${ms.slots.type} : ${(f[ms.slots.type] || []).join(', ')}`);
+  lines.push(`Salle / intervenants lus : créneau « ${(await placeParts(ms.slots?.type || null)) || 'rien'} » · session « ${(await placeParts(sessT)) || 'rien'} »${placeFieldsBroken ? ' (refusés par l’API : ignorés)' : ''}`);
   return lines.join('\n');
 }
 
@@ -349,8 +429,9 @@ async function moduleQueryParts(): Promise<string> {
     smd && (smd.id || smd.name)
       ? `mod: ${smd.field} { ${[smd.id ? sel('id', smd.id) : '', smd.name ? sel('name', smd.name) : '', smd.off ? `off: ${smd.off}` : '', smd.modality ? `modality: ${smd.modality}` : ''].join(' ')} }`
       : '';
+  const slotPlace = ms.slots ? await placeParts(ms.slots.type) : '';
   const slots = ms.slots
-    ? `slots: ${ms.slots.field} { ${[ms.slots.id ? sel('id', ms.slots.id) : '', ms.slots.name, ms.slots.start, ms.slots.end, ms.slots.startTime, ms.slots.endTime, slotMod].filter(Boolean).join(' ')} }`
+    ? `slots: ${ms.slots.field} { ${[ms.slots.id ? sel('id', ms.slots.id) : '', ms.slots.name, ms.slots.start, ms.slots.end, ms.slots.startTime, ms.slots.endTime, slotMod, slotPlace].filter(Boolean).join(' ')} }`
     : '';
   // Sous-session du même type qu'une session : ses créneaux aussi (découpage par semaine).
   const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
@@ -374,6 +455,8 @@ function toSessionModules(s: any): DigiformaSessionModules {
     end: m.endDate || m.startDate || null,
     startTime: m.startTime || null,
     endTime: m.endTime || null,
+    room: roomOf(m),
+    trainers: peopleOf(m),
   });
 
       // Sous-sessions (modules d'un parcours GEIQ…) : une longue sous-session est découpée par semaine
@@ -383,7 +466,7 @@ function toSessionModules(s: any): DigiformaSessionModules {
         if (!m.start) return [];
         const subSlots = (sub.slots || []).map(mapDated).filter((x: any) => x.start);
         const long = m.end && day(m.end) - day(m.start) > 6 * 86400000;
-        if (!long || !subSlots.length) return long ? [] : [m];
+        if (!long || !subSlots.length) return long ? [] : [{ ...m, ...(subSlots.length ? placeOf(subSlots) : {}) }];
         return slotBlocks(subSlots.map((x: any) => ({ ...x, name: x.name || m.name }))).map((b) => ({ ...b, key: `${m.key}~${b.start.slice(0, 10)}` }));
       });
       // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
@@ -405,7 +488,14 @@ function toSessionModules(s: any): DigiformaSessionModules {
           return { ...mapDated(x, i), name: String(x.mod?.name || info?.name || x.name || '').trim() || null, offsite: modOff || Boolean(info?.off), remote: modRemote || Boolean(info?.remote) };
         })
         .filter((m: any) => m.start);
-      const modules = subsList.length ? subsList : slotBlocks(slotsList);
+      // Salle / intervenants : ceux des créneaux du module, sinon ceux de la session.
+      const sessRoom = roomOf(s);
+      const sessPeople = peopleOf(s);
+      const modules = (subsList.length ? subsList : slotBlocks(slotsList)).map((m) => ({
+        ...m,
+        room: m.room || sessRoom,
+        trainers: m.trainers?.length ? m.trainers : sessPeople,
+      }));
       return {
         fromSubsessions: subsList.length > 0,
         id: String(s.id),
@@ -439,7 +529,21 @@ export async function digiformaListSessionsLight(): Promise<{ hasStatus: boolean
 export async function digiformaSessionModules(id: string): Promise<DigiformaSessionModules> {
   const sh = await sessionShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
-  const data = await digiformaFetch(`query($id: ID!) { s: ${sh.oneField}(id: $id) { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${await moduleQueryParts()} } }`, { id });
+  const f = await schemaFields();
+  const ask = async () =>
+    digiformaFetch(
+      `query($id: ID!) { s: ${sh.oneField}(id: $id) { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${await placeParts(f.TrainingSession ? 'TrainingSession' : 'Session')} ${await moduleQueryParts()} } }`,
+      { id }
+    );
+  let data;
+  try {
+    data = await ask();
+  } catch (e: any) {
+    // Salle / intervenants refusés par l'API de ce compte : on continue sans eux.
+    if (placeFieldsBroken || /délai|injoignable|refusée/.test(String(e?.message))) throw e;
+    placeFieldsBroken = true;
+    data = await ask();
+  }
   return toSessionModules(data?.s || { id });
 }
 
@@ -467,6 +571,7 @@ const mondayOfIso = (v: string) => {
 function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
   const sorted = [...slots].sort((a, b) => `${a.start}${a.startTime || ''}`.localeCompare(`${b.start}${b.startTime || ''}`));
   const out: DigiformaModule[] = [];
+  const members = new Map<DigiformaModule, DigiformaModule[]>();
   for (const sl of sorted) {
     const last = out[out.length - 1];
     const sameWeek = last && mondayOfIso(sl.start) === mondayOfIso(last.start);
@@ -477,7 +582,8 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
         last.endTime = sl.endTime;
       }
       last.slotIds!.push(sl.key);
-    } else
+      members.get(last)!.push(sl);
+    } else {
       out.push({
         key: `bloc-${sl.start.slice(0, 10)}${sl.name ? `-${sl.name.slice(0, 40)}` : ''}`,
         name: sl.name,
@@ -489,8 +595,10 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
         offsite: sl.offsite,
         remote: sl.remote,
       });
+      members.set(out[out.length - 1], [sl]);
+    }
   }
-  return out;
+  return out.map((b) => ({ ...b, ...placeOf(members.get(b) || []) }));
 }
 
 /** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
