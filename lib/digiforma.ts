@@ -339,10 +339,9 @@ export async function digiformaStructure(): Promise<string> {
 }
 
 /** Sessions Digiforma avec leurs modules datés (sans stagiaires : requête légère). */
-export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasModules: boolean; sessions: DigiformaSessionModules[] }> {
-  const sh = await sessionShape();
+/** Morceaux de requête : créneaux (avec leur module) et sous-sessions d'une session. */
+async function moduleQueryParts(): Promise<string> {
   const ms = await moduleShape();
-  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
   const part = (alias: string, d: NonNullable<typeof ms.sub>, withName: boolean) =>
     `${alias}: ${d.field} { ${[d.id ? sel('id', d.id) : '', withName ? d.name : '', d.start, d.end, d.startTime, d.endTime].filter(Boolean).join(' ')} }`;
   const smd = ms.slotModule;
@@ -362,7 +361,11 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
   const subNamesPart = sn
     ? `subn: ${sn.field} { ${sn.id ? sel('id', sn.id) : ''} name: ${sn.name} ${sn.off ? `off: ${sn.off}` : ''} ${sn.modality ? `modality: ${sn.modality}` : ''} sl: ${sn.slotList} { id } }`
     : '';
-  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${subs} ${slots} ${subNamesPart} } }`);
+  return `${subs} ${slots} ${subNamesPart}`;
+}
+
+/** Session Digiforma brute (avec créneaux / sous-sessions) → modules datés et nommés. */
+function toSessionModules(s: any): DigiformaSessionModules {
   const mapDated = (m: any, i: number) => ({
     key: String(m.id ?? `${i}-${m.startDate || ''}`),
     // Créneau : nom de son module (sous-session) ; sinon son propre nom.
@@ -372,10 +375,7 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
     startTime: m.startTime || null,
     endTime: m.endTime || null,
   });
-  return {
-    hasStatus: Boolean(sh.status),
-    hasModules: Boolean(ms.sub || ms.slots),
-    sessions: (data?.sessions || []).map((s: any) => {
+
       // Sous-sessions (modules d'un parcours GEIQ…) : une longue sous-session est découpée par semaine
       // d'après ses créneaux ; chaque bloc garde le nom du module.
       const subsList: DigiformaModule[] = (s.subs || []).flatMap((sub: any, i: number) => {
@@ -415,8 +415,41 @@ export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasM
         endAt: s.endDate || null,
         modules,
       };
-    }),
+
+}
+
+/** Liste légère des sessions (nom, dates, statut) : rapide même avec des milliers de sessions. */
+export async function digiformaListSessionsLight(): Promise<{ hasStatus: boolean; sessions: { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null }[] }> {
+  const sh = await sessionShape();
+  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} } }`);
+  return {
+    hasStatus: Boolean(sh.status),
+    sessions: (data?.sessions || []).map((s: any) => ({
+      id: String(s.id),
+      name: s.name || 'Session Digiforma',
+      status: s.status == null ? null : String(typeof s.status === 'object' ? s.status.name ?? s.status.label ?? '' : s.status),
+      startAt: s.startDate || null,
+      endAt: s.endDate || null,
+    })),
   };
+}
+
+/** Modules d'une seule session (créneaux, sous-sessions) : une requête par session. */
+export async function digiformaSessionModules(id: string): Promise<DigiformaSessionModules> {
+  const sh = await sessionShape();
+  if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
+  const data = await digiformaFetch(`query($id: ID!) { s: ${sh.oneField}(id: $id) { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${await moduleQueryParts()} } }`, { id });
+  return toSessionModules(data?.s || { id });
+}
+
+/** Ancienne liste complète (toutes les sessions avec leurs créneaux) : trop lourde, gardée pour compatibilité. */
+export async function digiformaListModules(): Promise<{ hasStatus: boolean; hasModules: boolean; sessions: DigiformaSessionModules[] }> {
+  const sh = await sessionShape();
+  const ms = await moduleShape();
+  if (!sh.listField) throw new Error('Digiforma : liste des sessions introuvable dans l’API de ce compte.');
+  const data = await digiformaFetch(`{ sessions: ${sh.listField} { id ${sh.name} ${sh.start} ${sh.end} ${sh.status} ${await moduleQueryParts()} } }`);
+  return { hasStatus: Boolean(sh.status), hasModules: Boolean(ms.sub || ms.slots), sessions: (data?.sessions || []).map(toSessionModules) };
 }
 
 const day = (v: string) => new Date(v.slice(0, 10) + 'T12:00:00Z').getTime();

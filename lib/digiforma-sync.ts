@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaDateModules, digiformaFetchSessionTrainees, digiformaListModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaFetchSessionTrainees, digiformaListSessionsLight, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -39,7 +39,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 
   let listed;
   try {
-    listed = await digiformaListModules();
+    // Liste légère (nom, dates, statut) : les créneaux sont lus ensuite session par session.
+    listed = await digiformaListSessionsLight();
   } catch (e: any) {
     await logSync(supabase, 'error', e.message);
     return { ok: false, error: `Digiforma : ${e.message}` };
@@ -52,40 +53,15 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     return { ok: false, error: msg };
   }
 
-  // Sessions planifiées, avec des modules à venir (ou la session entière si l'API n'a pas de modules).
-  // « Dates et prix » (sessions planifiées / en cours) : modules nommés, prioritaires sur les créneaux.
-  let dateReads = 0;
-  for (const s of listed.sessions) {
-    if (Date.now() > deadline - 25_000 || dateReads >= 10) break;
-    if (listed.hasStatus && !isPlannedStatus(s.status)) continue;
-    if (s.modules.some((m) => m.name)) continue;
-    if (!/geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(s.name)) continue;
-    dateReads++;
-    try {
-      const fromDates = await digiformaDateModules(s.id);
-      if (fromDates?.length) s.modules = fromDates;
-    } catch {
-      // champ absent ou refusé : on garde les créneaux
-    }
-  }
+  // Sessions planifiées / en cours et pas terminées : leurs créneaux sont lus une par une.
   const seenStatus = new Map<string, number>();
   let notPlanned = 0;
   let past = 0;
   let stages = 0;
+  const asModule = 0;
   type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean };
-  const todo: { id: string; name: string; startAt: string | null; endAt: string | null; modules: Mod[]; stages: Mod[] }[] = [];
-  // Sous-sessions des parcours (GEIQ…) : déjà prises comme modules de leur session parente.
-  const subIds = new Set(
-    listed.sessions
-      .filter((x) => x.fromSubsessions && (!listed.hasStatus || isPlannedStatus(x.status)))
-      .flatMap((x) => x.modules.map((m) => m.key.split('~')[0]))
-  );
-  let asModule = 0;
+  const todo: { id: string; name: string; startAt: string | null; endAt: string | null }[] = [];
   for (const s of listed.sessions) {
-    if (subIds.has(s.id)) {
-      asModule++;
-      continue;
-    }
     if (listed.hasStatus) {
       const st = s.status || '(vide)';
       seenStatus.set(st, (seenStatus.get(st) || 0) + 1);
@@ -94,10 +70,19 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         continue;
       }
     }
-    const raw = s.modules.length
-      ? s.modules.map((m) => ({ key: `${s.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote) }))
-      : s.startAt && s.endAt && new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime() <= 6 * 86400000
-        ? [{ key: `${s.id}:session`, name: null, start_at: toWallClock(s.startAt, null, '08:00'), end_at: toWallClock(s.endAt, null, '16:00'), whole: true, slotIds: [] as string[], offsite: false, remote: false }]
+    if (s.endAt && s.endAt.slice(0, 10) < today) {
+      past++;
+      continue;
+    }
+    if (s.startAt && s.startAt.slice(0, 10) > horizon) continue;
+    todo.push({ id: s.id, name: s.name, startAt: s.startAt, endAt: s.endAt });
+  }
+  /** Créneaux d'une session → modules à venir (salle) et semaines de stage. */
+  const splitModules = (c: { id: string; startAt: string | null; endAt: string | null }, mods: { modules: { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[]; offsite?: boolean; remote?: boolean }[] }) => {
+    const raw: Mod[] = mods.modules.length
+      ? mods.modules.map((m) => ({ key: `${c.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote) }))
+      : c.startAt && c.endAt && new Date(c.endAt.slice(0, 10)).getTime() - new Date(c.startAt.slice(0, 10)).getTime() <= 6 * 86400000
+        ? [{ key: `${c.id}:session`, name: null, start_at: toWallClock(c.startAt, null, '08:00'), end_at: toWallClock(c.endAt, null, '16:00'), whole: true, slotIds: [], offsite: false, remote: false }]
         : [];
     const inRange = (m: { start_at: string; end_at: string }) => m.end_at.slice(0, 10) >= today && m.start_at.slice(0, 10) <= horizon && m.end_at >= m.start_at;
     // Stage / période en entreprise : un évènement du parcours (période de stage), pas un module en salle.
@@ -106,13 +91,13 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const stageBlocks = raw.filter((m) => isStage(m) && inRange(m));
     // Vacances, fermeture, absence, distanciel… : rien à placer en salle.
     const notStage = raw.filter((m) => !isStage(m) && !isOffPeriod(m.name || '') && !m.remote);
-    stages += stageBlocks.length;
     const upcoming = notStage.filter(inRange);
-    past += raw.length - upcoming.length;
-    if (upcoming.length || stageBlocks.length) todo.push({ id: s.id, name: s.name, startAt: s.startAt, endAt: s.endAt, modules: upcoming, stages: stageBlocks });
-  }
+    stages += stageBlocks.length;
+    past += raw.length - upcoming.length - stageBlocks.length;
+    return { modules: upcoming, stages: stageBlocks };
+  };
   // Les plus proches d'abord (si le temps manque, la suite est reprise au prochain passage).
-  const firstOf = (x: { modules: Mod[]; stages: Mod[] }) => (x.modules[0] || x.stages[0]).start_at;
+  const firstOf = (x: { startAt: string | null }) => x.startAt || '';
   // Relues à tour de rôle : jamais relues d'abord, puis les plus anciennes (sinon les mêmes passent toujours devant).
   const lastSeen = new Map<string, string>();
   for (let from = 0; from < 20000; from += 1000) {
@@ -124,7 +109,12 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   // Détails Digiforma lus quatre par quatre (en parallèle), dans l'ordre ci-dessus.
   const details = new Map<string, Promise<any>>();
   const prefetch = (i: number) => {
-    for (let k = i; k < Math.min(todo.length, i + 4); k++) if (!details.has(todo[k].id)) details.set(todo[k].id, digiformaSessionDetail(todo[k].id).catch(() => null));
+    for (let k = i; k < Math.min(todo.length, i + 4); k++)
+      if (!details.has(todo[k].id))
+        details.set(
+          todo[k].id,
+          Promise.all([digiformaSessionModules(todo[k].id), digiformaSessionDetail(todo[k].id)]).catch(() => null)
+        );
   };
   const processed = new Set<string>();
 
@@ -253,15 +243,31 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let autoPlaced = 0;
   let stagePeriods = 0;
   let geiqCleaned = 0;
-  for (const [idx, s] of todo.entries()) {
+  for (const [idx, c] of todo.entries()) {
     if (Date.now() > deadline) {
       remaining++;
       continue;
     }
     prefetch(idx);
-    const detail: { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> } | null = await details.get(s.id);
-    processed.add(s.id); // lue (même en échec) : ses modules ne sont pas purgés
-    if (!detail) continue;
+    const got = await details.get(c.id);
+    processed.add(c.id); // lue (même en échec) : ses modules ne sont pas purgés
+    if (!got) continue;
+    const [sessionMods, detail] = got as [Awaited<ReturnType<typeof digiformaSessionModules>>, { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> }];
+    // « Dates et prix » : si les créneaux d'un parcours ne nomment pas leurs modules.
+    if (!sessionMods.modules.some((m) => m.name) && /geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(c.name)) {
+      try {
+        const fromDates = await digiformaDateModules(c.id);
+        if (fromDates?.length) sessionMods.modules = fromDates;
+      } catch {
+        // champ absent ou refusé : on garde les créneaux
+      }
+    }
+    const s = { ...c, ...splitModules(c, sessionMods) };
+    if (!s.modules.length && !s.stages.length) {
+      // Plus rien à venir : ses anciens modules (pas placés) sont retirés.
+      await supabase.from('digiforma_modules').delete().eq('df_session_id', c.id).is('placed_session_id', null).or('covered_by.is.null,covered_by.neq.dismissed');
+      continue;
+    }
     const rows = s.modules.map((m) => {
       const own = detail.byModule[m.key.slice(s.id.length + 1).split('~')[0]];
       // Présence par créneau (Digiforma) : seulement les stagiaires prévus ces jours-là.
@@ -456,7 +462,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   }
 
   const log =
-    `${modulesSaved} module(s) à venir relu(s) sur ${todo.length} session(s) planifiée(s) ou en cours` +
+    `${modulesSaved} module(s) à venir relu(s) sur ${processed.size}/${todo.length} session(s) en cours lue(s)` +
     (asModule ? ` (${asModule} sous-session(s) de parcours GEIQ / POEC prises comme modules)` : '') +
     `. ${linked} module(s) déjà sur le planning, reliés, et ${covered} couvert(s) par un parcours déjà posé cette semaine (non reproposés). ` +
     (stages ? `${stages} semaine(s) de stage en entreprise, ${stagePeriods} période(s) de stage ajoutée(s) aux parcours. ` : '') +
@@ -471,7 +477,6 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (listed.hasStatus
       ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
       : ' Statut Digiforma introuvable : toutes les sessions avec des dates sont prises.') +
-    (listed.hasModules ? '' : ' Aucun champ « modules » trouvé dans l’API : sessions entières utilisées.') +
     (seenRegStatus.size ? ` Statuts d'inscription (clients) : ${[...seenRegStatus].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '');
   await logSync(supabase, 'ok', log);
   return { ok: true, created: modulesSaved, traineesLinked: addedLater, skipped: notPlanned, past, log, remaining };
