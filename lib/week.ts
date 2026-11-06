@@ -20,24 +20,24 @@ export function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-const DAY_LABELS = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.'];
+const DAY_LABELS = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
 const MONTHS = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ];
 
 export function weekDayLabels(monday: Date): string[] {
-  return DAY_LABELS.map((label, i) => {
+  return DAY_LABELS.slice(0, 5).map((label, i) => {
     const d = addDays(monday, i);
     return `${label} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 4)}.`;
   });
 }
 
-const FULL_DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+const FULL_DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-/** Lignes de la grille semaine : un objet par jour ouvré (lundi→vendredi). */
-export function weekDayRows(monday: Date): { iso: string; full: string; short: string; dateLabel: string }[] {
-  return FULL_DAY_NAMES.map((full, i) => {
+/** Lignes de la grille semaine : un objet par jour ouvré (lundi→vendredi, samedi s'il est demandé). */
+export function weekDayRows(monday: Date, withSaturday = false): { iso: string; full: string; short: string; dateLabel: string }[] {
+  return FULL_DAY_NAMES.slice(0, withSaturday ? 6 : 5).map((full, i) => {
     const d = addDays(monday, i);
     return {
       iso: isoDate(d),
@@ -80,7 +80,7 @@ export function monthLabel(date: Date): string {
  * y compris les jours des semaines à cheval sur le mois précédent/suivant.
  * Renvoie un tableau de semaines, chaque semaine étant un tableau de 5 dates.
  */
-export function monthWeekGrid(date: Date): Date[][] {
+export function monthWeekGrid(date: Date, withSaturday = false): Date[][] {
   const start = mondayOf(firstOfMonth(date));
   const lastDay = lastOfMonth(date);
   const end = addDays(mondayOf(lastDay), 4); // vendredi de la dernière semaine
@@ -88,7 +88,7 @@ export function monthWeekGrid(date: Date): Date[][] {
   let cursor = start;
   while (cursor.getTime() <= end.getTime()) {
     const week: Date[] = [];
-    for (let i = 0; i < 5; i++) week.push(addDays(cursor, i));
+    for (let i = 0; i < (withSaturday ? 6 : 5); i++) week.push(addDays(cursor, i));
     weeks.push(week);
     cursor = addDays(cursor, 7);
   }
@@ -120,6 +120,8 @@ function timeOf(iso: string): string {
 export function dayIsInRange(dayIso: string, startAt: string, endAt: string): boolean {
   const startDay = startAt.slice(0, 10);
   const endDay = endAt.slice(0, 10);
+  // Samedi : seulement s'il est prévu (premier ou dernier jour de la session).
+  if (isSaturday(dayIso) && !saturdayOf(dayIso, startAt, endAt)) return false;
   // Jour férié non travaillé : pas de formation ce jour-là (session décalée).
   return dayIso >= startDay && dayIso <= endDay && !isClosedHoliday(dayIso);
 }
@@ -182,8 +184,26 @@ export function daysBetween(startAt: string, endAt: string): string[] {
 export function weekdaysBetween(startAt: string, endAt: string): string[] {
   return daysBetween(startAt, endAt).filter((iso) => {
     const weekday = new Date(iso + 'T00:00:00Z').getUTCDay();
-    return weekday !== 0 && weekday !== 6 && !isClosedHoliday(iso);
+    if (weekday === 0 || isClosedHoliday(iso)) return false;
+    return weekday !== 6 || saturdayOf(iso, startAt, endAt);
   });
+}
+
+export const isSaturday = (iso: string) => new Date(iso.slice(0, 10) + 'T00:00:00Z').getUTCDay() === 6;
+
+/**
+ * Formation un samedi : seulement si la session commence ou finit ce samedi
+ * (programmée exprès ce jour-là). Un samedi au milieu d'une session de
+ * plusieurs semaines reste un jour sans formation.
+ */
+export function saturdayOf(dayIso: string, startAt: string, endAt: string): boolean {
+  const d = dayIso.slice(0, 10);
+  return isSaturday(d) && (d === startAt.slice(0, 10) || d === endAt.slice(0, 10));
+}
+
+/** Une des sessions a formation ce samedi-là (parmi les samedis donnés). */
+export function hasSaturdayTraining(saturdays: string[], sessions: { start_at: string; end_at: string }[]): boolean {
+  return sessions.some((s) => saturdays.some((d) => saturdayOf(d, s.start_at, s.end_at) && !isClosedHoliday(d)));
 }
 
 /**

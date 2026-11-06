@@ -234,9 +234,12 @@ export function gridAuto(def: GridDef, title: string): boolean {
   return def.kind === 'maint_grille' ? isMaintTitle(title) : /\birve\b/i.test(title || '') && !isMaintTitle(title);
 }
 
-/** Grille nécessaire : réglage de la session, sinon de la formation, sinon automatique d'après l'intitulé. */
-export function gridRequired(def: GridDef, sessionFlag: boolean | null | undefined, templateFlag: boolean | null | undefined, title: string): boolean {
+/**
+ * Grille demandée seulement si sa case est cochée : sur la formation (catalogue,
+ * ou paramètres propres à la session). Un ancien réglage « oui / non » de la
+ * session reste prioritaire. Jamais d'office d'après l'intitulé.
+ */
+export function gridRequired(_def: GridDef, sessionFlag: boolean | null | undefined, templateFlag: boolean | null | undefined, _title = ''): boolean {
   if (typeof sessionFlag === 'boolean') return sessionFlag;
-  if (typeof templateFlag === 'boolean') return templateFlag;
-  return gridAuto(def, title);
+  return templateFlag === true;
 }

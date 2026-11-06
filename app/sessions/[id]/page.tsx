@@ -25,7 +25,7 @@ import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHou
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
-import { GRIDS, gridAuto, gridRequired } from '@/lib/irve-grid';
+import { GRIDS, gridRequired } from '@/lib/irve-grid';
 import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -220,11 +220,8 @@ export default async function SessionDetailPage({
         supabase.from('sessions').select(col).eq('id', id).maybeSingle(),
         supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', def.kind).maybeSingle(),
       ]);
-      // Migration absente : signalée au bureau si la formation en a besoin.
-      if (flagErr)
-        return gridAuto(def, gridTitle)
-          ? ([def.kind, { sessionFlag: null, templateFlag: null, on: false, data: null, missing: def.kind === 'maint_grille' ? 65 : 63 }] as const)
-          : null;
+      // Migration absente : pas de grille.
+      if (flagErr) return null;
       const tplFlag: boolean | null = typeof (tplOpt as any)?.[col] === 'boolean' ? (tplOpt as any)[col] : null;
       const sessFlag2: boolean | null = (flagRow as any)?.[col] ?? null;
       return [def.kind, {
@@ -235,7 +232,8 @@ export default async function SessionDetailPage({
       }] as const;
     })
   );
-  const evalGrids = Object.fromEntries(evalGridEntries.filter((x): x is NonNullable<typeof x> => x !== null));
+  // Grille affichée dans le dossier seulement si sa case est cochée.
+  const evalGrids = Object.fromEntries(evalGridEntries.filter((x): x is NonNullable<typeof x> => x !== null && x[1].on));
   // Jours fériés de la période (migration 48) : décalage automatique ou à replanifier.
   const { data: shiftRows } = await supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday');
   const holidayShifts = ((shiftRows as any[]) || []).filter((h) => isClosedHoliday(String(h.holiday).slice(0, 10)));

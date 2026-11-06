@@ -79,13 +79,13 @@ export default async function Page({
     monthAnchor = safeDate(month, '-01T00:00:00Z') || firstOfMonth(new Date());
     const weeks = monthWeekGrid(monthAnchor);
     rangeStart = weeks[0][0];
-    rangeEnd = addDays(weeks[weeks.length - 1][4], 1);
+    rangeEnd = addDays(weeks[weeks.length - 1][0], 6); // jusqu'au samedi (formation un samedi)
   } else if (currentView === 'day') {
     rangeStart = dayAnchor;
     rangeEnd = addDays(dayAnchor, 1);
   } else {
     rangeStart = monday;
-    rangeEnd = addDays(monday, 5);
+    rangeEnd = addDays(monday, 6); // jusqu'au samedi (formation un samedi)
   }
 
   // Vitesse : les requêtes de la période partent toutes en même temps.

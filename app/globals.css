@@ -2360,3 +2360,7 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .df-autosync{position:fixed;left:16px;bottom:16px;z-index:40;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#17241b;color:#dce9df;font-size:12.5px;font-weight:700;box-shadow:0 6px 18px rgba(23,36,27,.18);pointer-events:none}
 @media (max-width:760px){.df-autosync{left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom))}}
 .ta-place{display:block;color:var(--ink);font-weight:700;font-size:12px}
+
+/* Samedi affiché quand une formation y est programmée. */
+.month-head.with-sat,.month-grid.with-sat{grid-template-columns:repeat(6,1fr)}
+@media (max-width:960px){.month-grid.with-sat{grid-template-columns:1fr}}

@@ -26,6 +26,7 @@ import {
   mondayOf,
   isoDate,
   weekDayRows,
+  hasSaturdayTraining,
   weekRangeLabel,
   monthWeekGrid,
   monthLabel,
@@ -532,10 +533,14 @@ export function Planning({
   }, [wantsCreate]);
 
 
+  // Samedi : affiché seulement si une formation y est programmée (semaine, ou mois affiché).
+  const weekSaturday = view === 'week' && hasSaturdayTraining([isoDate(addDays(monday, 5))], sessions);
+  const monthSaturday =
+    view === 'month' && hasSaturdayTraining(monthWeekGrid(monthAnchor).map((w) => isoDate(addDays(w[0], 5))), sessions);
   const dayRows =
-    view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday);
-  const weeks = view === 'month' ? monthWeekGrid(monthAnchor) : [];
-  const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+    view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday, weekSaturday);
+  const weeks = view === 'month' ? monthWeekGrid(monthAnchor, monthSaturday) : [];
+  const monthDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', ...(monthSaturday ? ['Samedi'] : [])];
   // Libellé court en vue Jour (« Vendredi 30 oct. ») : la barre tient sur une ligne.
   const periodLabel =
     view === 'day'
@@ -874,13 +879,13 @@ export function Planning({
 
       {view === 'month' && (
         <>
-          <div className="month-head">
+          <div className={`month-head${monthSaturday ? ' with-sat' : ''}`}>
             {monthDayLabels.map((d) => (
               <div className="month-day-label" key={d}>{d}</div>
             ))}
           </div>
           {weeks.map((week, wi) => (
-            <div className="month-grid" key={wi}>
+            <div className={`month-grid${monthSaturday ? ' with-sat' : ''}`} key={wi}>
               {week.map((day) => {
                 const dIso = isoDate(day);
                 const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at));

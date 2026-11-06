@@ -1,4 +1,4 @@
-import { isWorkingDay } from '@/lib/holidays';
+import { isClosedHoliday, isWorkingDay } from '@/lib/holidays';
 /**
  * Calcul « intelligent » des horaires de formation.
  *
@@ -61,7 +61,9 @@ export function planDays(startDate: string, startTime: string, totalMinutes: num
   if (!startDate || !startTime || totalMinutes <= 0) return [];
   const plan: DayPlan[] = [];
   let day = startDate;
-  while (isWeekend(day)) day = nextDay(day);
+  // Un samedi choisi comme premier jour est gardé (formation programmée ce samedi-là).
+  const saturdayStart = new Date(day + 'T00:00:00Z').getUTCDay() === 6 && !isClosedHoliday(day);
+  if (!saturdayStart) while (isWeekend(day)) day = nextDay(day);
   let remaining = totalMinutes;
   for (let guard = 0; remaining > 0 && guard < 120; guard++) {
     const minutes = Math.min(remaining, dailyMinutes);
