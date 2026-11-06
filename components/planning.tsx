@@ -26,7 +26,7 @@ import {
   mondayOf,
   isoDate,
   weekDayRows,
-  hasSaturdayTraining,
+  hasSaturdayEvent,
   weekRangeLabel,
   monthWeekGrid,
   monthLabel,
@@ -533,10 +533,10 @@ export function Planning({
   }, [wantsCreate]);
 
 
-  // Samedi : affiché seulement si une formation y est programmée (semaine, ou mois affiché).
-  const weekSaturday = view === 'week' && hasSaturdayTraining([isoDate(addDays(monday, 5))], sessions);
+  // Samedi : affiché seulement si un évènement (formation du samedi) y est programmé.
+  const weekSaturday = view === 'week' && hasSaturdayEvent([isoDate(addDays(monday, 5))], events);
   const monthSaturday =
-    view === 'month' && hasSaturdayTraining(monthWeekGrid(monthAnchor).map((w) => isoDate(addDays(w[0], 5))), sessions);
+    view === 'month' && hasSaturdayEvent(monthWeekGrid(monthAnchor).map((w) => isoDate(addDays(w[0], 5))), events);
   const dayRows =
     view === 'day' ? [{ iso: dayIso, full: fullDateLabel(dayAnchor), short: '', dateLabel: '' }] : weekDayRows(monday, weekSaturday);
   const weeks = view === 'month' ? monthWeekGrid(monthAnchor, monthSaturday) : [];

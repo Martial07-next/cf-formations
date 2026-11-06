@@ -64,8 +64,7 @@ function countWeekdays(startIso: string, endIso: string): number {
   let n = 0;
   for (let d = start; d <= end; d = new Date(d.getTime() + 86400000)) {
     const w = d.getUTCDay();
-    // Samedi : compté seulement s'il est le premier ou le dernier jour (formation programmée ce samedi).
-    if (w !== 0 && (w !== 6 || d.getTime() === start.getTime() || d.getTime() === end.getTime())) n++;
+    if (w !== 0 && w !== 6) n++;
   }
   return n;
 }

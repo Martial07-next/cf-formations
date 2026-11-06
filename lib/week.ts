@@ -120,8 +120,9 @@ function timeOf(iso: string): string {
 export function dayIsInRange(dayIso: string, startAt: string, endAt: string): boolean {
   const startDay = startAt.slice(0, 10);
   const endDay = endAt.slice(0, 10);
-  // Samedi : seulement s'il est prévu (premier ou dernier jour de la session).
-  if (isSaturday(dayIso) && !saturdayOf(dayIso, startAt, endAt)) return false;
+  // Week-end : jamais de session (une formation du samedi est un évènement).
+  const wd = new Date(dayIso.slice(0, 10) + 'T00:00:00Z').getUTCDay();
+  if (wd === 0 || wd === 6) return false;
   // Jour férié non travaillé : pas de formation ce jour-là (session décalée).
   return dayIso >= startDay && dayIso <= endDay && !isClosedHoliday(dayIso);
 }
@@ -184,26 +185,17 @@ export function daysBetween(startAt: string, endAt: string): string[] {
 export function weekdaysBetween(startAt: string, endAt: string): string[] {
   return daysBetween(startAt, endAt).filter((iso) => {
     const weekday = new Date(iso + 'T00:00:00Z').getUTCDay();
-    if (weekday === 0 || isClosedHoliday(iso)) return false;
-    return weekday !== 6 || saturdayOf(iso, startAt, endAt);
+    return weekday !== 0 && weekday !== 6 && !isClosedHoliday(iso);
   });
 }
 
-export const isSaturday = (iso: string) => new Date(iso.slice(0, 10) + 'T00:00:00Z').getUTCDay() === 6;
-
 /**
- * Formation un samedi : seulement si la session commence ou finit ce samedi
- * (programmée exprès ce jour-là). Un samedi au milieu d'une session de
- * plusieurs semaines reste un jour sans formation.
+ * Formation un samedi = un évènement du planning programmé ce samedi-là
+ * (il commence ou finit le samedi). Les sessions sautent toujours le week-end,
+ * et un évènement de plusieurs semaines (stage…) ne fait pas apparaître le samedi.
  */
-export function saturdayOf(dayIso: string, startAt: string, endAt: string): boolean {
-  const d = dayIso.slice(0, 10);
-  return isSaturday(d) && (d === startAt.slice(0, 10) || d === endAt.slice(0, 10));
-}
-
-/** Une des sessions a formation ce samedi-là (parmi les samedis donnés). */
-export function hasSaturdayTraining(saturdays: string[], sessions: { start_at: string; end_at: string }[]): boolean {
-  return sessions.some((s) => saturdays.some((d) => saturdayOf(d, s.start_at, s.end_at) && !isClosedHoliday(d)));
+export function hasSaturdayEvent(saturdays: string[], events: { start_date: string; end_date: string }[]): boolean {
+  return events.some((e) => saturdays.some((d) => (e.start_date.slice(0, 10) === d || e.end_date.slice(0, 10) === d) && !isClosedHoliday(d)));
 }
 
 /**
