@@ -25,7 +25,7 @@ import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHou
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
-import { irveRequired } from '@/lib/irve-grid';
+import { GRIDS, gridRequired } from '@/lib/irve-grid';
 import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -210,13 +210,28 @@ export default async function SessionDetailPage({
   const { data: habRow } = habSymbols.length
     ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'habilitation').maybeSingle()
     : { data: null };
-  // Grille d'évaluation pratique IRVE (migration 63) : réglage de la session, sinon de la formation, sinon « IRVE » dans l'intitulé.
-  const [{ data: irveFlag, error: irveFlagError }, { data: irveRow, error: irveError }] = await Promise.all([
-    supabase.from('sessions').select('grille_irve').eq('id', id).maybeSingle(),
-    supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'irve_grille').maybeSingle(),
-  ]);
-  const irveTemplateFlag: boolean | null = typeof (tplOpt as any)?.grille_irve === 'boolean' ? (tplOpt as any).grille_irve : null;
-  const irveSessionFlag: boolean | null = (irveFlag as any)?.grille_irve ?? null;
+  // Grilles d'évaluation pratique (IRVE : migration 63, Maintenance IRVE : 64) :
+  // réglage de la session, sinon de la formation, sinon d'après l'intitulé.
+  const gridTitle = (tplOpt as any)?.title || session.title;
+  const evalGridEntries = await Promise.all(
+    GRIDS.map(async (def) => {
+      const col = def.kind === 'maint_grille' ? 'grille_maintenance' : 'grille_irve';
+      const [{ data: flagRow, error: flagErr }, { data: formRow2, error: formErr }] = await Promise.all([
+        supabase.from('sessions').select(col).eq('id', id).maybeSingle(),
+        supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', def.kind).maybeSingle(),
+      ]);
+      if (flagErr) return null;
+      const tplFlag: boolean | null = typeof (tplOpt as any)?.[col] === 'boolean' ? (tplOpt as any)[col] : null;
+      const sessFlag2: boolean | null = (flagRow as any)?.[col] ?? null;
+      return [def.kind, {
+        sessionFlag: sessFlag2,
+        templateFlag: tplFlag,
+        on: gridRequired(def, sessFlag2, tplFlag, gridTitle),
+        data: formErr ? null : ((formRow2 as any)?.data as any) || null,
+      }] as const;
+    })
+  );
+  const evalGrids = Object.fromEntries(evalGridEntries.filter((x): x is NonNullable<typeof x> => x !== null));
   // Jours fériés de la période (migration 48) : décalage automatique ou à replanifier.
   const { data: shiftRows } = await supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday');
   const holidayShifts = ((shiftRows as any[]) || []).filter((h) => isClosedHoliday(String(h.holiday).slice(0, 10)));
@@ -515,20 +530,17 @@ export default async function SessionDetailPage({
               canManage={editable}
               tourDeTable={tourDeTable}
               titleFiles={titleError ? null : ((titleRows as any) || [])}
-              irve={
-                irveFlagError
-                  ? null
-                  : {
-                      sessionFlag: irveSessionFlag,
-                      templateFlag: irveTemplateFlag,
-                      on: irveRequired(irveSessionFlag, irveTemplateFlag, (tplOpt as any)?.title || session.title),
-                      data: irveError ? null : ((irveRow as any)?.data as any) || null,
+              evalGrids={
+                Object.keys(evalGrids).length
+                  ? {
+                      grids: evalGrids,
                       dates:
                         session.start_at.slice(0, 10) === session.end_at.slice(0, 10)
                           ? `Le ${session.start_at.slice(0, 10).split('-').reverse().join('/')}`
                           : `Du ${session.start_at.slice(0, 10).split('-').reverse().join('/')} au ${session.end_at.slice(0, 10).split('-').reverse().join('/')}`,
                       trainer: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || '',
                     }
+                  : null
               }
               habilitation={
                 habSymbols.length

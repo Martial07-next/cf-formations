@@ -2,7 +2,7 @@
 
 import { submitWith } from '@/lib/form-submit';
 import { departureAllowed } from '@/lib/departs';
-import { irveRequired } from '@/lib/irve-grid';
+import { IRVE_GRID, MAINT_GRID, gridRequired } from '@/lib/irve-grid';
 import { AUTH_KINDS } from '@/lib/autorisations';
 import { REUSSITE_MODELS, reussiteModels } from '@/lib/reussite';
 import { FontsKit } from '@/components/fonts-kit';
@@ -55,6 +55,7 @@ type Template = {
   duration_hours_recyclage?: number | null;
   early_departure?: boolean | null;
   grille_irve?: boolean | null;
+  grille_maintenance?: boolean | null;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -347,8 +348,12 @@ export function TemplateFields({
         </label>
         <input type="hidden" name="irve_present" value="1" />
         <label className="check-line">
-          <input type="checkbox" name="grille_irve" defaultChecked={irveRequired(null, t?.grille_irve, t?.title || '')} />
-          Grille d’évaluation pratique IRVE remplie par le formateur · cochée d’office pour l’IRVE
+          <input type="checkbox" name="grille_irve" defaultChecked={gridRequired(IRVE_GRID, null, t?.grille_irve, t?.title || '')} />
+          Grille d’évaluation pratique IRVE (P1 / P2 / P3) remplie par le formateur · cochée d’office pour l’IRVE
+        </label>
+        <label className="check-line">
+          <input type="checkbox" name="grille_maintenance" defaultChecked={gridRequired(MAINT_GRID, null, t?.grille_maintenance, t?.title || '')} />
+          Grille d’évaluation pratique Maintenance IRVE (MA1 / MA2 / MA3) remplie par le formateur · cochée d’office pour la maintenance IRVE
         </label>
         <input type="hidden" name="auth_present" value="1" />
         <div className="autor-kinds" role="group" aria-label="Autorisations à faire remplir aux stagiaires">

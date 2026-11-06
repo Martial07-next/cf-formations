@@ -15,7 +15,7 @@ import { getSessionForm, patchSessionForm, type FormPatch } from '@/app/dossier/
  */
 
 export type Peer = { key: string; name: string; color: string; field: string | null };
-type Kind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation' | 'irve_grille';
+type Kind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation' | 'irve_grille' | 'maint_grille';
 
 const COLORS = ['#2f6fb0', '#c4472f', '#7a3fb0', '#d97706', '#0f7a4a', '#b0306f', '#3f6f7a'];
 const isObj = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null && !Array.isArray(v);

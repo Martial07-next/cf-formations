@@ -6,17 +6,14 @@ import { saveIrve } from '@/app/dossier/actions';
 import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
 import {
   APPRECIATIONS,
-  CONSERVES,
-  CRITICAL,
-  FAMILIES,
   LEVELS,
-  SITUATIONS,
   familyNote,
   fmtNote,
   irveDone,
   irveEntryDone,
   totalNote,
   type AppreciationKey,
+  type GridDef,
   type IrveData,
   type IrveEntry,
   type Level,
@@ -33,8 +30,8 @@ export type IrveSession = {
 };
 
 /** Appréciation suggérée d'après le total et les erreurs critiques. */
-function suggest(e: IrveEntry): AppreciationKey | null {
-  const t = totalNote(e);
+function suggest(def: GridDef, e: IrveEntry): AppreciationKey | null {
+  const t = totalNote(def, e);
   if (t === null) return null;
   const critical = Object.values(e.critical || {}).some(Boolean);
   if (t >= 16 && !critical) return 'maitrise';
@@ -49,6 +46,7 @@ function suggest(e: IrveEntry): AppreciationKey | null {
  * de CF Réseaux.
  */
 export function IrveEditor({
+  def,
   session,
   initialData,
   canEdit,
@@ -56,6 +54,7 @@ export function IrveEditor({
   onClose,
   onSaved,
 }: {
+  def: GridDef;
   session: IrveSession;
   initialData: IrveData | null;
   canEdit: boolean;
@@ -71,21 +70,21 @@ export function IrveEditor({
   const ids = session.trainees.map((t) => t.id);
   const live = useLiveForm<IrveData>({
     sessionId: session.sessionId,
-    kind: 'irve_grille',
+    kind: def.kind,
     data,
     setData,
     canEdit,
     me,
-    completedOf: (d) => irveDone(d, ids),
-    legacySave: (d, comp) => saveIrve(session.sessionId, d, Boolean(comp)),
-    onSynced: (d) => onSaved?.(d, irveDone(d, ids)),
+    completedOf: (d) => irveDone(def, d, ids),
+    legacySave: (d, comp) => saveIrve(session.sessionId, d, Boolean(comp), def.kind),
+    onSynced: (d) => onSaved?.(d, irveDone(def, d, ids)),
   });
   const error = localError || live.error;
   const idx = session.trainees.findIndex((t) => t.id === current);
   const trainee = session.trainees[idx] || null;
   const e: IrveEntry = (trainee && data.trainees?.[trainee.id]) || {};
-  const total = useMemo(() => totalNote(e), [e]);
-  const suggestion = suggest(e);
+  const total = useMemo(() => totalNote(def, e), [def, e]);
+  const suggestion = suggest(def, e);
 
   const set = (patch: Partial<IrveEntry>) => {
     if (!trainee || !canEdit) return;
@@ -103,8 +102,8 @@ export function IrveEditor({
       if (!list.length) throw new Error('Aucune grille commencée.');
       const { buildIrvePdf } = await import('@/lib/pdf-irve');
       const { downloadPdf } = await import('@/lib/pdf-dossier');
-      const bytes = await buildIrvePdf({ sessionTitle: session.title, dates: session.dates, trainer: session.trainer, trainees: list, entries: data.trainees || {} });
-      downloadPdf(bytes, only ? `Grille IRVE - ${list[0].name}.pdf` : `Grilles IRVE - ${session.title}.pdf`);
+      const bytes = await buildIrvePdf(def, { sessionTitle: session.title, dates: session.dates, trainer: session.trainer, defaultDate: session.defaultDate, trainees: list, entries: data.trainees || {} });
+      downloadPdf(bytes, only ? `${def.short} - ${list[0].name}.pdf` : `${def.short} - ${session.title}.pdf`);
     } catch (err: any) {
       setError(err?.message || 'PDF impossible.');
     } finally {
@@ -112,13 +111,13 @@ export function IrveEditor({
     }
   }
 
-  const doneCount = session.trainees.filter((t) => irveEntryDone(data.trainees?.[t.id])).length;
+  const doneCount = session.trainees.filter((t) => irveEntryDone(def, data.trainees?.[t.id])).length;
 
   return (
     <div className="pf irve">
       <div className="pf-bar">
         <div className="pf-title">
-          <strong>Grille d’évaluation pratique IRVE · {session.title}</strong>
+          <strong>{def.name} · {session.title}</strong>
           <span className="hint">
             {live.status === 'saving' ? (
               <><Loader2 size={12} className="spin" aria-hidden /> Enregistrement…</>
@@ -163,8 +162,8 @@ export function IrveEditor({
             </select>
             {session.trainees.map((t) => {
               const te = data.trainees?.[t.id];
-              const done = irveEntryDone(te);
-              const tt = totalNote(te);
+              const done = irveEntryDone(def, te);
+              const tt = totalNote(def, te);
               return (
                 <button key={t.id} type="button" className={`irve-person${t.id === current ? ' on' : ''}${done ? ' done' : ''}`} onClick={() => setCurrent(t.id)}>
                   <span>
@@ -193,9 +192,9 @@ export function IrveEditor({
               <section className="irve-card">
                 <h3>Identification</h3>
                 <div className="irve-line">
-                  <span className="irve-label">Qualification visée</span>
+                  <span className="irve-label">{def.qualifLabel}</span>
                   <span className="irve-chips">
-                    {(['P1', 'P2', 'P3'] as const).map((q) => (
+                    {def.qualifs.map((q) => (
                       <button key={q} type="button" className={`irve-chip${e.qualif?.includes(q) ? ' on' : ''}`} aria-pressed={Boolean(e.qualif?.includes(q))} disabled={!canEdit} onClick={() => set({ qualif: toggleIn(e.qualif, q) })}>{q}</button>
                     ))}
                   </span>
@@ -203,7 +202,7 @@ export function IrveEditor({
                 <div className="irve-line">
                   <span className="irve-label">Mise en situation</span>
                   <span className="irve-chips">
-                    {SITUATIONS.map((q) => (
+                    {def.situations.map((q) => (
                       <button key={q} type="button" className={`irve-chip${e.situations?.includes(q) ? ' on' : ''}`} aria-pressed={Boolean(e.situations?.includes(q))} disabled={!canEdit} onClick={() => set({ situations: toggleIn(e.situations, q) })}>{q}</button>
                     ))}
                   </span>
@@ -213,13 +212,13 @@ export function IrveEditor({
               <div className="irve-quick">
                 <span className="hint">0 non réalisé · 1 aide importante · 2 quelques indications · 3 maîtrisé · N/O non observé</span>
                 {canEdit && (
-                  <button type="button" className="small" onClick={() => allTo3(FAMILIES.flatMap((f) => f.criteria))}>
+                  <button type="button" className="small" onClick={() => allTo3(def.families.flatMap((f) => f.criteria))}>
                     <Sparkles size={14} aria-hidden /> Tout à 3 pour ce stagiaire
                   </button>
                 )}
               </div>
 
-              {FAMILIES.map((fam) => {
+              {def.families.map((fam) => {
                 const note = familyNote(fam, e);
                 const filled = fam.criteria.filter((c) => e.scores?.[c.id] !== undefined).length;
                 return (
@@ -284,7 +283,7 @@ export function IrveEditor({
               <section className="irve-card">
                 <h3>Erreurs critiques / sécurité</h3>
                 <p className="hint" style={{ marginTop: 0 }}>Relevées à part : elles ne sont pas compensées par la note.</p>
-                {CRITICAL.map((c) => (
+                {def.critical.map((c) => (
                   <label key={c.key} className={`irve-critical${e.critical?.[c.key] ? ' on' : ''}`}>
                     <input type="checkbox" checked={Boolean(e.critical?.[c.key])} disabled={!canEdit} onChange={(ev) => set({ critical: { ...(e.critical || {}), [c.key]: ev.target.checked } })} />
                     {c.label}
@@ -326,14 +325,14 @@ export function IrveEditor({
                 <summary><h3>Traçabilité de la mise en situation et date</h3></summary>
                 <div className="irve-two">
                   <label>Atelier / poste utilisé<input className="input" value={e.atelier || ''} readOnly={!canEdit} onChange={(ev) => set({ atelier: ev.target.value })} /></label>
-                  <label>Matériel / borne / contrôleur<input className="input" value={e.materiel || ''} readOnly={!canEdit} onChange={(ev) => set({ materiel: ev.target.value })} /></label>
-                  <label>Référence du scénario ou exercice<input className="input" value={e.scenario || ''} readOnly={!canEdit} onChange={(ev) => set({ scenario: ev.target.value })} /></label>
+                  <label>{def.materielLabel}<input className="input" value={e.materiel || ''} readOnly={!canEdit} onChange={(ev) => set({ materiel: ev.target.value })} /></label>
+                  <label>{def.scenarioLabel}<input className="input" value={e.scenario || ''} readOnly={!canEdit} onChange={(ev) => set({ scenario: ev.target.value })} /></label>
                   <label>Date de l’évaluation<input className="input" value={e.date ?? session.defaultDate} placeholder="JJ/MM/AAAA" readOnly={!canEdit} onChange={(ev) => set({ date: ev.target.value })} /></label>
                 </div>
                 <div className="irve-line">
                   <span className="irve-label">Documents conservés</span>
                   <span className="irve-chips">
-                    {CONSERVES.map((q) => (
+                    {def.conserves.map((q) => (
                       <button key={q} type="button" className={`irve-chip${e.conserves?.includes(q) ? ' on' : ''}`} aria-pressed={Boolean(e.conserves?.includes(q))} disabled={!canEdit} onClick={() => set({ conserves: toggleIn(e.conserves, q) })}>{q}</button>
                     ))}
                   </span>
@@ -347,7 +346,7 @@ export function IrveEditor({
                 <button type="button" className="small" disabled={idx <= 0} onClick={() => setCurrent(session.trainees[idx - 1].id)}>
                   <ChevronLeft size={14} aria-hidden /> Stagiaire précédent
                 </button>
-                <span className="hint">{irveEntryDone(e) ? 'Grille complète' : 'Note tous les critères et choisis une appréciation'}</span>
+                <span className="hint">{irveEntryDone(def, e) ? 'Grille complète' : 'Note tous les critères et choisis une appréciation'}</span>
                 <button type="button" className="small primary" disabled={idx >= session.trainees.length - 1} onClick={() => setCurrent(session.trainees[idx + 1].id)}>
                   Stagiaire suivant <ChevronRight size={14} aria-hidden />
                 </button>

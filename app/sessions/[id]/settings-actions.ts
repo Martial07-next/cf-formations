@@ -46,7 +46,11 @@ export async function ensureSessionSettings(sessionId: string): Promise<Result<{
       if (mods?.length) await supabase.from('template_modules').insert((mods as any[]).map((m) => ({ ...m, template_id: newId })));
       if (trs?.length) await supabase.from('template_trainers').insert((trs as any[]).map((x) => ({ ...x, template_id: newId })));
       if (lks?.length) await supabase.from('template_links').insert((lks as any[]).map((x) => ({ ...x, template_id: newId })));
-      if (dcs?.length) await supabase.from('dossier_documents').insert((dcs as any[]).map(({ id: _i, created_at: _ca, ...d }) => ({ ...d, template_id: newId })));
+      // Documents du dossier : copiés (même fichier), les saisies déjà faites suivent la copie.
+      for (const { id: oldDoc, created_at: _ca, ...d } of (dcs as any[]) || []) {
+        const { data: nd } = await supabase.from('dossier_documents').insert({ ...d, template_id: newId }).select('id').single();
+        if (nd) await supabase.from('dossier_entries').update({ document_id: (nd as any).id }).eq('session_id', sessionId).eq('document_id', oldDoc);
+      }
       await supabase.from('sessions').update({ template_id: newId }).eq('id', sessionId);
       revalidatePath(`/sessions/${sessionId}`);
       return { ok: true, template: await loadTemplateForEdit(supabase, newId) };

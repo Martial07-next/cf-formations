@@ -33,6 +33,7 @@ export async function loadTemplateForEdit(supabase: any, id: string): Promise<an
     duration_hours_recyclage: t.duration_hours_recyclage ?? null,
     early_departure: t.early_departure ?? null,
     grille_irve: t.grille_irve ?? null,
+    grille_maintenance: t.grille_maintenance ?? null,
   };
 }
 

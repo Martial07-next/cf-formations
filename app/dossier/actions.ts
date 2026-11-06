@@ -250,7 +250,11 @@ export async function deleteDocument(id: string): Promise<Result> {
   const { data: d } = await supabase.from('dossier_documents').select('storage_path').eq('id', id).maybeSingle();
   const { error } = await supabase.from('dossier_documents').delete().eq('id', id);
   if (error) return { ok: false, error: migrationHint(error.message) };
-  if (d?.storage_path) await supabase.storage.from('dossiers').remove([d.storage_path]);
+  // Fichier partagé (formation du catalogue copiée pour une session) : conservé tant qu'un autre document l'utilise.
+  if (d?.storage_path) {
+    const { count } = await supabase.from('dossier_documents').select('id', { count: 'exact', head: true }).eq('storage_path', d.storage_path);
+    if (!count) await supabase.storage.from('dossiers').remove([d.storage_path]);
+  }
   revalidatePath('/modeles');
   revalidatePath('/sessions', 'layout');
   revalidatePath('/');
@@ -479,8 +483,8 @@ export async function setDigiformaLinkDone(sessionId: string, linkId: string, do
 
 // ---- Fiches à plusieurs, en direct (migration 47) ----------------------------
 
-type FormKind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation' | 'irve_grille';
-const FORM_KINDS: FormKind[] = ['tour_de_table', 'appreciation', 'reussite', 'habilitation', 'irve_grille'];
+type FormKind = 'tour_de_table' | 'appreciation' | 'reussite' | 'habilitation' | 'irve_grille' | 'maint_grille';
+const FORM_KINDS: FormKind[] = ['tour_de_table', 'appreciation', 'reussite', 'habilitation', 'irve_grille', 'maint_grille'];
 export type FormPatch = { path: string[]; value: unknown };
 
 /**
@@ -561,27 +565,32 @@ export async function saveHabilitation(sessionId: string, data: unknown, complet
 const IRVE_MIGRATION = 'Exécute d’abord la migration 63 (supabase/migration_phase63.sql) dans Supabase.';
 
 /** Grille IRVE remplie par le formateur (enregistrement complet, si la sauvegarde en direct n'est pas disponible). */
-export async function saveIrve(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
+const MAINT_MIGRATION = 'Exécute d’abord la migration 64 (supabase/migration_phase64.sql) dans Supabase.';
+const gridMigration = (kind: 'irve_grille' | 'maint_grille') => (kind === 'maint_grille' ? MAINT_MIGRATION : IRVE_MIGRATION);
+
+export async function saveIrve(sessionId: string, data: unknown, completed: boolean, kind: 'irve_grille' | 'maint_grille' = 'irve_grille'): Promise<Result> {
+  if (kind !== 'irve_grille' && kind !== 'maint_grille') return { ok: false, error: 'Fiche inconnue.' };
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
   const json = JSON.stringify(data ?? {});
   if (json.length > 800_000) return { ok: false, error: 'Grille trop longue.' };
   const now = new Date().toISOString();
   const { error } = await r.supabase.from('session_forms').upsert(
-    { session_id: sessionId, kind: 'irve_grille', data: JSON.parse(json), completed, completed_at: completed ? now : null, updated_by: r.profile.id, updated_at: now },
+    { session_id: sessionId, kind, data: JSON.parse(json), completed, completed_at: completed ? now : null, updated_by: r.profile.id, updated_at: now },
     { onConflict: 'session_id,kind' }
   );
-  if (error) return { ok: false, error: /kind_check|schema cache|does not exist/i.test(error.message) ? IRVE_MIGRATION : error.message };
+  if (error) return { ok: false, error: /kind_check|schema cache|does not exist/i.test(error.message) ? gridMigration(kind) : error.message };
   refresh(sessionId);
   return { ok: true };
 }
 
 /** Grille IRVE pour cette session : oui, non, ou comme la formation (null). */
-export async function setSessionIrve(sessionId: string, value: boolean | null): Promise<Result> {
+export async function setSessionIrve(sessionId: string, value: boolean | null, kind: 'irve_grille' | 'maint_grille' = 'irve_grille'): Promise<Result> {
   if (!(await requireManager())) return FORBIDDEN;
+  const col = kind === 'maint_grille' ? 'grille_maintenance' : 'grille_irve';
   const supabase = await createClient();
-  const { error } = await supabase.from('sessions').update({ grille_irve: value }).eq('id', sessionId);
-  if (error) return { ok: false, error: /grille_irve|schema cache/i.test(error.message) ? IRVE_MIGRATION : error.message };
+  const { error } = await supabase.from('sessions').update({ [col]: value }).eq('id', sessionId);
+  if (error) return { ok: false, error: /grille_|schema cache/i.test(error.message) ? gridMigration(kind) : error.message };
   refresh(sessionId);
   return { ok: true };
 }

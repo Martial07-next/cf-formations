@@ -57,6 +57,8 @@ function readTemplate(formData: FormData) {
       : {}),
     // Grille d'évaluation pratique IRVE (migration 63).
     ...(formData.has('irve_present') ? { grille_irve: formData.get('grille_irve') === 'on' } : {}),
+    // Grille Maintenance IRVE (migration 64).
+    ...(formData.has('irve_present') ? { grille_maintenance: formData.get('grille_maintenance') === 'on' } : {}),
     // Départ anticipé possible (migration 56).
     ...(formData.has('depart_present') ? { early_departure: formData.get('early_departure') === 'on' } : {}),
     // Autorisations stagiaire demandées (migration 24).
@@ -70,7 +72,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['grille_irve'], ['early_departure'], ['duration_hours_recyclage'], ['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['grille_maintenance'], ['grille_irve'], ['early_departure'], ['duration_hours_recyclage'], ['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore
@@ -153,10 +155,12 @@ async function saveLinks(supabase: Client, templateId: string, formData: FormDat
       .insert(links.map((l, position) => ({ ...l, position, template_id: templateId })));
     if (error) return missingTable(error.message);
   }
-  const gone = ((before as { url: string }[]) || [])
+  const goneUrls = ((before as { url: string }[]) || [])
     .map((r) => r.url)
-    .filter((u) => isSupportFile(u) && !links.some((l) => l.url === u))
-    .map(supportStoragePath);
+    .filter((u) => isSupportFile(u) && !links.some((l) => l.url === u));
+  // Un fichier encore utilisé ailleurs (catalogue ↔ paramètres propres à une session) est conservé.
+  const { data: still } = goneUrls.length ? await supabase.from('template_links').select('url').in('url', goneUrls) : { data: [] };
+  const gone = goneUrls.filter((u) => !((still as { url: string }[]) || []).some((r) => r.url === u)).map(supportStoragePath);
   if (gone.length) await supabase.storage.from(SUPPORT_BUCKET).remove(gone);
   return null;
 }
