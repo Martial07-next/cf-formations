@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { SESSION_STATUSES } from '@/lib/status';
 import { sameCompany } from '@/lib/company';
 import { formatHours, weekdaysBetween } from '@/lib/week';
+import { isClosedHoliday } from '@/lib/holidays';
 import { freeWindows, hm, type Busy } from '@/lib/session-slots';
 import { roomAvailability } from '@/app/sessions/actions';
 import { TemplatePicker } from '@/components/template-picker';
@@ -59,14 +60,20 @@ export type SessionFormDefaults = {
 
 function countWeekdays(startIso: string, endIso: string): number {
   if (!startIso) return 0;
-  const start = new Date(startIso + 'T00:00:00Z');
-  const end = new Date((endIso || startIso) + 'T00:00:00Z');
-  let n = 0;
-  for (let d = start; d <= end; d = new Date(d.getTime() + 86400000)) {
+  // Jours ouvrés, sans les fériés non travaillés (comme le planning et la fiche de la session).
+  return weekdaysBetween(`${startIso}T00:00:00`, `${(endIso || startIso)}T00:00:00`).length;
+}
+
+/** Fériés non travaillés en semaine entre deux dates (« 11 nov. »). */
+function closedHolidaysBetween(startIso: string, endIso: string): string[] {
+  if (!startIso) return [];
+  const out: string[] = [];
+  for (let d = new Date(startIso + 'T00:00:00Z'); d <= new Date((endIso || startIso) + 'T00:00:00Z'); d = new Date(d.getTime() + 86400000)) {
+    const iso = d.toISOString().slice(0, 10);
     const w = d.getUTCDay();
-    if (w !== 0 && w !== 6) n++;
+    if (w !== 0 && w !== 6 && isClosedHoliday(iso)) out.push(d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' }));
   }
-  return n;
+  return out;
 }
 
 /** Regroupe les formations du catalogue par dossier. */
@@ -554,6 +561,7 @@ export function SessionForm({
           ) : plannedHours > 0 ? (
             <>
               <strong>{formatHours(plannedHours)}</strong> sur {manualDays}, pause 12h–13h déduite
+              {closedHolidaysBetween(startDate, endDate).length > 0 && ` · férié non travaillé non compté : ${closedHolidaysBetween(startDate, endDate).join(', ')}`}
               {template && Math.abs(plannedHours - Number(template.duration_hours)) >= 0.25 && (
                 <> · <span style={{ color: 'var(--wait-ink)' }}>catalogue : {formatHours(Number(template.duration_hours))}</span></>
               )}
