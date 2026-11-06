@@ -25,7 +25,7 @@ import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHou
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
-import { GRIDS, gridRequired } from '@/lib/irve-grid';
+import { GRIDS, gridAuto, gridRequired } from '@/lib/irve-grid';
 import { reussiteModels, reussiteModule } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -220,7 +220,11 @@ export default async function SessionDetailPage({
         supabase.from('sessions').select(col).eq('id', id).maybeSingle(),
         supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', def.kind).maybeSingle(),
       ]);
-      if (flagErr) return null;
+      // Migration absente : signalée au bureau si la formation en a besoin.
+      if (flagErr)
+        return gridAuto(def, gridTitle)
+          ? ([def.kind, { sessionFlag: null, templateFlag: null, on: false, data: null, missing: def.kind === 'maint_grille' ? 65 : 63 }] as const)
+          : null;
       const tplFlag: boolean | null = typeof (tplOpt as any)?.[col] === 'boolean' ? (tplOpt as any)[col] : null;
       const sessFlag2: boolean | null = (flagRow as any)?.[col] ?? null;
       return [def.kind, {

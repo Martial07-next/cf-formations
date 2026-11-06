@@ -565,7 +565,7 @@ export async function saveHabilitation(sessionId: string, data: unknown, complet
 const IRVE_MIGRATION = 'Exécute d’abord la migration 63 (supabase/migration_phase63.sql) dans Supabase.';
 
 /** Grille IRVE remplie par le formateur (enregistrement complet, si la sauvegarde en direct n'est pas disponible). */
-const MAINT_MIGRATION = 'Exécute d’abord la migration 64 (supabase/migration_phase64.sql) dans Supabase.';
+const MAINT_MIGRATION = 'Exécute d’abord la migration 65 (supabase/migration_phase65.sql) dans Supabase.';
 const gridMigration = (kind: 'irve_grille' | 'maint_grille') => (kind === 'maint_grille' ? MAINT_MIGRATION : IRVE_MIGRATION);
 
 export async function saveIrve(sessionId: string, data: unknown, completed: boolean, kind: 'irve_grille' | 'maint_grille' = 'irve_grille'): Promise<Result> {

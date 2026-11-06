@@ -12,6 +12,8 @@ export type EvalGridProp = {
   templateFlag: boolean | null;
   on: boolean;
   data: IrveData | null;
+  /** Migration à exécuter pour activer cette grille. */
+  missing?: number;
 };
 
 /**
@@ -54,6 +56,20 @@ export function EvalGridRow({
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   if (!grid.on && !canManage) return null;
+  if (grid.missing)
+    return (
+      <div className="doc-list" style={{ marginBottom: 6 }}>
+        <div className="doc-item doc-off">
+          <ClipboardCheck size={16} aria-hidden />
+          <span className="doc-item-main">
+            <strong>{def.name}</strong>
+            <small className="hint fin-warn-inline">
+              Exécute la migration {grid.missing} (supabase/migration_phase{grid.missing}.sql) dans Supabase pour activer cette grille.
+            </small>
+          </span>
+        </div>
+      </div>
+    );
   const ids = trainees.map((t) => t.id);
   const filled = irveCount(def, data, ids).done;
   const done = grid.on && irveDone(def, data, ids);
