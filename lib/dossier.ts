@@ -1,4 +1,4 @@
-import { effectiveDayTime, weekdaysBetween, type DayOverride } from '@/lib/week';
+import { effectiveDayTime, trainingDays, weekdaysBetween, type DayOverride } from '@/lib/week';
 import { EMARGEMENT_ENABLED } from '@/lib/features';
 
 /**
@@ -38,7 +38,7 @@ export type DossierEntry = { document_id: string; completed: boolean; updated_at
 
 /** Demi-journées d'une session (matin si la journée commence avant 12 h, après-midi si elle finit après 13 h). */
 export function sessionSlots(startAt: string, endAt: string, overrides: DayOverride[] = []): Slot[] {
-  const days = weekdaysBetween(startAt, endAt);
+  const days = trainingDays(startAt, endAt, overrides);
   const list = days.length ? days : [startAt.slice(0, 10)];
   const slots: Slot[] = [];
   for (const day of list) {

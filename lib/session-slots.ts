@@ -1,4 +1,4 @@
-import { effectiveDayTime, weekdaysBetween, type DayOverride } from '@/lib/week';
+import { effectiveDayTime, trainingDays, type DayOverride } from '@/lib/week';
 
 /**
  * Créneaux réels d'une session, jour par jour (les nuits et week-ends ne
@@ -8,7 +8,7 @@ import { effectiveDayTime, weekdaysBetween, type DayOverride } from '@/lib/week'
 export type DaySlot = { day: string; start: string; end: string };
 
 export function sessionDaySlots(startAt: string, endAt: string, overrides: DayOverride[] = []): DaySlot[] {
-  const days = weekdaysBetween(startAt, endAt);
+  const days = trainingDays(startAt, endAt, overrides);
   return (days.length ? days : [startAt.slice(0, 10)]).map((day) => ({ day, ...effectiveDayTime(day, startAt, endAt, overrides) }));
 }
 

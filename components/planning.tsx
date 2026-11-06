@@ -32,6 +32,7 @@ import {
   monthLabel,
   isSameMonth,
   dayIsInRange,
+  isOffDay,
   effectiveDayTime,
   type DayOverride,
   fullDateLabel,
@@ -595,13 +596,13 @@ export function Planning({
 
   // Toutes les sessions de la case (même filtrées) : sert à savoir si le créneau est déjà pris.
   function cellSessions(dIso: string, roomId: string) {
-    return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at));
+    return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso));
   }
   // Salle occupée ce jour-là : on peut placer une session avant ou après ;
   // le « + » propose l'heure de fin de la dernière session du jour.
   function freeFrom(dIso: string, roomId: string): string | null {
     const ends = sessions
-      .filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at))
+      .filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso))
       .map((s) => effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []).end);
     if (!ends.length) return null;
     return ends.sort()[ends.length - 1];
@@ -888,7 +889,7 @@ export function Planning({
             <div className={`month-grid${monthSaturday ? ' with-sat' : ''}`} key={wi}>
               {week.map((day) => {
                 const dIso = isoDate(day);
-                const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at));
+                const daySessions = shown.filter((s) => dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso));
                 const muted = !isSameMonth(day, monthAnchor);
                 return (
                   <div
@@ -1099,7 +1100,7 @@ function PlanBrief({
           ? 'Hier'
           : new Date(focusDay + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
   const items = active
-    .filter((s) => dayIsInRange(focusDay, s.start_at, s.end_at))
+    .filter((s) => dayIsInRange(focusDay, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], focusDay))
     .map((s) => ({ s, ...effectiveDayTime(focusDay, s.start_at, s.end_at, dayOverrides[s.id] || []) }))
     .sort((a, b) => a.start.localeCompare(b.start));
   const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));

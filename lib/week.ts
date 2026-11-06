@@ -150,6 +150,20 @@ export type DayOverride = { day: string; start_time: string; end_time: string };
  * pour ce jour (session_days) s'il existe, sinon l'heure de début/fin de la
  * session appliquée à chaque jour par défaut.
  */
+/**
+ * Jour sans formation dans une session (ex. pas de créneau ce jour-là sur
+ * Digiforma, même si le férié est travaillé) : horaire du jour « 00:00–00:00 ».
+ */
+export function isOffDay(overrides: DayOverride[] | undefined, dayIso: string): boolean {
+  const o = overrides?.find((x) => x.day === dayIso);
+  return Boolean(o && o.start_time.slice(0, 5) === o.end_time.slice(0, 5));
+}
+
+/** Jours de formation réels d'une session : jours ouvrés, sans les jours sans formation. */
+export function trainingDays(startAt: string, endAt: string, overrides: DayOverride[] = []): string[] {
+  return weekdaysBetween(startAt, endAt).filter((d) => !isOffDay(overrides, d));
+}
+
 export function effectiveDayTime(
   dayIso: string,
   startAt: string,
@@ -208,7 +222,7 @@ export function sessionHours(startAt: string, endAt: string, overrides: DayOverr
 
 /** Détail jour par jour des minutes de formation d'une session. */
 export function dayHours(startAt: string, endAt: string, overrides: DayOverride[] = []): { day: string; minutes: number }[] {
-  const days = weekdaysBetween(startAt, endAt);
+  const days = trainingDays(startAt, endAt, overrides);
   const list = days.length ? days : [startAt.slice(0, 10)];
   return list.map((day) => {
     const { start, end } = effectiveDayTime(day, startAt, endAt, overrides);

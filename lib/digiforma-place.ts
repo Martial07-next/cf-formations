@@ -200,6 +200,7 @@ export async function placeModuleRow(
   const real = ((m.trainees as any[]) || []).filter((t) => !isPlaceholder(t) && !trashed.has(t));
   await addNewTrainees(supabase, created as any, real);
   await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).eq('key', m.key);
+  await applyDigiformaDays(supabase, created.id).catch(() => 0);
   return { ok: true, sessionId: created.id };
 }
 
@@ -300,6 +301,7 @@ async function placeGroup(
   if (partial.length) await supabase.from('session_trainee_modules').upsert(partial, { onConflict: 'trainee_id,module_id', ignoreDuplicates: true });
 
   await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).in('key', mods.map((x) => x.key));
+  await applyDigiformaDays(supabase, created.id).catch(() => 0);
   await markHolidaysAccounted(supabase, created.id).catch(() => null);
 
   // Salle et formateur Digiforma : les plus fréquents des modules.
@@ -371,5 +373,41 @@ export async function attachToGroup(supabase: SupabaseClient, m: any): Promise<s
     if (rows.length) await supabase.from('session_trainee_modules').upsert(rows, { onConflict: 'trainee_id,module_id', ignoreDuplicates: true });
   }
   await supabase.from('digiforma_modules').update({ placed_session_id: sid }).eq('key', m.key);
+  await applyDigiformaDays(supabase, sid).catch(() => 0);
+  // Dates de Digiforma : jamais décalées automatiquement pour un férié.
+  await markHolidaysAccounted(supabase, sid).catch(() => null);
   return sid;
+}
+
+/**
+ * Jours réels des créneaux Digiforma → session créée depuis Digiforma : un
+ * jour ouvré de la session sans aucun créneau (férié travaillé chez nous mais
+ * pas de cours, jour sauté…) devient un jour sans formation (horaire 00:00–00:00 :
+ * ni heures, ni émargement, ni salle occupée). Un jour qui retrouve un créneau
+ * redevient normal. Les sessions créées à la main ne sont jamais touchées.
+ * Renvoie le nombre de jours passés « sans formation ».
+ */
+export async function applyDigiformaDays(supabase: SupabaseClient, sessionId: string): Promise<number> {
+  const [{ data: sess }, { data: mods, error }] = await Promise.all([
+    supabase.from('sessions').select('id, start_at, end_at, digiforma_ref').eq('id', sessionId).maybeSingle(),
+    supabase.from('digiforma_modules').select('df_days').eq('placed_session_id', sessionId),
+  ]);
+  if (error || !sess || !String((sess as any).digiforma_ref || '').includes(':')) return 0;
+  const lists = ((mods as any[]) || []).map((m) => m.df_days).filter((d) => Array.isArray(d) && d.length);
+  if (!lists.length) return 0; // jours inconnus : rien à changer
+  const real = new Set<string>(lists.flat().map((d: string) => String(d).slice(0, 10)));
+  const { data: overRows } = await supabase.from('session_days').select('day, start_time, end_time').eq('session_id', sessionId);
+  const over = new Map(((overRows as any[]) || []).map((o) => [String(o.day).slice(0, 10), o]));
+  let set = 0;
+  for (const d of weekdaysBetween((sess as any).start_at, (sess as any).end_at)) {
+    const o = over.get(d);
+    const off = o && String(o.start_time).slice(0, 5) === String(o.end_time).slice(0, 5);
+    if (!real.has(d) && !off) {
+      const { error: e } = await supabase.from('session_days').upsert({ session_id: sessionId, day: d, start_time: '00:00', end_time: '00:00' }, { onConflict: 'session_id,day' });
+      if (!e) set++;
+    } else if (real.has(d) && off) {
+      await supabase.from('session_days').delete().eq('session_id', sessionId).eq('day', d);
+    }
+  }
+  return set;
 }

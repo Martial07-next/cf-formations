@@ -233,6 +233,8 @@ export type DigiformaModule = {
   room?: string | null;
   /** Intervenants indiqués sur Digiforma (créneaux, sinon session), du plus présent au moins présent. */
   trainers?: DigiformaPerson[];
+  /** Jours qui ont vraiment un créneau sur Digiforma (« AAAA-MM-JJ ») : les autres jours ouvrés ne sont pas des jours de formation. */
+  days?: string[];
 };
 export type DigiformaPerson = { name: string; email: string | null };
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
@@ -466,7 +468,8 @@ function toSessionModules(s: any): DigiformaSessionModules {
         if (!m.start) return [];
         const subSlots = (sub.slots || []).map(mapDated).filter((x: any) => x.start);
         const long = m.end && day(m.end) - day(m.start) > 6 * 86400000;
-        if (!long || !subSlots.length) return long ? [] : [{ ...m, ...(subSlots.length ? placeOf(subSlots) : {}) }];
+        if (!long || !subSlots.length)
+          return long ? [] : [{ ...m, ...(subSlots.length ? { ...placeOf(subSlots), days: [...new Set(subSlots.map((x: any) => String(x.start).slice(0, 10)))].sort() } : {}) }];
         return slotBlocks(subSlots.map((x: any) => ({ ...x, name: x.name || m.name }))).map((b) => ({ ...b, key: `${m.key}~${b.start.slice(0, 10)}` }));
       });
       // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
@@ -598,7 +601,11 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
       members.set(out[out.length - 1], [sl]);
     }
   }
-  return out.map((b) => ({ ...b, ...placeOf(members.get(b) || []) }));
+  return out.map((b) => ({
+    ...b,
+    ...placeOf(members.get(b) || []),
+    days: [...new Set((members.get(b) || []).map((x) => x.start.slice(0, 10)))].sort(),
+  }));
 }
 
 /** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
