@@ -3,7 +3,7 @@ import { digiformaDateModules, digiformaFetchSessionTrainees, digiformaListSessi
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
-import { applyDigiformaPlace, loadPlaceRefs, placeModuleRow } from '@/lib/digiforma-place';
+import { applyDigiformaPlace, attachToGroup, loadPlaceRefs, placeModuleRow } from '@/lib/digiforma-place';
 import { withoutSessionOnly } from '@/lib/template-edit';
 import { People, isPlaceholder } from '@/lib/digiforma-people';
 
@@ -393,6 +393,15 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     for (const r of rows) {
       if (geiqSkipped) break; // parcours GEIQ fait à la main : rien à relier ni à proposer
       if (!open.has(r.key)) continue;
+      // Autre module de la même session Digiforma déjà posé cette semaine (une session à modules) : ajouté à celle-ci.
+      if (!programId) {
+        const g = await attachToGroup(supabase, { ...r, program_id: null });
+        if (g) {
+          alreadyLinked.add(g);
+          linked++;
+          continue;
+        }
+      }
       const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at, (r.trainees as DigiformaTrainee[]) || []);
       if (!hit) {
         // Parcours (GEIQ, POEC, personnalisé) déjà posé cette semaine sur le planning.

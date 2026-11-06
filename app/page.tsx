@@ -21,6 +21,7 @@ import { withoutSessionOnly } from '@/lib/template-edit';
 const GEIQ_RE = /\bgeiq\b/i;
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
+import { groupKeyOf, groupable } from '@/lib/digiforma-place';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -291,8 +292,55 @@ export default async function Page({
               geiq: GEIQ_RE.test(program?.title || '') || GEIQ_RE.test(m.df_session_name || '') || programs.some((p) => GEIQ_RE.test(p.title) && real.length > 0 && p.people.count(real) >= Math.max(1, Math.ceil(real.length / 2))),
             };
           });
+        // Plusieurs modules d'une même session Digiforma la même semaine (ex. IRVE P1, P2, P3) :
+        // une seule carte, placée en une session avec ses modules (pas pour les parcours GEIQ / POEC).
+        const groups = new Map<string, number[]>();
+        moduleItems.forEach((it, i) => {
+          const m = modRows[i];
+          if (it.covered || it.program || it.geiq || !groupable(m)) return;
+          const k = groupKeyOf(m);
+          groups.set(k, [...(groups.get(k) || []), i]);
+        });
+        const merged = new Set<number>();
+        const groupItems = [...groups.values()]
+          .filter((idx) => idx.length > 1)
+          .map((idx) => {
+            idx.forEach((i) => merged.add(i));
+            const its = idx.map((i) => moduleItems[i]).sort((a, b) => a.start_at.localeCompare(b.start_at));
+            const m0 = modRows[idx[0]];
+            const dfName = (m0.df_session_name as string) || its[0].title;
+            const people = new Map<string, { key: string; name: string; waiting?: boolean; modules: string[] }>();
+            const fake = new Map<string, { key: string; name: string }>();
+            for (const it of its) {
+              for (const p of it.people) {
+                const e = people.get(p.key) || { ...p, modules: [] as string[] };
+                e.modules.push(it.title);
+                people.set(p.key, e);
+              }
+              for (const f of it.fake) fake.set(f.key, f);
+            }
+            return {
+              ...its[0],
+              id: its[0].id,
+              title: dfName,
+              parent: null,
+              start_at: its.map((x) => x.start_at).sort()[0],
+              end_at: its.map((x) => x.end_at).sort().reverse()[0],
+              trainees: people.size,
+              people: [...people.values()].map((p) => ({
+                key: p.key,
+                waiting: p.waiting,
+                // Stagiaire qui ne suit pas tous les modules : ses modules entre parenthèses.
+                name: p.modules.length < its.length ? `${p.name} (${p.modules.join(', ')})` : p.name,
+              })),
+              fake: [...fake.values()],
+              match: matchModule(dfName, dfName, catalog),
+              modules: its.map((x) => ({ name: x.title, start_at: x.start_at, end_at: x.end_at, trainees: x.trainees })),
+            };
+          });
         return [
-          ...moduleItems,
+          ...moduleItems.filter((_, i) => !merged.has(i)),
+          ...groupItems,
           ...((held.data as any[]) || []).filter((x) => {
             const p = x.poec_id ? programs.find((q) => q.id === x.poec_id) : null;
             return !(p && p.manual && GEIQ_RE.test(p.title) && String(x.digiforma_ref || '').includes(':'));

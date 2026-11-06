@@ -1216,6 +1216,8 @@ export type ToAssign = {
   match: CatalogMatch | null;
   /** Salle et intervenant indiqués sur Digiforma (repris en plaçant le module). */
   place?: string | null;
+  /** Plusieurs modules de la même session Digiforma cette semaine : placés en une session à modules. */
+  modules?: { name: string; start_at: string; end_at: string; trainees: number }[];
 };
 
 /**
@@ -1308,6 +1310,16 @@ export function ToAssignSection({
                   {origin && <small className="ta-origin">Digiforma : {origin}</small>}
                   {unnamed && <small className="ta-note">Module non nommé sur Digiforma : choisis la formation ci-dessous.</small>}
                   {s.place && <small className="ta-place">Sur Digiforma : {s.place}</small>}
+                  {s.modules && s.modules.length > 1 && (
+                    <span className="ta-modules" aria-label="Modules de la session">
+                      {s.modules.map((mo, i) => (
+                        <span key={i} className="ta-module">
+                          <b>{mo.name}</b> {d(mo.start_at)}{mo.start_at.slice(0, 10) !== mo.end_at.slice(0, 10) ? ` → ${d(mo.end_at)}` : ''} · {h(mo.start_at)}–{h(mo.end_at)} · {mo.trainees} stag.
+                        </span>
+                      ))}
+                      <small className="hint">Une seule session avec ces modules ; chaque stagiaire est inscrit à ses modules.</small>
+                    </span>
+                  )}
                   <small className="ta-when">
                     {d(s.start_at)}{s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? ` → ${d(s.end_at)}` : ''} · {h(s.start_at)}–{h(s.end_at)} · {s.trainees} stagiaire{s.trainees > 1 ? 's' : ''}
                     {waiting > 0 && <b className="ta-waiting"> · {waiting} indécis</b>}

@@ -1,7 +1,40 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addNewTrainees } from '@/lib/digiforma-sync';
 import { markHolidaysAccounted } from '@/lib/holiday-shifts';
-import { People, isPlaceholder } from '@/lib/digiforma-people';
+import { People, isPlaceholder, personKey } from '@/lib/digiforma-people';
+import { findOrCreateTrainee } from '@/lib/trainee-conflict';
+import { trainingMinutes } from '@/lib/schedule';
+import { weekdaysBetween } from '@/lib/week';
+
+/* ------------------------------------------------------------------------
+ * Plusieurs modules d'une même session Digiforma la même semaine (ex. IRVE
+ * P1 lundi, P2 mardi, P3 mercredi) : UNE session sur le planning, avec ses
+ * modules posés sur leurs jours, les horaires de Digiforma jour par jour, et
+ * chaque stagiaire inscrit seulement aux modules qu'il suit sur Digiforma.
+ * Les parcours (GEIQ, POEC, alternance…) restent un module par semaine.
+ * ---------------------------------------------------------------------- */
+
+export const PARCOURS_RE = /geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i;
+
+const mondayIso = (v: string) => {
+  const d = new Date(v.slice(0, 10) + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
+/** Clé du regroupement : session Digiforma + semaine. */
+export const groupKeyOf = (m: { df_session_id: string; start_at: string }) => `${m.df_session_id}|${mondayIso(m.start_at)}`;
+
+/** Le module peut se regrouper avec d'autres (pas un parcours, pas une session entière). */
+export function groupable(m: any, programId: string | null = null): boolean {
+  return !programId && !m.program_id && !m.whole_session && !PARCOURS_RE.test(String(m.df_session_name || ''));
+}
+
+/** Module à proposer : de vrais stagiaires, ni retiré ni couvert. */
+function hasReal(m: any, trashed: People) {
+  return ((m.trainees as any[]) || []).some((t) => !isPlaceholder(t) && !trashed.has(t));
+}
+
+const hm = (v: string) => v.slice(11, 16);
 
 /* ------------------------------------------------------------------------
  * Salle et formateur indiqués sur Digiforma → salle et formateur du planning
@@ -114,6 +147,17 @@ export async function placeModuleRow(
   refs?: PlaceRefs
 ): Promise<{ ok: true; sessionId: string } | { ok: false; error: string }> {
   if (m.placed_session_id) return { ok: true, sessionId: m.placed_session_id };
+  // Autres modules de la même session Digiforma cette semaine : une seule session, avec ses modules.
+  if (groupable(m, programId)) {
+    const { data: sib } = await supabase.from('digiforma_modules').select('*').eq('df_session_id', m.df_session_id).is('placed_session_id', null);
+    const { data: trashedRows0 } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
+    const trashed0 = new People();
+    for (const t of (trashedRows0 as any[]) || []) trashed0.add(t);
+    const group = ((sib as any[]) || []).filter(
+      (x) => groupKeyOf(x) === groupKeyOf(m) && groupable(x) && (x.key === m.key || (!x.covered_by && hasReal(x, trashed0)))
+    );
+    if (group.length > 1) return placeGroup(supabase, group, templateId, refs, trashed0);
+  }
   const { data: holding } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
   if (!holding) return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
   let tpl: { id: string; title: string } | null = null;
@@ -157,4 +201,175 @@ export async function placeModuleRow(
   await addNewTrainees(supabase, created as any, real);
   await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).eq('key', m.key);
   return { ok: true, sessionId: created.id };
+}
+
+/** Crée la session d'un groupe de modules Digiforma (même session, même semaine). */
+async function placeGroup(
+  supabase: SupabaseClient,
+  rows: any[],
+  templateId: string | null,
+  refs: PlaceRefs | undefined,
+  trashed: People
+): Promise<{ ok: true; sessionId: string } | { ok: false; error: string }> {
+  const mods = [...rows].sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const { data: holding } = await supabase.from('rooms').select('id').eq('is_holding', true).maybeSingle();
+  if (!holding) return { ok: false, error: "Salle d'attente introuvable : exécute migration_phase6.sql." };
+  let tpl: { id: string; title: string } | null = null;
+  if (templateId) {
+    const { data } = await supabase.from('templates').select('id, title').eq('id', templateId).maybeSingle();
+    tpl = (data as any) || null;
+  }
+  const first = mods[0];
+  const startAt = mods.map((x) => x.start_at).sort()[0];
+  const endAt = mods.map((x) => x.end_at).sort().reverse()[0];
+  const names = mods.map((x, i) => x.name || `Module ${i + 1}`);
+  const { data: created, error } = await supabase
+    .from('sessions')
+    .insert({
+      title: tpl?.title || first.df_session_name || 'Session Digiforma',
+      ...(tpl ? { template_id: tpl.id } : {}),
+      room_id: holding.id,
+      start_at: startAt,
+      end_at: endAt,
+      status: 'planifiee',
+      digiforma_ref: first.key,
+      notes: `Session Digiforma « ${first.df_session_name} » : modules ${names.join(', ')} (horaires repris de Digiforma) · salle et formateur à choisir.`,
+    })
+    .select('id, start_at, end_at')
+    .single();
+  if (error || !created) return { ok: false, error: 'Création impossible, réessaie.' };
+
+  // Horaires de Digiforma, jour par jour (deux modules le même jour : du début du premier à la fin du second).
+  const days = new Map<string, { start: string; end: string }>();
+  for (const x of mods) {
+    for (const d of weekdaysBetween(x.start_at, x.end_at)) {
+      const cur = days.get(d);
+      const st = hm(x.start_at);
+      const en = hm(x.end_at);
+      days.set(d, cur ? { start: st < cur.start ? st : cur.start, end: en > cur.end ? en : cur.end } : { start: st, end: en });
+    }
+  }
+  if (days.size)
+    await supabase.from('session_days').upsert(
+      [...days].map(([day, t]) => ({ session_id: created.id, day, start_time: t.start, end_time: t.end })),
+      { onConflict: 'session_id,day' }
+    );
+
+  // Modules de la session, posés sur leurs jours.
+  const { data: smRows } = await supabase
+    .from('session_modules')
+    .insert(
+      mods.map((x, i) => {
+        const ds = weekdaysBetween(x.start_at, x.end_at);
+        const minutes = (ds.length ? ds.length : 1) * trainingMinutes(hm(x.start_at), hm(x.end_at));
+        return {
+          session_id: created.id,
+          position: i,
+          name: names[i],
+          start_day: x.start_at.slice(0, 10),
+          end_day: x.end_at.slice(0, 10),
+          duration_hours: minutes > 0 ? Math.round((minutes / 60) * 100) / 100 : null,
+        };
+      })
+    )
+    .select('id, position');
+  const moduleIds = new Map(((smRows as any[]) || []).map((r) => [r.position as number, r.id as string]));
+
+  // Stagiaires : les vrais, une seule fois ; chacun inscrit aux modules qu'il suit sur Digiforma.
+  const people = new Map<string, { t: any; in: number[] }>();
+  mods.forEach((x, i) => {
+    for (const t of (x.trainees as any[]) || []) {
+      if (isPlaceholder(t) || trashed.has(t)) continue;
+      const k = (t.email && String(t.email).trim().toLowerCase()) || personKey(t);
+      const e = people.get(k);
+      if (e) e.in.push(i);
+      else people.set(k, { t, in: [i] });
+    }
+  });
+  await addNewTrainees(supabase, created as any, [...people.values()].map((p) => p.t));
+  const partial: { session_id: string; trainee_id: string; module_id: string }[] = [];
+  for (const p of people.values()) {
+    if (p.in.length === mods.length) continue; // tous les modules : toute la session
+    const trainee = await findOrCreateTrainee(supabase, { first_name: p.t.firstName, last_name: p.t.lastName }, p.t.email);
+    if (!trainee) continue;
+    for (const i of p.in) {
+      const mid = moduleIds.get(i);
+      if (mid) partial.push({ session_id: created.id, trainee_id: trainee.id, module_id: mid });
+    }
+  }
+  if (partial.length) await supabase.from('session_trainee_modules').upsert(partial, { onConflict: 'trainee_id,module_id', ignoreDuplicates: true });
+
+  await supabase.from('digiforma_modules').update({ placed_session_id: created.id }).in('key', mods.map((x) => x.key));
+  await markHolidaysAccounted(supabase, created.id).catch(() => null);
+
+  // Salle et formateur Digiforma : les plus fréquents des modules.
+  const roomCount = new Map<string, number>();
+  for (const x of mods) if (x.df_room) roomCount.set(x.df_room, (roomCount.get(x.df_room) || 0) + 1);
+  const room = [...roomCount].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const trainers = mods.flatMap((x) => (Array.isArray(x.df_trainers) ? x.df_trainers : []));
+  if (room || trainers.length) await applyDigiformaPlace(supabase, created.id, refs || (await loadPlaceRefs(supabase)), room, trainers);
+  return { ok: true, sessionId: created.id };
+}
+
+/**
+ * Nouveau module Digiforma d'une session déjà placée cette semaine en une
+ * seule session (ex. P3 ajouté après coup) : ajouté à cette session (module,
+ * jours, horaires, stagiaires) au lieu d'une session à part.
+ */
+export async function attachToGroup(supabase: SupabaseClient, m: any): Promise<string | null> {
+  if (m.placed_session_id || !groupable(m)) return null;
+  const { data: sib } = await supabase.from('digiforma_modules').select('key, start_at, placed_session_id').eq('df_session_id', m.df_session_id).not('placed_session_id', 'is', null);
+  const target = ((sib as any[]) || []).find((x) => groupKeyOf({ df_session_id: m.df_session_id, start_at: x.start_at }) === groupKeyOf(m));
+  if (!target) return null;
+  const sid = target.placed_session_id as string;
+  const { data: sess } = await supabase.from('sessions').select('id, start_at, end_at').eq('id', sid).maybeSingle();
+  if (!sess) return null;
+  const { count } = await supabase.from('session_modules').select('id', { count: 'exact', head: true }).eq('session_id', sid);
+  if (!count) return null; // session posée sans modules (créée à la main) : on n'y touche pas
+  const startAt = m.start_at < (sess as any).start_at ? m.start_at : (sess as any).start_at;
+  const endAt = m.end_at > (sess as any).end_at ? m.end_at : (sess as any).end_at;
+  if (startAt !== (sess as any).start_at || endAt !== (sess as any).end_at) {
+    const { error } = await supabase.from('sessions').update({ start_at: startAt, end_at: endAt }).eq('id', sid);
+    if (error) return null; // salle prise ces jours-là : le module reste à placer
+  }
+  const ds = weekdaysBetween(m.start_at, m.end_at);
+  if (ds.length) await supabase.from('session_days').upsert(ds.map((day) => ({ session_id: sid, day, start_time: hm(m.start_at), end_time: hm(m.end_at) })), { onConflict: 'session_id,day' });
+  const minutes = (ds.length || 1) * trainingMinutes(hm(m.start_at), hm(m.end_at));
+  // Avant l'ajout : modules existants, stagiaires de la session, et ceux limités à certains modules.
+  const [{ data: oldMods }, { data: before }, { data: partials }] = await Promise.all([
+    supabase.from('session_modules').select('id').eq('session_id', sid),
+    supabase.from('session_trainees').select('trainee_id').eq('session_id', sid),
+    supabase.from('session_trainee_modules').select('trainee_id').eq('session_id', sid),
+  ]);
+  const oldIds = ((oldMods as any[]) || []).map((r) => r.id as string);
+  const wasIn = new Set(((before as any[]) || []).map((r) => r.trainee_id as string));
+  const limited = new Set(((partials as any[]) || []).map((r) => r.trainee_id as string));
+  const { data: mod } = await supabase
+    .from('session_modules')
+    .insert({ session_id: sid, position: count, name: m.name || `Module ${count + 1}`, start_day: m.start_at.slice(0, 10), end_day: m.end_at.slice(0, 10), duration_hours: minutes > 0 ? Math.round((minutes / 60) * 100) / 100 : null })
+    .select('id')
+    .single();
+  const real = ((m.trainees as any[]) || []).filter((t) => !isPlaceholder(t));
+  await addNewTrainees(supabase, sess as any, real);
+  if (mod) {
+    const newId = (mod as any).id as string;
+    const inNew = new Set<string>();
+    for (const t of real) {
+      const tr = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
+      if (tr) inNew.add(tr.id);
+    }
+    const rows: { session_id: string; trainee_id: string; module_id: string }[] = [];
+    for (const id of new Set([...wasIn, ...inNew])) {
+      if (!wasIn.has(id)) rows.push({ session_id: sid, trainee_id: id, module_id: newId }); // nouveau : ce module seulement
+      else if (limited.has(id)) {
+        if (inNew.has(id)) rows.push({ session_id: sid, trainee_id: id, module_id: newId });
+      } else if (!inNew.has(id)) {
+        // Suivait toute la session, mais pas ce nouveau module : limité aux modules d'avant.
+        for (const mid of oldIds) rows.push({ session_id: sid, trainee_id: id, module_id: mid });
+      }
+    }
+    if (rows.length) await supabase.from('session_trainee_modules').upsert(rows, { onConflict: 'trainee_id,module_id', ignoreDuplicates: true });
+  }
+  await supabase.from('digiforma_modules').update({ placed_session_id: sid }).eq('key', m.key);
+  return sid;
 }
