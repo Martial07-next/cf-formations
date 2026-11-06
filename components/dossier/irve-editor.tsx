@@ -157,7 +157,7 @@ export function IrveEditor({
         <div className="irve-body">
           {/* Stagiaires */}
           <nav className="irve-people" aria-label="Stagiaires">
-            <select className="irve-people-select" value={current} onChange={(ev) => setCurrent(ev.target.value)} aria-label="Stagiaire">
+            <select className="input irve-people-select" value={current} onChange={(ev) => setCurrent(ev.target.value)} aria-label="Stagiaire">
               {session.trainees.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             {session.trainees.map((t) => {
