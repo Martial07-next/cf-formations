@@ -249,7 +249,7 @@ export default async function Page({
             }
             if (!program && m.df_session_name) {
               const byName = matchCatalog(m.df_session_name, programs, '');
-              if (byName.templateId && byName.score >= 0.55) program = { id: byName.templateId, title: byName.title || '' };
+              if (byName.templateId && byName.score >= 0.75) program = { id: byName.templateId, title: byName.title || '' };
             }
             // Déjà sur le planning : session aux mêmes jours avec les mêmes stagiaires, ou parcours déjà posé cette semaine.
             let covered: string | null =

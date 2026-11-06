@@ -164,7 +164,18 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const hasProgRef = !progRes.error;
   if (progRes.error) progRes = await supabase.from('poec_programs').select('id, title, start_date, end_date, notes').gte('end_date', today);
   const progRows = progRes.data;
-  const programs = ((progRows as any[]) || []).map((p) => ({ id: p.id as string, title: p.title as string, notes: (p.notes as string | null) ?? null, digiforma_ref: (p.digiforma_ref as string | null) ?? null }));
+  const programs = ((progRows as any[]) || []).map((p) => ({
+    id: p.id as string,
+    title: p.title as string,
+    notes: (p.notes as string | null) ?? null,
+    digiforma_ref: (p.digiforma_ref as string | null) ?? null,
+    start_date: (p.start_date as string) || '',
+    end_date: (p.end_date as string) || '',
+  }));
+  /** Les dates du parcours recouvrent celles de la session Digiforma (pas une autre promotion). */
+  const overlaps = (p: { start_date: string; end_date: string }, a: string, b: string) => !p.start_date || !a || (p.start_date <= b && p.end_date >= a);
+  // Décisions par parcours, détaillées dans le compte-rendu.
+  const decisions: string[] = [];
   const progPeople = new Map<string, { emails: Set<string>; names: Set<string> }>();
   if (programs.length) {
     const { data: pt } = await supabase.from('poec_trainees').select('program_id, trainees(email, full_name, first_name, last_name)').in('program_id', programs.map((p) => p.id));
@@ -182,19 +193,24 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   const { data: progSessRows } = await supabase.from('sessions').select('id, poec_id, start_at, end_at').not('poec_id', 'is', null).gte('end_at', `${today}T00:00:00`);
   const progSessions = ((progSessRows as any[]) || []) as { id: string; poec_id: string; start_at: string; end_at: string }[];
   /** Parcours du planning correspondant à une session Digiforma : même nom, ou la moitié de ses stagiaires. */
-  const programFor = (dfName: string, all: DigiformaTrainee[]): string | null => {
+  const programFor = (dfName: string, all: DigiformaTrainee[], a: string, b: string): { id: string; why: string } | null => {
     const trainees = all.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(t));
-    const byTitle = matchCatalog(dfName, programs, '');
-    if (byTitle.templateId && byTitle.score >= 0.55) return byTitle.templateId;
-    if (!trainees.length) return null;
-    let best: { id: string; n: number } | null = null;
-    for (const p of programs) {
-      const e = progPeople.get(p.id);
-      if (!e) continue;
-      const n = trainees.filter((t) => (t.email && e.emails.has(t.email.trim().toLowerCase())) || e.names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))).length;
-      if (n >= Math.max(1, Math.ceil(trainees.length / 2)) && (!best || n > best.n)) best = { id: p.id, n };
+    const candidates = programs.filter((p) => overlaps(p, a, b));
+    // 1. Mêmes stagiaires (au moins la moitié des vrais), sur des dates qui se recouvrent.
+    if (trainees.length) {
+      let best: { id: string; n: number } | null = null;
+      for (const p of candidates) {
+        const e = progPeople.get(p.id);
+        if (!e) continue;
+        const n = trainees.filter((t) => (t.email && e.emails.has(t.email.trim().toLowerCase())) || e.names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))).length;
+        if (n >= Math.max(1, Math.ceil(trainees.length / 2)) && (!best || n > best.n)) best = { id: p.id, n };
+      }
+      if (best) return { id: best.id, why: `${best.n}/${trainees.length} stagiaires en commun` };
     }
-    return best?.id || null;
+    // 2. Même nom, très net (pas « GEIQ septembre » pour « GEIQ octobre »), sur des dates qui se recouvrent.
+    const byTitle = matchCatalog(dfName, candidates, '');
+    if (byTitle.templateId && byTitle.score >= 0.75) return { id: byTitle.templateId, why: 'même nom' };
+    return null;
   };
   /** Le parcours a déjà une session ou un évènement ces jours-là : le module est couvert. */
   const coveredBy = (programId: string, start: string, end: string): string | null => {
@@ -282,12 +298,21 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       // Parcours déjà retenu pour cette session (choisi à la main en plaçant un module).
       const { data: prior } = await supabase.from('digiforma_modules').select('program_id').eq('df_session_id', s.id).not('program_id', 'is', null).limit(1);
       const priorId = ((prior as any[]) || [])[0]?.program_id || null;
-      programId = byRef?.id || priorId || programFor(s.name, real);
+      const sA = (s.startAt || s.modules[0]?.start_at || s.stages[0]?.start_at || '').slice(0, 10);
+      const sB = (s.endAt || s.modules[s.modules.length - 1]?.end_at || '').slice(0, 10);
+      const priorOk = priorId && programs.some((p) => p.id === priorId && overlaps(p, sA, sB)) ? priorId : null;
+      const found = byRef ? null : priorOk ? null : programFor(s.name, real, sA, sB);
+      programId = byRef?.id || priorOk || found?.id || null;
+      if (programId && !byRef) {
+        const t = programs.find((p) => p.id === programId)?.title;
+        decisions.push(`« ${s.name.trim()} » → relié au parcours « ${t} » (${priorOk ? 'choisi en plaçant un module' : found?.why})`);
+      }
       // Création : seulement si le nom dit clairement que c'est un parcours (GEIQ, POEC…).
+      if (!programId && !hasProgRef && namedParcours) decisions.push(`« ${s.name.trim()} » → pas de parcours : migration 61 à exécuter`);
       if (!programId && hasProgRef && namedParcours) {
         const starts = s.modules.map((m) => m.start_at.slice(0, 10)).sort();
         const ends = s.modules.map((m) => m.end_at.slice(0, 10)).sort();
-        const { data: np } = await supabase
+        const { data: np, error: npError } = await supabase
           .from('poec_programs')
           .insert({
             title: s.name,
@@ -302,9 +327,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
           .single();
         if (np) {
           programId = (np as any).id;
-          programs.push({ id: programId!, title: s.name, notes: AUTO_PROGRAM, digiforma_ref: s.id });
+          programs.push({ id: programId!, title: s.name, notes: AUTO_PROGRAM, digiforma_ref: s.id, start_date: sA, end_date: sB });
           programsCreated++;
-        }
+          decisions.push(`« ${s.name.trim()} » → parcours personnalisé créé`);
+        } else decisions.push(`« ${s.name.trim()} » → création du parcours impossible : ${npError?.message || 'erreur inconnue'}`);
       }
       if (programId) {
         autoProgram = Boolean(programs.find((p) => p.id === programId)?.notes?.startsWith(AUTO_PROGRAM));
@@ -346,7 +372,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at, (r.trainees as DigiformaTrainee[]) || []);
       if (!hit) {
         // Parcours (GEIQ, POEC, personnalisé) déjà posé cette semaine sur le planning.
-        const prog = programFor(s.name, (r.trainees as DigiformaTrainee[]) || []);
+        const prog = programId || programFor(s.name, (r.trainees as DigiformaTrainee[]) || [], r.start_at.slice(0, 10), r.end_at.slice(0, 10))?.id || null;
         const cov = prog ? coveredBy(prog, r.start_at, r.end_at) : null;
         const { error: ce } = await supabase.from('digiforma_modules').update({ covered_by: cov }).eq('key', r.key).or('covered_by.is.null,covered_by.neq.dismissed');
         if (!ce && cov) covered++;
@@ -438,6 +464,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     `${programsLinked} parcours Digiforma relié(s) à un parcours de la plateforme, dont ${programsCreated} créé(s) automatiquement ; ${autoPlaced} module(s) de parcours créé(s) automatiquement (salle à choisir). ` +
     (hasProgRef ? '' : 'Migration 61 à exécuter pour créer les parcours automatiquement. ') +
     (geiqCleaned ? `${geiqCleaned} session(s) Digiforma effacée(s) : leur parcours GEIQ est déjà sur le planning. ` : '') +
+    (decisions.length ? `Parcours : ${decisions.slice(0, 20).join(' ; ')}. ` : '') +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +
