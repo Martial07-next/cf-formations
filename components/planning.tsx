@@ -1205,6 +1205,8 @@ export type ToAssign = {
   covered: string | null;
   /** Retiré à la main de la liste (peut être remis). */
   dismissed?: boolean;
+  /** Module d'un GEIQ (parcours GEIQ, ou session Digiforma GEIQ). */
+  geiq?: boolean;
   /** Formation du catalogue reconnue d'après le nom du module. */
   match: CatalogMatch | null;
 };
@@ -1286,7 +1288,10 @@ export function ToAssignSection({
               return (
                 <li key={s.kind + s.id} className={`ta-card${isModule ? '' : ' is-session'}`}>
                   <div className="ta-top">
-                    <strong className="ta-title">{title}</strong>
+                    <strong className="ta-title">
+                      {s.geiq && <span className="ta-geiq" title="Module suivi par des alternants GEIQ">GEIQ</span>}
+                      {title}
+                    </strong>
                     {isModule && (
                       <span className={`to-assign-flag ${tpl ? (tplId === s.match?.templateId ? s.match?.confidence || 'none' : 'sure') : 'none'}`}>
                         {tpl ? (tplId === s.match?.templateId ? (s.match?.confidence === 'sure' ? 'Reconnue' : 'À vérifier') : 'Choisie') : 'Sans formation'}

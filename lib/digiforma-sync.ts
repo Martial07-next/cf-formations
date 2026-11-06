@@ -236,6 +236,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let programsLinked = 0;
   let autoPlaced = 0;
   let stagePeriods = 0;
+  let geiqCleaned = 0;
   for (const [idx, s] of todo.entries()) {
     if (Date.now() > deadline) {
       remaining++;
@@ -271,6 +272,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     // qui a ses stagiaires (ou le même nom) ; sinon parcours personnalisé créé automatiquement, avec ses modules.
     let programId: string | null = null;
     let autoProgram = false;
+    let geiqSkipped = false;
     const span = s.startAt && s.endAt ? (new Date(s.endAt.slice(0, 10)).getTime() - new Date(s.startAt.slice(0, 10)).getTime()) / 86400000 : 0;
     const namedParcours = /geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(s.name);
     const { count: hasPrior } = await supabase.from('digiforma_modules').select('key', { count: 'exact', head: true }).eq('df_session_id', s.id).not('program_id', 'is', null);
@@ -314,12 +316,32 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         }
         await supabase.from('digiforma_modules').update({ program_id: programId }).eq('df_session_id', s.id);
         programsLinked++;
+        // Parcours GEIQ déjà créé à la main sur le planning : ses modules Digiforma ne sont pas repris,
+        // et les sessions créées automatiquement pour lui (jamais placées dans une salle) sont effacées.
+        const prog = programs.find((p) => p.id === programId);
+        if (prog && /\bgeiq\b/i.test(prog.title) && !String(prog.notes || '').startsWith(AUTO_PROGRAM)) {
+          await supabase
+            .from('digiforma_modules')
+            .update({ covered_by: 'geiq-parcours' })
+            .eq('df_session_id', s.id)
+            .is('placed_session_id', null)
+            .or('covered_by.is.null,covered_by.neq.dismissed');
+          const { data: autoSessions } = await supabase.from('sessions').select('id').like('digiforma_ref', `${s.id}:%`).in('room_id', [...holdIds]);
+          const ids = ((autoSessions as any[]) || []).map((x) => x.id);
+          if (ids.length) {
+            await supabase.from('digiforma_modules').update({ placed_session_id: null, covered_by: 'geiq-parcours' }).in('placed_session_id', ids);
+            const { error: de } = await supabase.from('sessions').delete().in('id', ids);
+            if (!de) geiqCleaned += ids.length;
+          }
+          geiqSkipped = true;
+        }
       }
     }
     // Modules pas encore placés mais déjà sur le planning (créés à la main) : reliés.
     const { data: unplaced } = await supabase.from('digiforma_modules').select('key').eq('df_session_id', s.id).is('placed_session_id', null);
     const open = new Set(((unplaced as any[]) || []).map((u) => u.key));
     for (const r of rows) {
+      if (geiqSkipped) break; // parcours GEIQ fait à la main : rien à relier ni à proposer
       if (!open.has(r.key)) continue;
       const hit = findOnPlanning(r.name || s.name, s.name, r.start_at, r.end_at, (r.trainees as DigiformaTrainee[]) || []);
       if (!hit) {
@@ -337,7 +359,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       }
     }
     // Stages / périodes en entreprise : périodes du parcours (affichées comme évènements sur le planning).
-    if (programId && s.stages.length) {
+    if (programId && s.stages.length && !geiqSkipped) {
       const { data: per } = await supabase.from('poec_periods').select('start_date, end_date').eq('program_id', programId);
       const existing = ((per as any[]) || []) as { start_date: string; end_date: string }[];
       for (const blk of mergeBlocks(s.stages)) {
@@ -350,7 +372,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       }
     }
     // Parcours créé depuis Digiforma : ses modules à venir sont créés tout seuls (salle et formateur à choisir).
-    if (autoProgram && programId) {
+    if (autoProgram && programId && !geiqSkipped) {
       const { data: still } = await supabase.from('digiforma_modules').select('*').eq('df_session_id', s.id).is('placed_session_id', null);
       for (const m of (still as any[]) || []) {
         if (m.covered_by || Date.now() > deadline) continue; // déjà couvert, ou retiré à la main
@@ -415,6 +437,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (legacyIds.length ? `${legacyIds.length} ancienne(s) session(s) entière(s) « À affecter » retirée(s). ` : '') +
     `${programsLinked} parcours Digiforma relié(s) à un parcours de la plateforme, dont ${programsCreated} créé(s) automatiquement ; ${autoPlaced} module(s) de parcours créé(s) automatiquement (salle à choisir). ` +
     (hasProgRef ? '' : 'Migration 61 à exécuter pour créer les parcours automatiquement. ') +
+    (geiqCleaned ? `${geiqCleaned} session(s) Digiforma effacée(s) : leur parcours GEIQ est déjà sur le planning. ` : '') +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +

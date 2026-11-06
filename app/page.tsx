@@ -17,6 +17,7 @@ import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { withoutSessionOnly } from '@/lib/template-edit';
+const GEIQ_RE = /\bgeiq\b/i;
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
 import { MySessions, type MySession } from '@/components/my-sessions';
@@ -179,7 +180,7 @@ export default async function Page({
           holdingIds.length
             ? supabase
                 .from('sessions')
-                .select('id, title, start_at, end_at, session_trainees(status)')
+                .select('id, title, start_at, end_at, poec_id, digiforma_ref, session_trainees(status)')
                 .in('room_id', holdingIds)
                 .lt('start_at', periodTo)
                 .gte('end_at', periodFrom)
@@ -202,7 +203,7 @@ export default async function Page({
             .select('id, title, template_id, poec_id, room_id, start_at, end_at, session_trainees(trainees(email, full_name, first_name, last_name))')
             .lt('start_at', periodTo)
             .gte('end_at', periodFrom),
-          supabase.from('poec_programs').select('id, title, start_date, end_date, poec_trainees(trainees(email, full_name, first_name, last_name))').gte('end_date', periodFrom.slice(0, 10)),
+          supabase.from('poec_programs').select('id, title, notes, start_date, end_date, poec_trainees(trainees(email, full_name, first_name, last_name))').gte('end_date', periodFrom.slice(0, 10)),
           supabase.from('planning_events').select('id, poec_id, start_date, end_date').not('poec_id', 'is', null).lte('start_date', periodTo.slice(0, 10)).gte('end_date', periodFrom.slice(0, 10)),
         ]);
         const sessPeople = ((weekSessions as any[]) || [])
@@ -221,7 +222,9 @@ export default async function Page({
             const t = Array.isArray(pt.trainees) ? pt.trainees[0] : pt.trainees;
             if (t) pp.add(t);
           }
-          return { id: p.id as string, title: p.title as string, people: pp };
+          // Parcours créé à la main (pas par la synchronisation Digiforma).
+          const manual = !String(p.notes || '').startsWith('Parcours créé automatiquement depuis Digiforma');
+          return { id: p.id as string, title: p.title as string, people: pp, manual };
         });
         toAssignPrograms = programs.map((p) => ({ id: p.id, title: p.title })).sort((a, b) => a.title.localeCompare(b.title, 'fr'));
         const sameDays = (a1: string, b1: string, a2: string, b2: string) => a1.slice(0, 10) <= b2.slice(0, 10) && b1.slice(0, 10) >= a2.slice(0, 10);
@@ -249,7 +252,8 @@ export default async function Page({
               if (byName.templateId && byName.score >= 0.55) program = { id: byName.templateId, title: byName.title || '' };
             }
             // Déjà sur le planning : session aux mêmes jours avec les mêmes stagiaires, ou parcours déjà posé cette semaine.
-            let covered: string | null = m.covered_by === 'dismissed' ? 'Retiré de la liste' : null;
+            let covered: string | null =
+              m.covered_by === 'dismissed' ? 'Retiré de la liste' : m.covered_by === 'geiq-parcours' ? 'Parcours GEIQ déjà sur le planning : module Digiforma non repris' : null;
             // Personne de réel sur ces jours, ou stage / vacances : rien à placer en salle.
             if (covered) {
               // retiré à la main : rien d'autre à vérifier
@@ -258,6 +262,9 @@ export default async function Page({
             else if (!real.length) covered = all.length ? 'Aucun vrai stagiaire prévu (fictifs ou corbeille seulement)' : 'Aucun stagiaire prévu sur ces créneaux';
             const bySession = real.length ? sessPeople.find((x) => sameDays(x.start_at, x.end_at, m.start_at, m.end_at) && x.people.count(real) >= half(real.length)) : null;
             if (!covered && bySession) covered = `Déjà sur le planning : ${bySession.title}`;
+            // Parcours GEIQ déjà créé à la main sur le planning : les modules Digiforma ne sont pas repris.
+            const progFull = program ? programs.find((p) => p.id === program!.id) : null;
+            if (!covered && progFull?.manual && GEIQ_RE.test(progFull.title)) covered = `Parcours GEIQ « ${progFull.title} » déjà sur le planning : module Digiforma non repris`;
             if (!covered && program) {
               const ev = ((progEvents as any[]) || []).find((e) => e.poec_id === program!.id && e.start_date <= m.end_at.slice(0, 10) && e.end_date >= m.start_at.slice(0, 10));
               const ps = sessPeople.find((x) => x.poec_id === program!.id && sameDays(x.start_at, x.end_at, m.start_at, m.end_at));
@@ -278,11 +285,16 @@ export default async function Page({
               program,
               covered,
               dismissed: m.covered_by === 'dismissed',
+              // GEIQ : parcours GEIQ, ou session Digiforma GEIQ (même si le module vient d'une session à part).
+              geiq: GEIQ_RE.test(program?.title || '') || GEIQ_RE.test(m.df_session_name || '') || programs.some((p) => GEIQ_RE.test(p.title) && real.length > 0 && p.people.count(real) >= Math.max(1, Math.ceil(real.length / 2))),
             };
           });
         return [
           ...moduleItems,
-          ...((held.data as any[]) || []).map((x) => ({
+          ...((held.data as any[]) || []).filter((x) => {
+            const p = x.poec_id ? programs.find((q) => q.id === x.poec_id) : null;
+            return !(p && p.manual && GEIQ_RE.test(p.title) && String(x.digiforma_ref || '').includes(':'));
+          }).map((x) => ({
             match: null,
             kind: 'session' as const,
             id: x.id as string,
@@ -296,6 +308,7 @@ export default async function Page({
             program: null,
             covered: null,
             dismissed: false,
+            geiq: false,
           })),
         ].sort((p, q) => p.start_at.localeCompare(q.start_at));
       })()

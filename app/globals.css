@@ -2285,3 +2285,4 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .infos-tools{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .session-gear svg{transition:transform .3s}
 .session-gear:hover svg{transform:rotate(60deg)}
+.ta-geiq{display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;background:#5b3fa8;color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;vertical-align:2px}
