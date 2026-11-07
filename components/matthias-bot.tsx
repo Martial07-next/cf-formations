@@ -1,11 +1,14 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { Loader2, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
-import { matthiasSuggestions } from '@/lib/matthias-suggestions';
+import { Loader2, RotateCcw, Send, Sparkles, X } from 'lucide-react';
+import { matthiasSuggestions } from '@/lib/matthias-faq';
+import { matthiasAnswer } from '@/lib/matthias-match';
 
-type Turn = { role: 'user' | 'assistant'; text: string };
+/** related : questions proches proposées sous une réponse. */
+type Turn = { role: 'user' | 'assistant'; text: string; related?: string[] };
+
+const FORMATEUR_ROLES = ['formateur', 'referent', 'consultation'];
 
 const STORE = 'cf_matthias_chat';
 
@@ -63,15 +66,14 @@ function Rich({ text }: { text: string }) {
 
 /**
  * Matthias bot : bulle d'aide en bas à droite, sur toutes les pages, pour
- * toute l'équipe connectée. Conversation gardée le temps de l'onglet.
+ * toute l'équipe connectée. Gratuit : les réponses viennent d'une base de
+ * questions / réponses cherchée dans le navigateur (aucun service extérieur).
  */
 export function MatthiasBot({ role, firstName, raised = false }: { role: string; firstName: string; raised?: boolean }) {
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -100,44 +102,30 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  async function ask(question: string) {
+  function ask(question: string) {
     const q = question.trim();
     if (!q || busy) return;
-    const history: Turn[] = [...turns, { role: 'user', text: q }];
-    setTurns([...history, { role: 'assistant', text: '' }]);
+    setTurns((t) => [...t, { role: 'user', text: q }, { role: 'assistant', text: '' }]);
     setDraft('');
     setBusy(true);
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    let answer = '';
-    try {
-      const res = await fetch('/api/matthias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, page: pageName(pathname) }),
-        signal: ctrl.signal,
-      });
-      if (!res.ok || !res.body) {
-        answer = (await res.text().catch(() => '')) || 'Matthias n’a pas pu répondre, réessaie.';
-      } else {
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          answer += dec.decode(value, { stream: true });
-          const now = answer;
-          setTurns((t) => [...t.slice(0, -1), { role: 'assistant', text: now }]);
-        }
-      }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') answer = answer || 'Connexion perdue, réessaie.';
-    } finally {
-      const final = answer.trim() || '…';
-      setTurns((t) => [...t.slice(0, -1), { role: 'assistant', text: final }]);
-      setBusy(false);
-      abortRef.current = null;
+    // Réponse trouvée tout de suite ; un court délai pour la lecture.
+    const r = matthiasAnswer(q);
+    let text: string;
+    let related: string[] = r.related.map((f) => f.q);
+    if (r.smallTalk) text = r.smallTalk;
+    else if (r.entry) {
+      const note = r.entry.bureau && FORMATEUR_ROLES.includes(role) ? '(C’est le bureau administratif qui s’en occupe, mais voici comment ça marche.)\n\n' : '';
+      text = note + r.entry.a;
+    } else {
+      text = related.length
+        ? 'Je ne suis pas sûr d’avoir bien compris 🤔 Tu parles de l’une de ces questions ? Sinon reformule avec d’autres mots, ou demande à **Martial**.'
+        : 'Je n’ai pas la réponse à ça 🤔 Essaie avec d’autres mots (ex. « QR code émargement », « placer une session », « grille IRVE »), choisis une question ci-dessous, ou demande à **Martial**.';
+      if (!related.length) related = matthiasSuggestions(role).slice(0, 4);
     }
+    window.setTimeout(() => {
+      setTurns((t) => [...t.slice(0, -1), { role: 'assistant', text, related }]);
+      setBusy(false);
+    }, 350);
   }
 
   const suggestions = matthiasSuggestions(role);
@@ -186,9 +174,19 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
             {turns.map((t, i) => (
               <div key={i} className={`mb-msg ${t.role}`}>
                 {t.role === 'assistant' ? (
-                  t.text ? <Rich text={t.text} /> : <span className="mb-typing"><Loader2 size={14} className="spin" aria-hidden /> Matthias réfléchit…</span>
+                  t.text ? <Rich text={t.text} /> : <span className="mb-typing"><Loader2 size={14} className="spin" aria-hidden /> Matthias cherche…</span>
                 ) : (
                   t.text
+                )}
+                {t.role === 'assistant' && t.related && t.related.length > 0 && (
+                  <span className="mb-related">
+                    <small>{t.text.startsWith('Je n') ? 'Questions possibles :' : 'Questions proches :'}</small>
+                    {t.related.map((q) => (
+                      <button key={q} type="button" onClick={() => ask(q)}>
+                        {q}
+                      </button>
+                    ))}
+                  </span>
                 )}
               </div>
             ))}
@@ -216,41 +214,13 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
                 }
               }}
             />
-            {busy ? (
-              <button type="button" className="icon" onClick={() => abortRef.current?.abort()} aria-label="Arrêter la réponse">
-                <Square size={15} />
-              </button>
-            ) : (
-              <button type="submit" className="icon primary" disabled={!draft.trim()} aria-label="Envoyer">
-                <Send size={16} />
-              </button>
-            )}
+            <button type="submit" className="icon primary" disabled={!draft.trim() || busy} aria-label="Envoyer">
+              <Send size={16} />
+            </button>
           </form>
-          <p className="mb-foot">Matthias peut se tromper : en cas de doute, demande à Martial.</p>
+          <p className="mb-foot">Une réponse manque ? Dis-le à Martial, il l’ajoute à Matthias.</p>
         </section>
       )}
     </>
   );
-}
-
-/** Nom lisible de la page ouverte (contexte donné à Matthias). */
-function pageName(path: string): string {
-  if (path === '/') return 'Planning';
-  const map: [RegExp, string][] = [
-    [/^\/sessions\/[^/]+/, 'Fiche d’une session'],
-    [/^\/sessions/, 'Liste des sessions'],
-    [/^\/tableau-de-bord/, 'Tableau de bord'],
-    [/^\/modeles/, 'Catalogue des formations'],
-    [/^\/stagiaires/, 'Stagiaires'],
-    [/^\/poec/, 'Parcours POEC et personnalisés'],
-    [/^\/formateurs/, 'Formateurs / historique'],
-    [/^\/salles/, 'Salles'],
-    [/^\/facturation/, 'Facturation'],
-    [/^\/suivi/, 'Suivi interne'],
-    [/^\/equipe/, 'Équipes & suivi'],
-    [/^\/administration/, 'Administration'],
-    [/^\/salaries/, 'Salariés'],
-    [/^\/profil/, 'Mon profil'],
-  ];
-  return map.find(([re]) => re.test(path))?.[1] || path;
 }
