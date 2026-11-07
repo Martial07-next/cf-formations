@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { NavProgress } from '@/components/nav-progress';
 import { FirstPasswordGate } from '@/components/first-password';
+import { MatthiasBot } from '@/components/matthias-bot';
 import { setWorkedHolidays } from '@/lib/holidays';
 
 type Profile = { id?: string; full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number; must_change_password?: boolean; worked_holidays?: string[] } | null;
@@ -33,6 +34,10 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <NavProgress />
       {/* Mot de passe temporaire : à remplacer avant d'utiliser la plateforme. */}
       {profile.must_change_password && <FirstPasswordGate name={profile.full_name} />}
+      {/* Matthias bot : l'assistant de la plateforme, pour toute l'équipe. */}
+      {profile.role !== 'aucun' && !profile.must_change_password && (
+        <MatthiasBot role={profile.role} firstName={(profile.full_name || '').split(/\s+/).find((w) => w && w !== w.toUpperCase()) || ''} raised={profile.role === 'admin' || Boolean(profile.can_dev)} />
+      )}
       {/* Remarques d'amélioration : comptes avec l'accès dev et administrateur. */}
       {profile.id && (profile.role === 'admin' || profile.can_dev) && (
         <Suspense fallback={null}>
