@@ -122,7 +122,7 @@ export function DigiformaDocs({
             <div key={l.id} className="df-edit-row">
               <div className="df-edit-line">
                 <input className="input" value={l.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Nom (ex. Groupe GEIQ)" aria-label={`Nom du lien ${i + 1}`} maxLength={80} />
-                <input type="url" className="input df-url" value={l.url} onChange={(e) => upd(i, { url: e.target.value })} placeholder="https://app.digiforma.com/… (lien de la session)" aria-label={`Lien Digiforma ${i + 1}`} />
+                <input type="url" className="input df-url" value={l.url} onChange={(e) => upd(i, { url: e.target.value })} placeholder="Lien de l’intervenant (Digiforma › session › Accès)" aria-label={`Lien Digiforma ${i + 1}`} />
                 <button type="button" className="small icon ghost danger" aria-label={`Retirer le lien ${i + 1}`} onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}>
                   <Trash2 size={14} />
                 </button>

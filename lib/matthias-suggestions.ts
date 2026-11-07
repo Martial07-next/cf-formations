@@ -9,7 +9,7 @@ export function matthiasSuggestions(role: string | null | undefined): string[] {
       'Qu’est-ce que la plateforme reprend de Digiforma ?',
     ];
   return [
-    'Où je mets le lien / QR code d’émargement Digiforma ?',
+    'Lien formateur et QR codes d’émargement Digiforma : je fais comment ?',
     'Comment les sessions Digiforma arrivent sur le planning ?',
     'Qu’est-ce que la plateforme prend en compte depuis Digiforma ?',
     'Comment positionner une session sur le planning ?',

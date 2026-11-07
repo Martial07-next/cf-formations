@@ -529,9 +529,9 @@ export function FinalStep({ state, pending, run }: { state: WizardState; pending
 
       <div className="wiz-card">
         <label className="wiz-field">
-          <span><Link2 size={14} aria-hidden /> Lien Digiforma des autres documents</span>
+          <span><Link2 size={14} aria-hidden /> Lien Digiforma de l’intervenant <small className="hint">(Digiforma › session › Accès)</small></span>
           <span className="wiz-inline">
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" inputMode="url" />
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… (lien de l’intervenant)" inputMode="url" />
             <button type="button" className="small primary" disabled={pending || url.trim() === (state.digiforma_docs_url || '')} onClick={() => run(() => setDigiformaDocsUrl(state.id, url))}>
               Enregistrer
             </button>
