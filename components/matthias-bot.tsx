@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Loader2, RotateCcw, Send, Sparkles, X } from 'lucide-react';
+import { Bot, Loader2, RotateCcw, Send, Sparkles, X } from 'lucide-react';
 import { matthiasSuggestions } from '@/lib/matthias-faq';
 import { matthiasAnswer } from '@/lib/matthias-match';
 
@@ -134,14 +134,14 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
     <>
       {!open && (
         <button type="button" className={`mb-fab${raised ? ' raised' : ''}`} onClick={() => setOpen(true)} aria-label="Ouvrir Matthias, l’assistant de la plateforme">
-          <span className="mb-avatar" aria-hidden>M</span>
-          <span className="mb-fab-label">Une question ?</span>
+          <span className="mb-avatar" aria-hidden><Bot size={22} strokeWidth={2.2} /></span>
+          <span className="mb-fab-label">Matthias · une question ?</span>
         </button>
       )}
       {open && (
         <section className={`mb-panel${raised ? ' raised' : ''}`} role="dialog" aria-label="Matthias, l’assistant de la plateforme">
           <header className="mb-head">
-            <span className="mb-avatar" aria-hidden>M</span>
+            <span className="mb-avatar" aria-hidden><Bot size={20} strokeWidth={2.2} /></span>
             <span className="mb-title">
               <strong>Matthias</strong>
               <small>L’assistant de la plateforme CF Réseaux</small>
@@ -159,7 +159,7 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
             {turns.length === 0 && (
               <div className="mb-hello">
                 <p>
-                  Salut {firstName || ''} 👋 Je suis <strong>Matthias</strong>. Pose-moi n’importe quelle question sur la plateforme ou Digiforma :
+                  Salut {firstName || ''} 👋 Je suis <strong>Matthias</strong>, le robot d’aide de la plateforme. Pose-moi n’importe quelle question sur la plateforme ou Digiforma :
                   planning, sessions, dossier, documents à remplir… Écris comme tu veux, l’orthographe on s’en fiche.
                 </p>
                 <div className="mb-sugg">

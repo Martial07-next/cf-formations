@@ -22,22 +22,25 @@ export const FAQ: FaqEntry[] = [
   {
     id: 'df-qr',
     q: 'Lien formateur et QR codes d’émargement Digiforma : je fais comment ?',
-    keys: ['qr code', 'qrcode', 'qr', 'emargement', 'emarger', 'signature', 'signer', 'faire signer', 'signer stagiaires', 'feuille emargement', 'lien intervenant', 'lien formateur', 'lien formateur digiforma', 'recuperer lien', 'lien digiforma', 'ajouter intervenant', 'acces', 'qr codes emargement', 'liste qr'],
+    keys: ['qr code', 'qrcode', 'qr', 'liste qr codes', 'espace apprenant', 'configuration intervenants', 'intervenants', 'ajouter formateur digiforma', 'formateur session digiforma', 'mettre formateur digiforma', 'emargement', 'emarger', 'signature', 'signer', 'faire signer', 'signer stagiaires', 'feuille emargement', 'lien intervenant', 'lien formateur', 'lien formateur digiforma', 'recuperer lien', 'lien digiforma', 'ajouter intervenant', 'acces', 'qr codes emargement', 'liste qr'],
     bureau: true,
-    a: `Il y a **deux choses** à mettre sur la plateforme pour chaque session :
+    a: `Tout se passe dans la **session Digiforma**, en 3 étapes :
 
-**1. Le lien de l'intervenant** (le formateur signe et voit qui a signé)
-1. Sur Digiforma, **ajoute l'intervenant (le formateur) sur la session Digiforma**. Indispensable : sans lui, pas de lien formateur. Vérifie bien la session et le formateur.
-2. Dans la session Digiforma, rubrique **« Accès »** (la première fenêtre) : copie le **lien de l'intervenant**.
-3. Sur la plateforme, colle-le comme **lien Digiforma** de la session : à la création (étape « Finaliser »), ou fiche de la session > « Dossier de formation » > **« Ajouter le lien Digiforma »**.
+**1. Ajouter l'intervenant (le formateur)**
+Session Digiforma > **« Configuration »** > **« Intervenants »** : ajoute le formateur. Indispensable : sans lui, pas de lien de l'intervenant. Vérifie bien que c'est la bonne session et le bon formateur.
 
-Le formateur clique ensuite **« Accès formateur Digiforma »** : il signe ses émargements, voit qui a signé, puis coche « C'est fait sur Digiforma ».
+**2. Récupérer le lien de l'intervenant et la liste des QR codes**
+Session Digiforma > **« Espace apprenant et accès »** :
+- copie le **lien de l'intervenant** ;
+- **télécharge la liste des QR codes** (émargement des stagiaires).
 
-**2. La fiche des QR codes d'émargement** (les stagiaires émargent)
-1. Sur Digiforma, dans la session : **« Suivi » > « Émargement »**, télécharge la fiche des QR codes.
-2. Sur la plateforme, fiche de la session > « Dossier de formation » > **« Documents propres à cette session »** : « Fichier PDF » = la fiche, « Nom du document » = « QR codes émargement », « Qui le remplit ? » = **« Personne : document à consulter »**, puis **« Ajouter au dossier »**.
+**3. Les mettre sur la plateforme** (fiche de la session > « Dossier de formation »)
+- **Le lien de l'intervenant** : **« Ajouter le lien Digiforma »**, colle le lien, enregistre (ou à la création, étape « Finaliser »).
+  → Le formateur clique **« Accès formateur Digiforma »** : il **signe ses émargements** et **voit qui a signé**, puis coche « C'est fait sur Digiforma ».
+- **La liste des QR codes** : **« Documents propres à cette session »** > « Fichier PDF » = la liste, « Nom du document » = « QR codes émargement », « Qui le remplit ? » = **« Personne : document à consulter »** > **« Ajouter au dossier »**.
+  → Les stagiaires émargent en scannant leur QR code.
 
-Elle n'arrive pas toute seule : c'est à faire **à la main** pour chaque session.`,
+Rien de tout ça n'arrive tout seul : c'est à faire **à la main** pour chaque session.`,
   },
   {
     id: 'df-what',
@@ -50,7 +53,7 @@ Elle n'arrive pas toute seule : c'est à faire **à la main** pour chaque sessio
 - la **salle** et l'**intervenant** s'ils existent aussi sur la plateforme (même nom) ;
 - les **parcours** GEIQ / POEC / alternance et les **stages en entreprise**.
 
-**Pas repris (à faire à la main) :** le **lien de l'intervenant** et la **fiche des QR codes d'émargement** (demande-moi « QR code »).
+**Pas repris (à faire à la main) :** le **lien de l'intervenant** et la **liste des QR codes d'émargement** (demande-moi « QR code »).
 
 **Restent dans Digiforma :** les émargements et la satisfaction à chaud.
 
@@ -122,7 +125,7 @@ Sinon (ou si la salle est déjà réservée, ou le formateur absent), la session
     keys: ['acces formateur digiforma', 'satisfaction', 'questionnaire', 'a chaud', 'c est fait sur digiforma', 'emargement formateur'],
     a: `1. Ouvre ta session (planning > clic sur la carte) > **« Dossier de formation »**.
 2. Clique **« Accès formateur Digiforma »** : tu arrives sur Digiforma.
-3. Fais émarger les stagiaires (la **fiche des QR codes** est dans les documents de la session), **signe** tes émargements et vérifie **qui a signé** ; lance la **satisfaction à chaud**.
+3. Fais émarger les stagiaires (la **liste des QR codes** est dans les documents de la session), **signe** tes émargements et vérifie **qui a signé** ; lance la **satisfaction à chaud**.
 4. De retour sur la plateforme, coche **« C'est fait sur Digiforma »**.
 
 Pas de bouton « Accès formateur Digiforma » ? Le lien n'est pas encore renseigné : préviens le bureau.`,
