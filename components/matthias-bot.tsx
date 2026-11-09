@@ -133,7 +133,7 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
   return (
     <>
       {!open && (
-        <button type="button" className={`mb-fab${raised ? ' raised' : ''}`} onClick={() => setOpen(true)} aria-label="Ouvrir Matthias, l’assistant de la plateforme">
+        <button type="button" className={`mb-fab${raised ? ' raised' : ''}`} onClick={() => setOpen(true)} aria-label="Ouvrir Matthias, l’assistant de la plateforme" title="Matthias, le robot d’aide de la plateforme">
           <span className="mb-avatar" aria-hidden><Bot size={22} strokeWidth={2.2} /></span>
           <span className="mb-fab-label">Matthias · une question ?</span>
         </button>
