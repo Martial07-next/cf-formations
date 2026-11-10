@@ -15,7 +15,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   if (path.length !== 2 || !/^[0-9a-f-]{36}$/i.test(path[0]) || path.some((p) => p.includes('..'))) {
     return new NextResponse('Fichier introuvable.', { status: 404 });
   }
-  const name = decodeURIComponent(path[1]);
+  let name: string;
+  try {
+    name = decodeURIComponent(path[1]);
+  } catch {
+    return new NextResponse('Fichier introuvable.', { status: 404 });
+  }
+  // Nom de fichier seul : jamais de dossier ni de remontée de chemin, même encodés.
+  if (!name || /[\\/]/.test(name) || name.includes('..')) return new NextResponse('Fichier introuvable.', { status: 404 });
   const supabase = await createClient();
   const ext = (name.split('.').pop() || '').toLowerCase();
   if (req.nextUrl.searchParams.has('ouvrir') && OFFICE_EXT.includes(ext)) {
