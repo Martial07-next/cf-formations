@@ -1,7 +1,8 @@
 'use client';
 
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Loader2, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eraser, Loader2, RotateCcw, X } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveTourDeTable } from '@/app/dossier/actions';
 import { TDT_COLUMNS, type TdtData, type TdtKey } from '@/lib/tdt';
 import { titleOk, type TitleFile } from '@/lib/titres';
@@ -199,6 +200,19 @@ export function TourDeTable({
           <button type="button" className={`small${completed ? ' primary' : ''}`} onClick={download} disabled={busy}>
             {busy ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} {completed ? 'Télécharger' : 'Aperçu PDF'}
           </button>
+          {editable && (Object.keys(data.rows || {}).length > 0 || Boolean(data.general)) && (
+            <button
+              type="button"
+              className="small ghost"
+              title="Vide les lignes et les remarques générales (les titres d’habilitation déposés sont gardés)"
+              onClick={async () => {
+                if (await askConfirm('Effacer tout ce qui a été saisi dans le tour de table (lignes et remarques générales) ? Les titres d’habilitation déposés sont gardés.', { danger: true, confirmLabel: 'Tout effacer' }))
+                  setData((d) => ({ ...d, rows: {}, general: '' }));
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           {canEdit &&
             (completed ? (
               <button type="button" className="small" onClick={() => setDone(false)} disabled={isPending}><RotateCcw size={14} aria-hidden /> Rouvrir</button>

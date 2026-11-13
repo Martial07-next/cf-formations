@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Check, CheckCircle2, Download, Loader2, MousePointer2, PenLine, RotateCcw, Type, X } from 'lucide-react';
+import { Check, CheckCircle2, Download, Loader2, MousePointer2, PenLine, RotateCcw, Type, X, Eraser } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveEntry, documentUrl } from '@/app/dossier/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import type { EntryData, Mark } from '@/lib/pdf-dossier';
@@ -323,6 +324,21 @@ export function PdfFiller({
           <button type="button" className={`small${completed ? ' primary' : ''}`} onClick={download} disabled={!bytes}>
             <Download size={14} aria-hidden /> {completed ? 'Télécharger' : 'PDF'}
           </button>
+          {editable && (Object.keys(fields).length > 0 || marks.length > 0) && (
+            <button
+              type="button"
+              className="small ghost"
+              title="Vide tout ce qui a été saisi sur ce document (champs, textes, signatures)"
+              onClick={async () => {
+                if (await askConfirm('Effacer tout ce qui a été saisi sur ce document (champs, textes, signatures) ?', { danger: true, confirmLabel: 'Tout effacer' })) {
+                  setFields({});
+                  setMarks([]);
+                }
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           {canEdit &&
             (completed ? (
               <button type="button" className="small" onClick={() => setDone(false)} disabled={isPending}><RotateCcw size={14} aria-hidden /> Rouvrir</button>

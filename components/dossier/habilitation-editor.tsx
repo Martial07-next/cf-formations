@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Download, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { CheckCircle2, Download, Eraser, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveHabilitation } from '@/app/dossier/actions';
 import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
 import { certificateTitle, habDone, symbolsOf, type HabData, type HabEntry } from '@/lib/habilitation';
@@ -112,6 +113,18 @@ export function HabilitationEditor({
               <ThumbsUp size={14} aria-hidden /> Tous favorables
             </button>
           )}
+          {canEdit && done > 0 && (
+            <button
+              type="button"
+              className="small ghost"
+              onClick={async () => {
+                if (await askConfirm('Effacer tous les avis et symboles des certificats de cette session ?', { danger: true, confirmLabel: 'Tout effacer' }))
+                  setData((d) => ({ ...d, trainees: {} }));
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           <button type="button" className={`small${done ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy || !done}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Tous les certificats
           </button>
@@ -137,10 +150,10 @@ export function HabilitationEditor({
                   <small className="hint">{t.company || 'Sans entreprise'}</small>
                 </div>
                 <div className="hab-avis" role="radiogroup" aria-label={`Avis pour ${t.name}`}>
-                  <button type="button" role="radio" aria-checked={e.avis === 'favorable'} className={e.avis === 'favorable' ? 'on ok' : ''} disabled={!canEdit} onClick={() => set(t.id, { avis: 'favorable' })}>
+                  <button type="button" role="radio" aria-checked={e.avis === 'favorable'} className={e.avis === 'favorable' ? 'on ok' : ''} disabled={!canEdit} onClick={() => set(t.id, { avis: e.avis === 'favorable' ? undefined : 'favorable' })} title={e.avis === 'favorable' ? 'Cliquer à nouveau pour retirer l’avis' : undefined}>
                     <ThumbsUp size={13} aria-hidden /> Favorable
                   </button>
-                  <button type="button" role="radio" aria-checked={e.avis === 'defavorable'} className={e.avis === 'defavorable' ? 'on ko' : ''} disabled={!canEdit} onClick={() => set(t.id, { avis: 'defavorable' })}>
+                  <button type="button" role="radio" aria-checked={e.avis === 'defavorable'} className={e.avis === 'defavorable' ? 'on ko' : ''} disabled={!canEdit} onClick={() => set(t.id, { avis: e.avis === 'defavorable' ? undefined : 'defavorable' })} title={e.avis === 'defavorable' ? 'Cliquer à nouveau pour retirer l’avis' : undefined}>
                     <ThumbsDown size={13} aria-hidden /> Défavorable
                   </button>
                 </div>
@@ -161,6 +174,23 @@ export function HabilitationEditor({
                 >
                   {busy === t.id ? <Loader2 size={13} className="spin" aria-hidden /> : <Download size={13} aria-hidden />} {isBlocked ? 'Titre manquant' : 'Certificat'}
                 </button>
+                {canEdit && data.trainees?.[t.id] && (
+                  <button
+                    type="button"
+                    className="icon ghost"
+                    title="Effacer (avis et symboles remis à zéro)"
+                    aria-label={`Effacer le certificat de ${t.name}`}
+                    onClick={() =>
+                      setData((d) => {
+                        const next = { ...(d.trainees || {}) };
+                        delete next[t.id];
+                        return { ...d, trainees: next };
+                      })
+                    }
+                  >
+                    <Eraser size={15} />
+                  </button>
+                )}
               </div>
             );
           })}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Download, Loader2, PenLine, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Download, Eraser, Loader2, PenLine, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveReussite } from '@/app/dossier/actions';
 import { AutoText } from '@/components/dossier/tour-de-table';
 import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
@@ -176,6 +177,18 @@ export function ReussiteEditor({
         </div>
         <div className="row-actions">
           <LivePeers peers={live.peers} live={live.live} />
+          {canEdit && Object.keys(data.models || {}).length > 0 && (
+            <button
+              type="button"
+              className="small ghost"
+              onClick={async () => {
+                if (await askConfirm('Effacer toutes les attestations de réussite de cette session (avis, notes, observations) ? La signature est gardée.', { danger: true, confirmLabel: 'Tout effacer' }))
+                  setData((d) => ({ ...d, models: {} }));
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           <button type="button" className={`small${allDone ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy || !items.length}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les attestations (PDF)
           </button>
@@ -266,6 +279,22 @@ export function ReussiteEditor({
               <button type="button" className="small" onClick={() => download({ key, traineeId: tid })} disabled={!!busy || blocked.includes(tid)} title={blocked.includes(tid) ? 'Titre d’habilitation manquant (tour de table)' : undefined}>
                 {busy === current ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} {blocked.includes(tid) ? 'Titre d’habilitation manquant' : 'PDF de cette attestation'}
               </button>
+              {canEdit && data.models?.[key]?.[tid] && (
+                <button
+                  type="button"
+                  className="small ghost"
+                  onClick={async () => {
+                    if (await askConfirm('Effacer cette attestation ? L’avis, la note et les observations seront supprimés.', { danger: true, confirmLabel: 'Effacer' }))
+                      setData((d) => {
+                        const m = { ...(d.models?.[key] || {}) };
+                        delete m[tid];
+                        return { ...d, models: { ...(d.models || {}), [key]: m } };
+                      });
+                  }}
+                >
+                  <Eraser size={14} aria-hidden /> Effacer cette attestation
+                </button>
+              )}
               <span style={{ flex: 1 }} />
               <button type="button" className="small primary" disabled={index >= items.length - 1} onClick={() => setCurrent(items[index + 1].id)}>
                 Suivant <ArrowRight size={14} aria-hidden />

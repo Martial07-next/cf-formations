@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, Loader2, MessageSquarePlus, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, Eraser, Loader2, MessageSquarePlus, Sparkles, X } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveIrve } from '@/app/dossier/actions';
 import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
 import {
@@ -143,6 +144,18 @@ export function IrveEditor({
               {busy === trainee.id ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} PDF du stagiaire
             </button>
           )}
+          {canEdit && Object.keys(data.trainees || {}).length > 0 && (
+            <button
+              type="button"
+              className="small ghost"
+              onClick={async () => {
+                if (await askConfirm('Effacer toutes les grilles de cette session ? Notes, remarques et appréciations seront supprimées.', { danger: true, confirmLabel: 'Tout effacer' }))
+                  setData((d) => ({ ...d, trainees: {} }));
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           <button type="button" className={`small${doneCount ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les grilles
           </button>
@@ -246,7 +259,7 @@ export function IrveEditor({
                                 title={l.hint}
                                 className={`irve-level l${l.value}${v === l.value ? ' on' : ''}`}
                                 disabled={!canEdit}
-                                onClick={() => setScore(c.id, l.value)}
+                                onClick={() => (v === l.value ? set({ scores: Object.fromEntries(Object.entries(e.scores || {}).filter(([k]) => k !== c.id)) as any }) : setScore(c.id, l.value))}
                               >
                                 {l.label}
                               </button>
@@ -310,7 +323,7 @@ export function IrveEditor({
                 )}
                 <div className="irve-apprs" role="radiogroup" aria-label="Appréciation générale">
                   {APPRECIATIONS.map((a) => (
-                    <button key={a.key} type="button" role="radio" aria-checked={e.appreciation === a.key} className={`irve-appr ${a.key}${e.appreciation === a.key ? ' on' : ''}`} disabled={!canEdit} onClick={() => set({ appreciation: a.key })}>
+                    <button key={a.key} type="button" role="radio" aria-checked={e.appreciation === a.key} className={`irve-appr ${a.key}${e.appreciation === a.key ? ' on' : ''}`} disabled={!canEdit} onClick={() => set({ appreciation: e.appreciation === a.key ? undefined : a.key })}>
                       {a.label}
                     </button>
                   ))}
@@ -346,7 +359,23 @@ export function IrveEditor({
                 <button type="button" className="small" disabled={idx <= 0} onClick={() => setCurrent(session.trainees[idx - 1].id)}>
                   <ChevronLeft size={14} aria-hidden /> Stagiaire précédent
                 </button>
-                <span className="hint">{irveEntryDone(def, e) ? 'Grille complète' : 'Note tous les critères et choisis une appréciation'}</span>
+                <span className="hint">{irveEntryDone(def, e) ? 'Grille complète' : 'Note tous les critères et choisis une appréciation'} · un 2e clic sur une note la retire</span>
+                {canEdit && trainee && data.trainees?.[trainee.id] && (
+                  <button
+                    type="button"
+                    className="small ghost"
+                    onClick={async () => {
+                      if (await askConfirm('Effacer la grille de ce stagiaire ? Toutes ses notes et remarques seront supprimées.', { danger: true, confirmLabel: 'Effacer' }))
+                        setData((d) => {
+                          const next = { ...(d.trainees || {}) };
+                          delete next[trainee.id];
+                          return { ...d, trainees: next };
+                        });
+                    }}
+                  >
+                    <Eraser size={14} aria-hidden /> Effacer la grille
+                  </button>
+                )}
                 <button type="button" className="small primary" disabled={idx >= session.trainees.length - 1} onClick={() => setCurrent(session.trainees[idx + 1].id)}>
                   Stagiaire suivant <ChevronRight size={14} aria-hidden />
                 </button>

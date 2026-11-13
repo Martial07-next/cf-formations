@@ -2,7 +2,8 @@
 
 import { codificationFor } from '@/lib/appreciation';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Download, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Download, Eraser, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { askConfirm } from '@/lib/confirm-dialog';
 import { saveAppreciation } from '@/app/dossier/actions';
 import { AutoText } from '@/components/dossier/tour-de-table';
 import { LivePeers, useLiveForm } from '@/components/dossier/use-live-form';
@@ -115,6 +116,19 @@ export function AppreciationEditor({
         </div>
         <div className="row-actions">
           <LivePeers peers={live.peers} live={live.live} />
+          {canEdit && done > 0 && (
+            <button
+              type="button"
+              className="small ghost"
+              title="Effacer toutes les fiches de la session"
+              onClick={async () => {
+                if (await askConfirm('Effacer toutes les fiches d’appréciation de cette session ? Les avis et les textes saisis seront supprimés.', { danger: true, confirmLabel: 'Tout effacer' }))
+                  setData((d) => ({ ...d, trainees: {} }));
+              }}
+            >
+              <Eraser size={14} aria-hidden /> Tout effacer
+            </button>
+          )}
           <button type="button" className={`small${allDone ? ' primary' : ''}`} onClick={() => download()} disabled={!!busy || !session.trainees.length}>
             {busy === 'all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Toutes les fiches (PDF)
           </button>
@@ -222,6 +236,23 @@ export function AppreciationEditor({
               <button type="button" className="small" onClick={() => download(current)} disabled={!!busy}>
                 {busy === current ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} PDF de cette fiche
               </button>
+              {canEdit && data.trainees?.[current] && (
+                <button
+                  type="button"
+                  className="small ghost"
+                  title="Remet la fiche de ce stagiaire à zéro"
+                  onClick={async () => {
+                    if (await askConfirm('Effacer la fiche de ce stagiaire ? L’avis et les textes saisis seront supprimés.', { danger: true, confirmLabel: 'Effacer' }))
+                      setData((d) => {
+                        const next = { ...(d.trainees || {}) };
+                        delete next[current];
+                        return { ...d, trainees: next };
+                      });
+                  }}
+                >
+                  <Eraser size={14} aria-hidden /> Effacer cette fiche
+                </button>
+              )}
               <span style={{ flex: 1 }} />
               <button type="button" className="small primary" disabled={index >= session.trainees.length - 1} onClick={() => setCurrent(session.trainees[index + 1].id)}>
                 Stagiaire suivant <ArrowRight size={14} aria-hidden />
