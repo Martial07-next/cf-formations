@@ -341,10 +341,11 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
   if (locked) return { ok: false, error: locked };
   if (!digiformaRef.trim()) return { ok: false, error: 'Renseigne la référence/l\'id de session Digiforma.' };
 
-  const { digiformaFetchSessionTrainees } = await import('@/lib/digiforma');
+  const { digiformaSessionDetail } = await import('@/lib/digiforma');
   let trainees;
   try {
-    trainees = await digiformaFetchSessionTrainees(digiformaRef.trim());
+    // Stagiaires de la session, clients particuliers compris, avec leur statut d'inscription.
+    trainees = (await digiformaSessionDetail(digiformaRef.trim())).trainees;
   } catch (e: any) {
     return { ok: false, error: `Digiforma : ${e.message}` };
   }
@@ -363,8 +364,8 @@ export async function importFromDigiforma(sessionId: string, digiformaRef: strin
     if (!trainee) continue;
     const traineeId = trainee.id;
 
-    let status: 'validee' | 'en_attente' = 'validee';
-    if (sessionRow && traineeId) {
+    let status: 'validee' | 'en_attente' = t.status === 'en_attente' ? 'en_attente' : 'validee';
+    if (sessionRow && traineeId && status === 'validee') {
       const conflict = await findTraineeConflict(supabase, traineeId, sessionRow.start_at, sessionRow.end_at, sessionId);
       if (conflict) {
         status = 'en_attente';

@@ -1036,7 +1036,7 @@ export function DossierPanel({
 
       {canManage && (
         <details className="doc-session-manage">
-          <summary>Documents propres à cette session ({sessionDocs.length})</summary>
+          <summary>Documents / QR Codes propres à cette session ({sessionDocs.length})</summary>
           <DocumentList documents={sessionDocs} emptyLabel="Aucun document propre à cette session." />
           <DocumentUploader sessionId={sessionId} />
         </details>

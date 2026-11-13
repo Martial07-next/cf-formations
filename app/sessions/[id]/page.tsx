@@ -10,7 +10,7 @@ import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/comp
 import { SessionAutorisations } from '@/components/autorisations/session-autorisations';
 import { loadAuthorizations } from '@/lib/autorisations-server';
 import { sessionKinds } from '@/lib/autorisations';
-import { sessionStarted, parisNowKey } from '@/lib/session-lock';
+import { firstDayOpen, sessionStarted, parisNowKey } from '@/lib/session-lock';
 import { SessionBilling } from '@/components/billing/session-billing';
 import { INVOICE_SELECT, type Invoice } from '@/lib/billing';
 import { builtinActive, customDocs as customDocsOf } from '@/lib/documents';
@@ -778,6 +778,7 @@ export default async function SessionDetailPage({
           started={started}
           sessionEnded={ended}
           isAdminUser={profile?.role === 'admin'}
+          sameDayEdit={profile?.role === 'bureau' && started && firstDayOpen(session.start_at)}
           workPanels={workPanels}
           intraCompany={room?.status === 'exterieur' ? room.name : null}
         />

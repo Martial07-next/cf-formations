@@ -14,13 +14,21 @@ export function sessionStarted(startAt: string): boolean {
   return startAt.slice(0, 16) <= parisNowKey();
 }
 
+/** Bureau administratif : la liste reste modifiable le premier jour de la session (retardataire, absent, client ajouté sur Digiforma…). */
+export function firstDayOpen(startAt: string): boolean {
+  return parisNowKey().slice(0, 10) <= startAt.slice(0, 10);
+}
+
 export const LOCKED_MESSAGE =
-  'La session a commencé : la liste des stagiaires est figée (plus d’ajout, de retrait ni de modification). Seul l’administrateur peut la corriger.';
+  'La session a commencé : la liste des stagiaires est figée (plus d’ajout, de retrait ni de modification). Le bureau peut encore la modifier le premier jour ; ensuite, seul l’administrateur peut la corriger.';
 
 /** Message d'erreur si la liste de cette session est figée pour le compte connecté, sinon null. */
 export async function traineesLockError(sessionId: string): Promise<string | null> {
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
   if (profile?.role === 'admin') return null;
   const { data } = await supabase.from('sessions').select('start_at').eq('id', sessionId).maybeSingle();
-  return data && sessionStarted(data.start_at) ? LOCKED_MESSAGE : null;
+  if (!data || !sessionStarted(data.start_at)) return null;
+  // Bureau : modifications encore possibles le jour même du début.
+  if (profile?.role === 'bureau' && firstDayOpen(data.start_at)) return null;
+  return LOCKED_MESSAGE;
 }

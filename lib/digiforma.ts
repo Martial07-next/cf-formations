@@ -83,11 +83,14 @@ let schemaCache: Promise<Record<string, string[]>> | null = null;
 
 async function schemaFields(): Promise<Record<string, string[]>> {
   if (!schemaCache) {
-    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name fields { name type { kind name ofType { kind name ofType { kind name } } } } } } }`)
+    schemaCache = digiformaFetch(`{ __schema { queryType { name } types { name kind possibleTypes { name } fields { name type { kind name ofType { kind name ofType { kind name } } } } } } }`)
       .then((data) => {
         const out: Record<string, string[]> = {};
         const leafKind = (ty: any): boolean => (ty?.kind === 'NON_NULL' || ty?.kind === 'LIST' ? leafKind(ty.ofType) : ty?.kind === 'SCALAR' || ty?.kind === 'ENUM');
-        for (const t of data.__schema.types as { name: string; fields: { name: string; type: any }[] | null }[]) {
+        for (const t of data.__schema.types as { name: string; kind?: string; possibleTypes?: { name: string }[] | null; fields: { name: string; type: any }[] | null }[]) {
+          // Union / interface (ex. Customer.entity : entreprise OU particulier) : ses types possibles.
+          if (t.kind) out[`${t.name}#kind`] = [t.kind];
+          if (t.possibleTypes?.length) out[`${t.name}#possible`] = t.possibleTypes.map((x) => x.name);
           if (!t.fields) continue;
           out[t.name] = t.fields.map((f) => f.name);
           // Champs simples (texte, nombre, énumération) : sélectionnables sans sous-champs.
@@ -614,21 +617,46 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
   const ms = await moduleShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
   const tSel = await traineeSelection();
-  const stPart = await statusPart();
   const sessTypeName = (await schemaFields()).TrainingSession ? 'TrainingSession' : 'Session';
-  const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } ${ms.sub.type === sessTypeName ? stPart : ''} }` : '';
-  const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
-  const att = await slotAttendancePart();
-  const data = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${stPart} ${modPart} ${att} } }`, { id });
-  // Présence par créneau : stagiaires réellement prévus ce jour-là.
+  const ask = async () => {
+    const stPart = await statusPart();
+    const stNamed = await statusPart(true); // session : nom des clients particuliers, pour les ajouter s'ils manquent
+    const modPart = ms.sub && ms.sub.trainees ? `subs: ${ms.sub.field} { ${ms.sub.id ? sel('id', ms.sub.id) : ''} ${ms.sub.start} trainees: ${ms.sub.trainees} { ${tSel} } ${ms.sub.type === sessTypeName ? stPart : ''} }` : '';
+    const sessT = sh.trainees ? `trainees: ${sh.trainees} { ${tSel} }` : '';
+    const att = await slotAttendancePart();
+    return digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { id ${sessT} ${stNamed} ${modPart} ${att} } }`, { id });
+  };
+  let data;
+  try {
+    data = await ask();
+  } catch (e: any) {
+    // Champ « entité du client » refusé par l'API de ce compte : on continue sans (comme avant).
+    if (entityBroken || /délai|injoignable|refusée/.test(String(e?.message))) throw e;
+    entityBroken = true;
+    data = await ask();
+  }
+  // Présence par créneau : stagiaires réellement prévus ce jour-là (inscrits d'une entreprise + clients particuliers).
   const bySlot: Record<string, string[]> = {};
-  for (const sl of data?.session?.att || []) bySlot[String(sl.id)] = (sl.ct || []).map((c: any) => String(c.one?.id ?? c.id ?? '')).filter(Boolean);
+  for (const sl of data?.session?.att || [])
+    bySlot[String(sl.id)] = [
+      ...(sl.ct || []).map((c: any) => String(c.one?.id ?? c.id ?? '')),
+      ...(sl.cu || []).map((c: any) => String(particulierOf(c)?.id ?? '')),
+    ].filter(Boolean);
   const byModule: Record<string, DigiformaTrainee[]> = {};
   (data?.session?.subs || []).forEach((m: any, i: number) => {
     const raw = m.trainees || [];
     byModule[String(m.id ?? `${i}-${m.startDate || ''}`)] = applyStatus(raw.map(mapTrainee), m, raw);
   });
-  const raw = data?.session?.trainees || [];
+  const raw = [...(data?.session?.trainees || [])];
+  // Clients particuliers absents de la liste des stagiaires de la session : ajoutés.
+  const known = new Set(raw.map((t: any) => String(t.id)));
+  for (const r of data?.session?.regs || []) {
+    const p = particulierOf(r);
+    if (p && !known.has(String(p.id)) && (p.firstName || p.lastName || p.email)) {
+      raw.push(p);
+      known.add(String(p.id));
+    }
+  }
   return { trainees: applyStatus(raw.map(mapTrainee), data?.session, raw), byModule, bySlot };
 }
 
@@ -687,11 +715,35 @@ async function statusShape() {
   return { traineeT, traineeStatus, custField, custT, custStatus, custStatus2, custTrainees, ctField, ctTrainee, custTrainee, abField, abT, abDirect, abTrainee, abFlag, abBack };
 }
 
+/*
+ * Client particulier : sur Digiforma, le client EST le stagiaire (Customer.entity
+ * = un stagiaire, sans « customerTrainees »). Sans ce champ, ces stagiaires
+ * manquaient (6 apprenants sur Digiforma, 4 sur la plateforme).
+ */
+let entityBroken = false;
+async function particulierPart(custT: string | null, sub: string): Promise<string> {
+  if (!custT || entityBroken) return '';
+  const f = await schemaFields();
+  const traineeT = f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant';
+  const entF = pick(f[custT], ['entity', 'client', 'customerEntity']);
+  if (!entF || (f[`${custT}#leaf`] || []).includes(entF)) return '';
+  const et = f[`${custT}.${entF}#type`]?.[0];
+  if (!et) return '';
+  if (et === traineeT) return `pt: ${entF} { ${sub} }`;
+  const kind = f[`${et}#kind`]?.[0];
+  if ((kind === 'UNION' || kind === 'INTERFACE') && (f[`${et}#possible`] || []).includes(traineeT)) return `pt: ${entF} { __typename ... on ${traineeT} { ${sub} } }`;
+  return '';
+}
+/** Stagiaire « particulier » d'un client (entité = stagiaire), sinon null. */
+const particulierOf = (c: any) => (c?.pt && c.pt.id != null && (!c.pt.__typename || /trainee|student|participant/i.test(c.pt.__typename)) ? c.pt : null);
+
 /** Morceau de requête (session ou sous-session) : statuts d'inscription et abandons. */
-async function statusPart(): Promise<string> {
+async function statusPart(withNames = false): Promise<string> {
   const st = await statusShape();
   const parts: string[] = [];
-  const who = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
+  const whoBase = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
+  const pt = await particulierPart(st.custT, withNames ? await traineeSelection() : 'id');
+  const who = [whoBase, pt].filter(Boolean).join(' ');
   if (st.custField && st.custStatus && who) parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custStatus2 ? `regStatus2: ${st.custStatus2}` : ''} ${who} }`);
   if (st.abField && (st.abDirect || st.abTrainee)) {
     const flags = [st.abFlag ? `isAbandon: ${st.abFlag}` : '', st.abBack ? `isBack: ${st.abBack}` : ''].join(' ');
@@ -720,7 +772,7 @@ function applyStatus(trainees: DigiformaTrainee[], block: any, rawTrainees: any[
     const pick2 = (v: unknown) => (v == null || /^\s*\d*\s*$/.test(String(v)) ? null : v);
     const st = registrationOf(pick2(r.regStatus2) ?? pick2(r.regStatus));
     seenRegStatus.set(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`, (seenRegStatus.get(`${r.regStatus ?? '(vide)'}${r.regStatus2 != null ? ` / ${r.regStatus2}` : ''}`) || 0) + 1);
-    for (const w of [...(r.who || []), ...((r.ct || []).map((c: any) => c.one).filter(Boolean)), ...(r.one ? [r.one] : [])]) {
+    for (const w of [...(r.who || []), ...((r.ct || []).map((c: any) => c.one).filter(Boolean)), ...(r.one ? [r.one] : []), ...(particulierOf(r) ? [particulierOf(r)] : [])]) {
       const prev = byId.get(String(w.id));
       // Le plus restrictif l'emporte (exclu > en attente > validée).
       if (!prev || st === 'exclu' || (st === 'en_attente' && prev === 'validee')) byId.set(String(w.id), st);
@@ -750,10 +802,15 @@ async function slotAttendancePart(): Promise<string> {
   if (!ctField) return '';
   const ctT = f[`${slotT}.${ctField}#type`]?.[0] || null;
   if (!ctT) return '';
+  // Clients particuliers prévus sur le créneau (Slot.customers → entité = stagiaire).
+  const cuField = (f[slotT] || []).includes('customers') ? 'customers' : null;
+  const cuT = cuField ? f[`${slotT}.${cuField}#type`]?.[0] || null : null;
+  const pt = cuT ? await particulierPart(cuT, 'id') : '';
+  const cu = pt ? `cu: ${cuField} { ${pt} }` : '';
   // Directement des stagiaires, ou des inscriptions qui portent un stagiaire.
-  if (ctT === (f.Trainee ? 'Trainee' : 'Student')) return `att: ${ms.slots.field} { id ct: ${ctField} { id } }`;
+  if (ctT === (f.Trainee ? 'Trainee' : 'Student')) return `att: ${ms.slots.field} { id ct: ${ctField} { id } ${cu} }`;
   const tr = pick(f[ctT], ['trainee', 'student', 'participant']);
-  return tr ? `att: ${ms.slots.field} { id ct: ${ctField} { one: ${tr} { id } } }` : '';
+  return tr ? `att: ${ms.slots.field} { id ct: ${ctField} { one: ${tr} { id } } ${cu} }` : '';
 }
 
 

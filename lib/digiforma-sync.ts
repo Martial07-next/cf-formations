@@ -510,7 +510,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     if (Date.now() > deadline) break;
     if (String(row.digiforma_ref).includes(':')) continue; // module placé : traité ci-dessus
     try {
-      addedLater += await addNewTrainees(supabase, row, await digiformaFetchSessionTrainees(row.digiforma_ref));
+      // Stagiaires de la session Digiforma, clients particuliers compris, avec leur statut d'inscription.
+      addedLater += await addNewTrainees(supabase, row, (await digiformaSessionDetail(row.digiforma_ref)).trainees);
     } catch {
       // session introuvable sur Digiforma : ignorée
     }

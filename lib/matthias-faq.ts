@@ -37,7 +37,7 @@ Session Digiforma > **« Espace apprenant et accès »** :
 **3. Les mettre sur la plateforme** (fiche de la session > « Dossier de formation »)
 - **Le lien de l'intervenant** : **« Ajouter le lien Digiforma »**, colle le lien, enregistre (ou à la création, étape « Finaliser »).
   → Le formateur clique **« Accès formateur Digiforma »** : il **signe ses émargements** et **voit qui a signé**, puis coche « C'est fait sur Digiforma ».
-- **La liste des QR codes** : **« Documents propres à cette session »** > « Fichier PDF » = la liste, « Nom du document » = « QR codes émargement », « Qui le remplit ? » = **« Personne : document à consulter »** > **« Ajouter au dossier »**.
+- **La liste des QR codes** : **« Documents / QR Codes propres à cette session »** > « Fichier PDF » = la liste, « Nom du document » = « QR codes émargement », « Qui le remplit ? » = **« Personne : document à consulter »** > **« Ajouter au dossier »**.
   → Les stagiaires émargent en scannant leur QR code.
 
 Rien de tout ça n'arrive tout seul : c'est à faire **à la main** pour chaque session.`,
@@ -49,7 +49,7 @@ Rien de tout ça n'arrive tout seul : c'est à faire **à la main** pour chaque 
     a: `**Repris automatiquement de Digiforma :**
 - les sessions **planifiées / en cours** et leurs **modules** (nom du module de chaque créneau), semaine par semaine ;
 - les **dates et horaires réels** de chaque jour (un jour sans créneau n'est pas compté, aucun décalage pour un férié) ;
-- les **stagiaires**, créneau par créneau (un stagiaire qui fait P1 et P2 mais pas P3 n'est inscrit qu'à ses modules) ; confirmé = validé, indécis = en attente ; les « Apprenant A » fictifs et la corbeille sont ignorés ; un nouvel inscrit rejoint la session déjà placée ;
+- les **stagiaires**, **clients particuliers compris**, créneau par créneau (un stagiaire qui fait P1 et P2 mais pas P3 n'est inscrit qu'à ses modules) ; confirmé = validé, indécis = en attente ; les « Apprenant A » fictifs et la corbeille sont ignorés ; un nouvel inscrit rejoint la session déjà placée ;
 - la **salle** et l'**intervenant** s'ils existent aussi sur la plateforme (même nom) ;
 - les **parcours** GEIQ / POEC / alternance et les **stages en entreprise**.
 
@@ -315,14 +315,14 @@ Un stagiaire sans téléphone peut signer sur l'appareil du formateur.`,
 - Tout s'enregistre **automatiquement**, même à plusieurs (on voit qui est sur la fiche).
 - Quand tout est fait, la session affiche **« Dossier complet »** sur le planning.
 - **« Dossier complet (PDF) »** : tout le dossier en un fichier.
-- « Documents propres à cette session » : les PDF ajoutés par le bureau (ex. QR codes d'émargement).`,
+- « Documents / QR Codes propres à cette session » : les PDF ajoutés par le bureau (ex. QR codes d'émargement).`,
   },
   {
     id: 'do-adddoc',
     q: 'Ajouter un document à une session',
     keys: ['ajouter document', 'deposer', 'pdf session', 'document propre', 'joindre', 'ajouter au dossier'],
     bureau: true,
-    a: `Fiche de la session > « Dossier de formation » > **« Documents propres à cette session »** :
+    a: `Fiche de la session > « Dossier de formation » > **« Documents / QR Codes propres à cette session »** :
 1. « Fichier PDF » ;
 2. « Nom du document » ;
 3. « Qui le remplit ? » : le formateur, le bureau, ou **« Personne : document à consulter »** ;

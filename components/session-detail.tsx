@@ -99,6 +99,7 @@ export function SessionDetailView({
   staff = [],
   cursus: serverCursus = null,
   started = false,
+  sameDayEdit = false,
   sessionEnded = false,
   isAdminUser = false,
   workPanels = null,
@@ -114,6 +115,8 @@ export function SessionDetailView({
   focusDay?: string | null;
   /** La session a commencé : liste des stagiaires figée. */
   started?: boolean;
+  /** Bureau : liste encore modifiable le premier jour de la session. */
+  sameDayEdit?: boolean;
   sessionEnded?: boolean;
   /** Administrateur : peut corriger une liste figée. */
   isAdminUser?: boolean;
@@ -164,7 +167,7 @@ export function SessionDetailView({
   const [justAdded, setJustAdded] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const [unlocked, setUnlocked] = useState(false);
-  const locked = started && !unlocked;
+  const locked = started && !unlocked && !sameDayEdit;
   // Inscriptions modifiables : bureau / admin, tant que la session n'a pas commencé.
   const canManageTrainees = isAdmin && !locked;
 
@@ -216,14 +219,15 @@ export function SessionDetailView({
   const traineeBlock = (
     <>
       {canManageTrainees && <PasteImport sessionId={session.id} recyclage={Boolean(cursus)} company={intraCompany} />}
-      {canManageTrainees && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
 
       <div className={`panel${locked ? ' trainees-locked' : ''}`}>
         <div className="panel-head">
           <h2 id="stagiaires">Stagiaires</h2>
           {started && (
             <span className="row-actions">
-              {locked ? (
+              {sameDayEdit && !unlocked ? (
+                <span className="badge en_attente"><LockOpen size={12} aria-hidden /> Modifiable aujourd’hui</span>
+              ) : locked ? (
                 <span className="badge brouillon"><Lock size={12} aria-hidden /> Liste figée</span>
               ) : (
                 <span className="badge indisponible"><LockOpen size={12} aria-hidden /> Correction en cours</span>
@@ -238,7 +242,9 @@ export function SessionDetailView({
         </div>
         {started && (
           <p className="panel-intro">
-            {locked
+            {sameDayEdit && !unlocked
+              ? 'Premier jour de la session : le bureau peut encore ajouter, retirer ou modifier des stagiaires aujourd’hui. La liste sera figée à partir de demain.'
+              : locked
               ? `La session a commencé${sessionEnded ? ' (terminée)' : ''} : la liste des stagiaires est figée. Plus d’ajout, de retrait ni de modification${isAdminUser ? ' (l’administrateur peut corriger une erreur avec « Corriger la liste »)' : ''}.`
               : 'Mode correction (administrateur) : chaque changement est noté dans l’historique de la session.'}
           </p>
@@ -819,6 +825,8 @@ export function SessionDetailView({
           {workPanels}
         </>
       )}
+      {/* Identifiant Digiforma : technique, tout en bas et replié (personne n'a à y toucher). */}
+      {!isNew && canManageTrainees && digiformaEnabled && <DigiformaPanel sessionId={session.id} digiformaRef={session.digiforma_ref || ''} />}
     </>
   );
 }
