@@ -21,6 +21,7 @@ import { PasteImport } from '@/components/paste-import';
 import { SessionModulesPanel, TraineeModuleToggles } from '@/components/session-modules';
 import type { SessionModule } from '@/lib/modules';
 import { DigiformaPanel } from '@/components/digiforma-panel';
+import { DigiformaRefresh } from '@/components/digiforma-refresh';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
 import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2, Building2 } from 'lucide-react';
@@ -100,6 +101,7 @@ export function SessionDetailView({
   cursus: serverCursus = null,
   started = false,
   sameDayEdit = false,
+  digiformaLinked = false,
   sessionEnded = false,
   isAdminUser = false,
   workPanels = null,
@@ -117,6 +119,8 @@ export function SessionDetailView({
   started?: boolean;
   /** Bureau : liste encore modifiable le premier jour de la session. */
   sameDayEdit?: boolean;
+  /** Session reliée à Digiforma (module placé ou identifiant) : bouton de mise à jour. */
+  digiformaLinked?: boolean;
   sessionEnded?: boolean;
   /** Administrateur : peut corriger une liste figée. */
   isAdminUser?: boolean;
@@ -223,6 +227,7 @@ export function SessionDetailView({
       <div className={`panel${locked ? ' trainees-locked' : ''}`}>
         <div className="panel-head">
           <h2 id="stagiaires">Stagiaires</h2>
+          {isAdmin && digiformaLinked && <DigiformaRefresh sessionId={session.id} />}
           {started && (
             <span className="row-actions">
               {sameDayEdit && !unlocked ? (

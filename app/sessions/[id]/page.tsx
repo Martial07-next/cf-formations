@@ -779,6 +779,10 @@ export default async function SessionDetailPage({
           sessionEnded={ended}
           isAdminUser={profile?.role === 'admin'}
           sameDayEdit={profile?.role === 'bureau' && started && firstDayOpen(session.start_at)}
+          digiformaLinked={
+            Boolean((session as any).digiforma_ref) ||
+            Boolean(editable && (await supabase.from('digiforma_modules').select('key', { count: 'exact', head: true }).eq('placed_session_id', session.id)).count)
+          }
           workPanels={workPanels}
           intraCompany={room?.status === 'exterieur' ? room.name : null}
         />

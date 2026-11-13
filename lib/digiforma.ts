@@ -64,6 +64,8 @@ export type DigiformaTrainee = {
   email: string | null;
   /** Inscription sur Digiforma : confirmée → validée ; indécise ou autre → en attente. */
   status?: 'validee' | 'en_attente';
+  /** Client particulier sur Digiforma (le client est le stagiaire). */
+  particulier?: boolean;
 };
 
 export type DigiformaSession = {
@@ -650,14 +652,19 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
   const raw = [...(data?.session?.trainees || [])];
   // Clients particuliers absents de la liste des stagiaires de la session : ajoutés.
   const known = new Set(raw.map((t: any) => String(t.id)));
+  const partIds = new Set<string>();
   for (const r of data?.session?.regs || []) {
     const p = particulierOf(r);
-    if (p && !known.has(String(p.id)) && (p.firstName || p.lastName || p.email)) {
+    if (!p) continue;
+    partIds.add(String(p.id));
+    seenParticuliers.add(String(p.id));
+    if (!known.has(String(p.id)) && (p.firstName || p.lastName || p.email)) {
       raw.push(p);
       known.add(String(p.id));
     }
   }
-  return { trainees: applyStatus(raw.map(mapTrainee), data?.session, raw), byModule, bySlot };
+  const trainees = applyStatus(raw.map(mapTrainee), data?.session, raw).map((t) => (partIds.has(t.id) ? { ...t, particulier: true } : t));
+  return { trainees, byModule, bySlot };
 }
 
 /** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */
@@ -760,6 +767,11 @@ export function registrationOf(v: unknown): 'validee' | 'en_attente' | 'exclu' {
   if (/confirm|valid|accept|won|gagn|inscrit|registered|enrolled|ongoing|finished|termin|complet/.test(t)) return 'validee';
   return 'en_attente'; // indécis, en attente, à confirmer, devis…
 }
+
+/** Clients particuliers rencontrés (compte-rendu de synchronisation). */
+export const seenParticuliers = new Set<string>();
+/** Le champ « entité du client » (clients particuliers) est-il lu ? (diagnostic) */
+export const particuliersReadable = () => !entityBroken;
 
 /** Statuts d'inscription rencontrés (compte-rendu de synchronisation). */
 export const seenRegStatus = new Map<string, number>();

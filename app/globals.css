@@ -2412,3 +2412,4 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .mb-related button:hover{border-color:var(--cf-mint-strong)}
 .df-tech summary{cursor:pointer;font-size:13.5px}
 .df-tech{opacity:.85}
+.df-refresh{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}

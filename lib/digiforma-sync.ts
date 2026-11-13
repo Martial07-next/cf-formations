@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaDateModules, digiformaFetchSessionTrainees, digiformaListSessionsLight, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaListSessionsLight, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -30,6 +30,7 @@ const HORIZON_DAYS = 183;
 export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_000): Promise<SyncResult> {
   const deadline = Date.now() + budgetMs;
   seenRegStatus.clear();
+  seenParticuliers.clear();
   // Corbeille de la page Stagiaires (migration 60) : ces personnes ne sont jamais ajoutées.
   const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
   ignoredTrainees = new People();
@@ -537,7 +538,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (listed.hasStatus
       ? ` ${notPlanned} session(s) non planifiée(s) ignorée(s). Statuts Digiforma : ${[...seenStatus].map(([k, n]) => `${k} (${n})`).join(', ') || 'aucun'}.`
       : ' Statut Digiforma introuvable : toutes les sessions avec des dates sont prises.') +
-    (seenRegStatus.size ? ` Statuts d'inscription (clients) : ${[...seenRegStatus].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '');
+    (seenRegStatus.size ? ` Statuts d'inscription (clients) : ${[...seenRegStatus].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '') +
+    (particuliersReadable() ? ` Clients particuliers trouvés : ${seenParticuliers.size}.` : ' Clients particuliers : champ refusé par l’API Digiforma, non lus.');
   await logSync(supabase, 'ok', log);
   return {
     ok: true,
