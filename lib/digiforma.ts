@@ -692,12 +692,15 @@ export async function digiformaSessionDetail(id: string): Promise<{
   const partIds = new Set<string>();
   for (const r of data?.session?.regs || []) {
     const p = particulierOf(r);
-    if (!p) continue;
-    partIds.add(String(p.id));
-    seenParticuliers.add(String(p.id));
-    if (!known.has(String(p.id)) && (p.firstName || p.lastName || p.email)) {
-      raw.push(p);
-      known.add(String(p.id));
+    if (p) {
+      partIds.add(String(p.id));
+      seenParticuliers.add(String(p.id));
+    }
+    // Stagiaires de chaque client (entreprise ou particulier), prospects en attente compris : ajoutés s'ils manquent.
+    for (const w of [...(r.who || []), ...((r.ct || []).map((c: any) => c?.one).filter(Boolean)), ...(r.one ? [r.one] : []), ...(p ? [p] : [])]) {
+      if (w?.id == null || known.has(String(w.id)) || !(w.firstName || w.lastName || w.email)) continue;
+      raw.push(w);
+      known.add(String(w.id));
     }
   }
   const trainees = applyStatus(raw.map(mapTrainee), data?.session, raw).map((t) => (partIds.has(t.id) ? { ...t, particulier: true } : t));
@@ -847,8 +850,10 @@ async function statusPart(withNames = false): Promise<string> {
   const parts: string[] = [];
   // Modules (sous-sessions) cochés pour chaque stagiaire sur Digiforma (ex. INITIAL / RECYCLAGE) : session seulement.
   const ss = withNames ? await subsessionsOfRegistration(st.custT, st.ctField) : { ct: '', cust: '' };
-  const whoBase = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } ${ss.ct} }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
-  const pt = await particulierPart(st.custT, withNames ? await traineeSelection() : 'id');
+  // Session : fiche complète des stagiaires de chaque client (prospects en attente compris, absents de la liste des stagiaires).
+  const tw = withNames ? await traineeSelection() : 'id';
+  const whoBase = st.custTrainees ? `who: ${st.custTrainees} { ${tw} }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { ${tw} } ${ss.ct} }` : st.custTrainee ? `one: ${st.custTrainee} { ${tw} }` : '';
+  const pt = await particulierPart(st.custT, tw);
   const who = [whoBase, pt, ss.cust].filter(Boolean).join(' ');
   if (st.custField && st.custStatus && who) parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custStatus2 ? `regStatus2: ${st.custStatus2}` : ''} ${who} }`);
   if (st.abField && (st.abDirect || st.abTrainee)) {

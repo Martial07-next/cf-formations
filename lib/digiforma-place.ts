@@ -480,7 +480,9 @@ export function byAttendance(b: DfBlock): DfBlock[] {
   const days = (b.days || []).filter((d): d is Exclude<DayEntry, string> => typeof d !== 'string' && Boolean(d?.day)).sort((x, y) => x.day.localeCompare(y.day));
   const ids = (b.trainees || []).map((t: any) => (t?.id != null ? String(t.id) : null));
   if (days.length < 2 || !days.every((d) => Array.isArray(d.who)) || ids.some((x) => !x)) return [b];
-  const sig = (d: { who?: string[] }) => ids.filter((id) => d.who!.includes(id!)).sort().join(',');
+  // Stagiaire absent de tout l'émargement du module : l'émargement ne dit rien de lui, il est là tous les jours.
+  const seen = new Set(days.flatMap((d) => d.who!));
+  const sig = (d: { who?: string[] }) => ids.filter((id) => d.who!.includes(id!) || !seen.has(id!)).sort().join(',');
   const runs: (typeof days)[] = [];
   for (const d of days) {
     const last = runs[runs.length - 1];

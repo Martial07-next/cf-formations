@@ -257,6 +257,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let autoPlaced = 0;
   let stagePeriods = 0;
   let geiqCleaned = 0;
+  let addedLater = 0;
   for (const [idx, c] of todo.entries()) {
     if (Date.now() > deadline) {
       remaining++;
@@ -285,9 +286,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const rows = s.modules.map((m) => {
       const own = detail.byModule[m.key.slice(s.id.length + 1).split('~')[0]];
       // Présence par créneau (Digiforma) : seulement les stagiaires prévus ces jours-là.
-      const known = m.slotIds.filter((id) => id in detail.bySlot);
-      const present = known.length ? new Set(known.flatMap((id) => detail.bySlot[id])) : null;
-      const base = own && own.length ? own : detail.trainees;
+      const present = presentOn(detail, m.slotIds);
+      // Stagiaires du module ; plus ceux cochés sur ce module dans Digiforma (prospects en attente…) qui n'y figurent pas.
+      const ownIds = new Set((own || []).map((t) => t.id));
+      const base = own && own.length ? [...own, ...detail.trainees.filter((t) => !ownIds.has(t.id) && detail.subsOf[t.id]?.length && followsModule(detail.subsOf, t.id, m.name))] : detail.trainees;
       return {
         key: m.key,
         df_session_id: s.id,
@@ -296,7 +298,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         start_at: m.start_at,
         end_at: m.end_at,
         // Présents sur les créneaux du module ET cochés sur ce module dans Digiforma (ex. initial / recyclage).
-        trainees: (present ? base.filter((t) => present.has(t.id)) : base).filter((t) => followsModule(detail.subsOf, t.id, m.name)),
+        trainees: base.filter((t) => present(t.id) && followsModule(detail.subsOf, t.id, m.name)),
         whole_session: m.whole,
         synced_at: new Date().toISOString(),
         ...(placeCols ? { df_room: m.room || null, df_trainers: m.trainers?.length ? m.trainers : null } : {}),
@@ -436,6 +438,9 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         if (daysCol) offDaysSet += await applyDigiformaDays(supabase, sid);
         // Vrais noms des modules Digiforma (au lieu de « Jour 1, Jour 2… » ou d'aucun module).
         const { data: onSess } = await supabase.from('digiforma_modules').select(daysCol ? 'name, start_at, end_at, trainees, df_days' : 'name, start_at, end_at, trainees').eq('placed_session_id', sid);
+        // D'abord les stagiaires qui manquent (prospects en attente compris), pour qu'ils aient leurs modules tout de suite.
+        const { data: sessRow } = await supabase.from('sessions').select('id, start_at, end_at').eq('id', sid).maybeSingle();
+        if (sessRow) addedLater += await addNewTrainees(supabase, sessRow as any, ((onSess as any[]) || []).flatMap((x) => (x.trainees as DigiformaTrainee[]) || []));
         modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [], days: (daysCol && x.df_days) || undefined })));
       }
     }
@@ -499,7 +504,6 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   await supabase.from('digiforma_modules').delete().is('placed_session_id', null).lt('end_at', `${today}T00:00:00`);
 
   // Modules déjà placés et pas terminés : nouveaux stagiaires ajoutés à la session du planning.
-  let addedLater = 0;
   const { data: placed } = await supabase
     .from('digiforma_modules')
     .select('trainees, placed_session_id, sessions:placed_session_id(id, start_at, end_at)')
@@ -563,22 +567,44 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
 let ignoredTrainees = new People();
 
+/**
+ * Émargement Digiforma des créneaux d'un module : le stagiaire y est-il prévu ?
+ * Un stagiaire absent de tout l'émargement de la session (prospect pas encore
+ * placé sur les créneaux…) n'est pas écarté : l'émargement ne dit rien de lui.
+ */
+export function presentOn(detail: { bySlot: Record<string, string[]> }, slotIds: string[] | undefined): (id: string) => boolean {
+  const known = (slotIds || []).filter((id) => id in detail.bySlot);
+  if (!known.length) return () => true;
+  const here = new Set(known.flatMap((id) => detail.bySlot[id]));
+  const anywhere = new Set(Object.values(detail.bySlot).flat());
+  return (id) => here.has(id) || !anywhere.has(id);
+}
+
 export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remoteAll: DigiformaTrainee[]): Promise<number> {
   // Jamais de stagiaire fictif (« Apprenant A ») ni mis à la corbeille.
   const remote = remoteAll.filter((t) => !isPlaceholder(t) && !ignoredTrainees.has(t));
   if (!remote.length) return 0;
-  const { data: links } = await supabase.from('session_trainees').select('trainee_id, trainees(email, full_name, first_name, last_name)').eq('session_id', row.id);
-  const emails = new Set<string>();
-  const names = new Set<string>();
+  const { data: links } = await supabase.from('session_trainees').select('trainee_id, status, trainees(email, full_name, first_name, last_name)').eq('session_id', row.id);
+  const emails = new Map<string, any>();
+  const names = new Map<string, any>();
   for (const l of (links as any[]) || []) {
     const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees;
-    if (t?.email) emails.add(String(t.email).trim().toLowerCase());
-    for (const n of [t?.full_name, `${t?.first_name || ''} ${t?.last_name || ''}`]) if (n && n.trim()) names.add(nameKey(n));
+    if (t?.email) emails.set(String(t.email).trim().toLowerCase(), l);
+    for (const n of [t?.full_name, `${t?.first_name || ''} ${t?.last_name || ''}`]) if (n && n.trim()) names.set(nameKey(n), l);
   }
   let added = 0;
+  const upgraded = new Set<string>();
   for (const t of remote) {
-    if (t.email && emails.has(t.email.trim().toLowerCase())) continue;
-    if (names.has(nameKey(`${t.firstName || ''} ${t.lastName || ''}`))) continue;
+    const have = (t.email && emails.get(t.email.trim().toLowerCase())) || names.get(nameKey(`${t.firstName || ''} ${t.lastName || ''}`));
+    if (have) {
+      // Prospect devenu inscrit sur Digiforma : validé ici aussi (jamais l'inverse, ni s'il est pris ailleurs).
+      if (have.status === 'en_attente' && t.status !== 'en_attente' && !upgraded.has(have.trainee_id)) {
+        upgraded.add(have.trainee_id);
+        const conflict = await findTraineeConflict(supabase, have.trainee_id, row.start_at, row.end_at, row.id);
+        if (!conflict) await supabase.from('session_trainees').update({ status: 'validee' }).eq('session_id', row.id).eq('trainee_id', have.trainee_id);
+      }
+      continue;
+    }
     const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
     if (!trainee) continue;
     const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
