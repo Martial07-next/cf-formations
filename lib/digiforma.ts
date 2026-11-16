@@ -243,18 +243,20 @@ export type DigiformaModule = {
   /** Horaire réel de chaque jour (demi-journées comprises : 08:30–12:00 le dernier jour d'un recyclage d'1,5 jour). */
   dayTimes?: DayTime[];
 };
-export type DayTime = { day: string; start: string | null; end: string | null };
+/** slots : créneaux Digiforma du jour ; who : stagiaires prévus ce jour-là d'après l'émargement Digiforma. */
+export type DayTime = { day: string; start: string | null; end: string | null; slots?: string[]; who?: string[] };
 
 /** Créneaux → horaire de chaque jour (du début du premier au fin du dernier créneau de la journée). */
-function dayTimesOf(list: { start: string; startTime?: string | null; endTime?: string | null }[]): DayTime[] {
+function dayTimesOf(list: { key?: string; start: string; startTime?: string | null; endTime?: string | null }[]): DayTime[] {
   const by = new Map<string, DayTime>();
   for (const x of list) {
     const day = String(x.start).slice(0, 10);
     const st = x.startTime ? String(x.startTime).slice(0, 5) : null;
     const en = x.endTime ? String(x.endTime).slice(0, 5) : null;
     const e = by.get(day);
-    if (!e) by.set(day, { day, start: st, end: en });
+    if (!e) by.set(day, { day, start: st, end: en, slots: x.key ? [String(x.key)] : [] });
     else {
+      if (x.key) (e.slots ||= []).push(String(x.key));
       if (st && (!e.start || st < e.start)) e.start = st;
       if (en && (!e.end || en > e.end)) e.end = en;
     }
@@ -714,6 +716,18 @@ export async function digiformaSessionDetail(id: string): Promise<{
     if (p && cust.length) subsOf[String(p.id)] = cust;
   }
   return { trainees, byModule, bySlot, subsOf };
+}
+
+/**
+ * Émargement Digiforma : pour chaque jour, les stagiaires prévus sur ses créneaux
+ * (seulement si tous les créneaux du jour sont connus). Les numéros de créneaux ne sont pas gardés.
+ */
+export function withAttendance(days: DayTime[] | undefined, bySlot: Record<string, string[]> | undefined): DayTime[] | undefined {
+  if (!days) return days;
+  return days.map(({ slots, who: _w, ...d }) => {
+    const known = (slots || []).length > 0 && (slots || []).every((id) => bySlot && id in bySlot);
+    return known ? { ...d, who: [...new Set((slots || []).flatMap((id) => bySlot![id]))] } : d;
+  });
 }
 
 /** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */

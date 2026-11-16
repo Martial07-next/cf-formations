@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaDateModules, digiformaListSessionsLight, followsModule, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaListSessionsLight, followsModule, withAttendance, type DayTime, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -61,7 +61,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let stages = 0;
   const asModule = 0;
   type Person = { name: string; email: string | null };
-  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: { day: string; start: string | null; end: string | null }[] };
+  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: DayTime[] };
   const todo: { id: string; name: string; startAt: string | null; endAt: string | null }[] = [];
   for (const s of listed.sessions) {
     if (listed.hasStatus) {
@@ -80,7 +80,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     todo.push({ id: s.id, name: s.name, startAt: s.startAt, endAt: s.endAt });
   }
   /** Créneaux d'une session → modules à venir (salle) et semaines de stage. */
-  const splitModules = (c: { id: string; startAt: string | null; endAt: string | null }, mods: { modules: { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: { day: string; start: string | null; end: string | null }[] }[] }) => {
+  const splitModules = (c: { id: string; startAt: string | null; endAt: string | null }, mods: { modules: { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: DayTime[] }[] }) => {
     const raw: Mod[] = mods.modules.length
       ? mods.modules.map((m) => ({ key: `${c.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote), room: m.room ?? null, trainers: m.trainers || [], days: m.days, dayTimes: m.dayTimes }))
       : c.startAt && c.endAt && new Date(c.endAt.slice(0, 10)).getTime() - new Date(c.startAt.slice(0, 10)).getTime() <= 6 * 86400000
@@ -301,7 +301,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         synced_at: new Date().toISOString(),
         ...(placeCols ? { df_room: m.room || null, df_trainers: m.trainers?.length ? m.trainers : null } : {}),
         // Jours réels avec leur horaire (demi-journées comprises), sinon les jours seuls.
-        ...(daysCol && (m.dayTimes?.length || m.days?.length) ? { df_days: m.dayTimes?.length ? m.dayTimes : m.days } : {}),
+        ...(daysCol && (m.dayTimes?.length || m.days?.length) ? { df_days: m.dayTimes?.length ? withAttendance(m.dayTimes, detail.bySlot) : m.days } : {}),
       };
     });
     // Valeurs Digiforma précédentes : une salle / un formateur changé sur Digiforma est repris.
