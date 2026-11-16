@@ -58,6 +58,22 @@ function hasReal(m: any, trashed: People) {
 
 const hm = (v: string) => v.slice(11, 16);
 
+/** Jours Digiforma enregistrés (« AAAA-MM-JJ » ou { day, start, end }). */
+type DayEntry = string | { day: string; start: string | null; end: string | null };
+const dayOfEntry = (d: DayEntry) => (typeof d === 'string' ? d : String(d?.day || '')).slice(0, 10);
+/**
+ * Minutes de formation d'un module, jour par jour (une demi-journée compte
+ * pour ce qu'elle dure : recyclage d'1,5 jour = 7 h + 3 h 30). Sans horaire par
+ * jour : même horaire tous les jours.
+ */
+function moduleMinutes(startAt: string, endAt: string, days?: DayEntry[] | null): number {
+  const timed = (days || []).filter((d): d is { day: string; start: string; end: string } => typeof d !== 'string' && Boolean(d?.start && d?.end));
+  if (timed.length) return timed.reduce((n, d) => n + trainingMinutes(d.start.slice(0, 5), d.end.slice(0, 5)), 0);
+  const ds = weekdaysBetween(startAt, endAt);
+  return (ds.length || 1) * trainingMinutes(hm(startAt), hm(endAt));
+}
+const hoursOf = (min: number) => (min > 0 ? Math.round((min / 60) * 100) / 100 : null);
+
 /* ------------------------------------------------------------------------
  * Salle et formateur indiqués sur Digiforma → salle et formateur du planning
  * (par le nom de la salle ; par l'e-mail ou le nom du formateur).
@@ -270,10 +286,16 @@ async function placeGroup(
   // Horaires de Digiforma, jour par jour (deux modules le même jour : du début du premier à la fin du second).
   const days = new Map<string, { start: string; end: string }>();
   for (const x of mods) {
+    // Horaire réel de chaque jour (demi-journée comprise), sinon celui du module.
+    const timed = new Map<string, { start: string; end: string }>(
+      ((x.df_days as DayEntry[] | null) || [])
+        .filter((d): d is { day: string; start: string; end: string } => typeof d !== 'string' && Boolean(d?.start && d?.end))
+        .map((d) => [d.day.slice(0, 10), { start: d.start.slice(0, 5), end: d.end.slice(0, 5) }])
+    );
     for (const d of weekdaysBetween(x.start_at, x.end_at)) {
       const cur = days.get(d);
-      const st = hm(x.start_at);
-      const en = hm(x.end_at);
+      const st = timed.get(d)?.start || hm(x.start_at);
+      const en = timed.get(d)?.end || hm(x.end_at);
       days.set(d, cur ? { start: st < cur.start ? st : cur.start, end: en > cur.end ? en : cur.end } : { start: st, end: en });
     }
   }
@@ -287,18 +309,14 @@ async function placeGroup(
   const { data: smRows } = await supabase
     .from('session_modules')
     .insert(
-      mods.map((x, i) => {
-        const ds = weekdaysBetween(x.start_at, x.end_at);
-        const minutes = (ds.length ? ds.length : 1) * trainingMinutes(hm(x.start_at), hm(x.end_at));
-        return {
-          session_id: created.id,
-          position: i,
-          name: names[i],
-          start_day: x.start_at.slice(0, 10),
-          end_day: x.end_at.slice(0, 10),
-          duration_hours: minutes > 0 ? Math.round((minutes / 60) * 100) / 100 : null,
-        };
-      })
+      mods.map((x, i) => ({
+        session_id: created.id,
+        position: i,
+        name: names[i],
+        start_day: x.start_at.slice(0, 10),
+        end_day: x.end_at.slice(0, 10),
+        duration_hours: hoursOf(moduleMinutes(x.start_at, x.end_at, x.df_days)),
+      }))
     )
     .select('id, position');
   const moduleIds = new Map(((smRows as any[]) || []).map((r) => [r.position as number, r.id as string]));
@@ -363,8 +381,13 @@ export async function attachToGroup(supabase: SupabaseClient, m: any): Promise<s
     if (error) return null; // salle prise ces jours-là : le module reste à placer
   }
   const ds = weekdaysBetween(m.start_at, m.end_at);
-  if (ds.length) await supabase.from('session_days').upsert(ds.map((day) => ({ session_id: sid, day, start_time: hm(m.start_at), end_time: hm(m.end_at) })), { onConflict: 'session_id,day' });
-  const minutes = (ds.length || 1) * trainingMinutes(hm(m.start_at), hm(m.end_at));
+  if (ds.length) {
+    const timed = new Map<string, any>(((m.df_days as DayEntry[] | null) || []).filter((d) => typeof d !== 'string').map((d: any) => [String(d.day).slice(0, 10), d]));
+    await supabase
+      .from('session_days')
+      .upsert(ds.map((day) => ({ session_id: sid, day, start_time: timed.get(day)?.start?.slice(0, 5) || hm(m.start_at), end_time: timed.get(day)?.end?.slice(0, 5) || hm(m.end_at) })), { onConflict: 'session_id,day' });
+  }
+  const minutes = moduleMinutes(m.start_at, m.end_at, m.df_days);
   // Avant l'ajout : modules existants, stagiaires de la session, et ceux limités à certains modules.
   const [{ data: oldMods }, { data: before }, { data: partials }] = await Promise.all([
     supabase.from('session_modules').select('id').eq('session_id', sid),
@@ -423,7 +446,7 @@ export async function applyDigiformaDays(supabase: SupabaseClient, sessionId: st
   if (error || !sess || !String((sess as any).digiforma_ref || '').includes(':')) return 0;
   const lists = ((mods as any[]) || []).map((m) => m.df_days).filter((d) => Array.isArray(d) && d.length);
   if (!lists.length) return 0; // jours inconnus : rien à changer
-  const real = new Set<string>(lists.flat().map((d: string) => String(d).slice(0, 10)));
+  const real = new Set<string>(lists.flat().map((d: DayEntry) => dayOfEntry(d)).filter(Boolean));
   const { data: overRows } = await supabase.from('session_days').select('day, start_time, end_time').eq('session_id', sessionId);
   const over = new Map(((overRows as any[]) || []).map((o) => [String(o.day).slice(0, 10), o]));
   let set = 0;
@@ -446,7 +469,7 @@ export async function applyDigiformaDays(supabase: SupabaseClient, sessionId: st
  * modules qu'il suit sur Digiforma.
  * ---------------------------------------------------------------------- */
 
-export type DfBlock = { name: string; start_at: string; end_at: string; trainees: any[] };
+export type DfBlock = { name: string; start_at: string; end_at: string; trainees: any[]; days?: DayEntry[] | null };
 
 /** Modules qu'on peut remplacer sans perdre un choix fait à la main : aucun, ou un découpage « Jour N ». */
 export function replaceableModules(names: string[]): boolean {
@@ -465,59 +488,70 @@ export async function writeSessionModules(supabase: SupabaseClient, sessionId: s
     const name = (b.name || '').trim();
     if (!name) continue;
     const e = byName.get(name);
-    if (!e) byName.set(name, { ...b, name, trainees: [...(b.trainees || [])] });
+    if (!e) byName.set(name, { ...b, name, trainees: [...(b.trainees || [])], days: [...(b.days || [])] });
     else {
       if (b.start_at < e.start_at) e.start_at = b.start_at;
       if (b.end_at > e.end_at) e.end_at = b.end_at;
       e.trainees.push(...(b.trainees || []));
+      e.days = [...(e.days || []), ...(b.days || [])];
     }
   }
   const blocks = [...byName.values()];
   if (blocks.length < 2) return 0; // un seul module : la session entière suffit
 
   const { data: cur } = await supabase.from('session_modules').select('id, name').eq('session_id', sessionId);
-  const curNames = ((cur as any[]) || []).map((m) => String(m.name));
+  const curRows = ((cur as any[]) || []) as { id: string; name: string }[];
+  const curNames = curRows.map((m) => String(m.name));
+  // Modules déjà ceux de Digiforma : seulement les modules suivis par chaque stagiaire, remis à jour.
   const same = curNames.length === blocks.length && blocks.every((b) => curNames.includes(b.name));
-  if (same) return 0;
-  if (curNames.length && !force && !replaceableModules(curNames)) return 0;
-
-  if (curNames.length) await supabase.from('session_modules').delete().eq('session_id', sessionId); // choix des stagiaires effacés avec (cascade)
-  const { data: rows, error } = await supabase
-    .from('session_modules')
-    .insert(
-      blocks.map((b, i) => {
-        const ds = weekdaysBetween(b.start_at, b.end_at);
-        const minutes = (ds.length || 1) * trainingMinutes(hm(b.start_at), hm(b.end_at));
-        return {
+  let idOf: Map<number, string>;
+  let written = 0;
+  if (same) {
+    idOf = new Map(blocks.map((b, i) => [i, curRows.find((r) => r.name === b.name)!.id]));
+    // Durées (jour par jour, demi-journées comprises) remises à jour aussi.
+    for (const [i, b] of blocks.entries()) await supabase.from('session_modules').update({ duration_hours: hoursOf(moduleMinutes(b.start_at, b.end_at, b.days)), start_day: b.start_at.slice(0, 10), end_day: b.end_at.slice(0, 10) }).eq('id', idOf.get(i)!);
+  } else {
+    if (curNames.length && !force && !replaceableModules(curNames)) return 0;
+    if (curNames.length) await supabase.from('session_modules').delete().eq('session_id', sessionId); // choix des stagiaires effacés avec (cascade)
+    const { data: rows, error } = await supabase
+      .from('session_modules')
+      .insert(
+        blocks.map((b, i) => ({
           session_id: sessionId,
           position: i,
           name: b.name.slice(0, 80),
           start_day: b.start_at.slice(0, 10),
           end_day: b.end_at.slice(0, 10),
-          duration_hours: minutes > 0 ? Math.round((minutes / 60) * 100) / 100 : null,
-        };
-      })
-    )
-    .select('id, position');
-  if (error) return 0;
-  const idOf = new Map(((rows as any[]) || []).map((r) => [r.position as number, r.id as string]));
+          // Durée jour par jour : une demi-journée compte pour une demi-journée.
+          duration_hours: hoursOf(moduleMinutes(b.start_at, b.end_at, b.days)),
+        }))
+      )
+      .select('id, position');
+    if (error) return 0;
+    idOf = new Map(((rows as any[]) || []).map((r) => [r.position as number, r.id as string]));
+    written = blocks.length;
+  }
 
   // Stagiaires de la session → modules suivis d'après Digiforma (tous les modules : session complète, aucune ligne).
+  // Seuls les stagiaires présents sur Digiforma sont touchés ; les autres gardent leur choix.
   const { data: st } = await supabase.from('session_trainees').select('trainee_id, trainees(email, full_name, first_name, last_name)').eq('session_id', sessionId);
+  const { data: curLinks } = await supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', sessionId);
+  const linksOf = (tid: string) => ((curLinks as any[]) || []).filter((l) => l.trainee_id === tid).map((l) => l.module_id as string).sort().join(',');
   const inMods = blocks.map((b) => {
     const p = new People();
     for (const t of b.trainees) if (!isPlaceholder(t)) p.add(t);
     return p;
   });
-  const lines: { session_id: string; trainee_id: string; module_id: string }[] = [];
   for (const r of (st as any[]) || []) {
     const t = Array.isArray(r.trainees) ? r.trainees[0] : r.trainees;
     if (!t) continue;
     const who = { email: t.email, firstName: t.first_name || null, lastName: t.last_name || t.full_name || '' };
     const follows = blocks.map((_, i) => i).filter((i) => inMods[i].has(who) || (t.full_name && inMods[i].names.has(personKey({ firstName: '', lastName: t.full_name }))));
-    if (!follows.length || follows.length === blocks.length) continue;
-    for (const i of follows) lines.push({ session_id: sessionId, trainee_id: r.trainee_id, module_id: idOf.get(i)! });
+    if (!follows.length) continue; // pas sur Digiforma : choix gardé
+    const want = follows.length === blocks.length ? [] : follows.map((i) => idOf.get(i)!).filter(Boolean);
+    if (want.slice().sort().join(',') === linksOf(r.trainee_id)) continue; // déjà à jour
+    await supabase.from('session_trainee_modules').delete().eq('session_id', sessionId).eq('trainee_id', r.trainee_id);
+    if (want.length) await supabase.from('session_trainee_modules').insert(want.map((module_id) => ({ session_id: sessionId, trainee_id: r.trainee_id, module_id })));
   }
-  if (lines.length) await supabase.from('session_trainee_modules').upsert(lines, { onConflict: 'trainee_id,module_id', ignoreDuplicates: true });
-  return blocks.length;
+  return written;
 }

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaDateModules, digiformaListSessionsLight, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaListSessionsLight, followsModule, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -61,7 +61,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let stages = 0;
   const asModule = 0;
   type Person = { name: string; email: string | null };
-  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[] };
+  type Mod = { key: string; name: string | null; start_at: string; end_at: string; whole: boolean; slotIds: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: { day: string; start: string | null; end: string | null }[] };
   const todo: { id: string; name: string; startAt: string | null; endAt: string | null }[] = [];
   for (const s of listed.sessions) {
     if (listed.hasStatus) {
@@ -80,9 +80,9 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     todo.push({ id: s.id, name: s.name, startAt: s.startAt, endAt: s.endAt });
   }
   /** Créneaux d'une session → modules à venir (salle) et semaines de stage. */
-  const splitModules = (c: { id: string; startAt: string | null; endAt: string | null }, mods: { modules: { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[] }[] }) => {
+  const splitModules = (c: { id: string; startAt: string | null; endAt: string | null }, mods: { modules: { key: string; name: string | null; start: string; end: string; startTime: string | null; endTime: string | null; slotIds?: string[]; offsite?: boolean; remote?: boolean; room?: string | null; trainers?: Person[]; days?: string[]; dayTimes?: { day: string; start: string | null; end: string | null }[] }[] }) => {
     const raw: Mod[] = mods.modules.length
-      ? mods.modules.map((m) => ({ key: `${c.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote), room: m.room ?? null, trainers: m.trainers || [], days: m.days }))
+      ? mods.modules.map((m) => ({ key: `${c.id}:${m.key}`, name: m.name, start_at: toWallClock(m.start, m.startTime, '08:00'), end_at: toWallClock(m.end || m.start, m.endTime, '16:00'), whole: false, slotIds: m.slotIds || [], offsite: Boolean(m.offsite), remote: Boolean(m.remote), room: m.room ?? null, trainers: m.trainers || [], days: m.days, dayTimes: m.dayTimes }))
       : c.startAt && c.endAt && new Date(c.endAt.slice(0, 10)).getTime() - new Date(c.startAt.slice(0, 10)).getTime() <= 6 * 86400000
         ? [{ key: `${c.id}:session`, name: null, start_at: toWallClock(c.startAt, null, '08:00'), end_at: toWallClock(c.endAt, null, '16:00'), whole: true, slotIds: [], offsite: false, remote: false }]
         : [];
@@ -266,7 +266,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     const got = await details.get(c.id);
     processed.add(c.id); // lue (même en échec) : ses modules ne sont pas purgés
     if (!got) continue;
-    const [sessionMods, detail] = got as [Awaited<ReturnType<typeof digiformaSessionModules>>, { trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> }];
+    const [sessionMods, detail] = got as [Awaited<ReturnType<typeof digiformaSessionModules>>, Awaited<ReturnType<typeof digiformaSessionDetail>>];
     // « Dates et prix » : si les créneaux d'un parcours ne nomment pas leurs modules.
     if (!sessionMods.modules.some((m) => m.name) && /geiq|poec|parcours|alternance|contrat pro|professionnalisation|apprentissage/i.test(c.name)) {
       try {
@@ -295,11 +295,13 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         name: m.name,
         start_at: m.start_at,
         end_at: m.end_at,
-        trainees: present ? base.filter((t) => present.has(t.id)) : base,
+        // Présents sur les créneaux du module ET cochés sur ce module dans Digiforma (ex. initial / recyclage).
+        trainees: (present ? base.filter((t) => present.has(t.id)) : base).filter((t) => followsModule(detail.subsOf, t.id, m.name)),
         whole_session: m.whole,
         synced_at: new Date().toISOString(),
         ...(placeCols ? { df_room: m.room || null, df_trainers: m.trainers?.length ? m.trainers : null } : {}),
-        ...(daysCol && m.days?.length ? { df_days: m.days } : {}),
+        // Jours réels avec leur horaire (demi-journées comprises), sinon les jours seuls.
+        ...(daysCol && (m.dayTimes?.length || m.days?.length) ? { df_days: m.dayTimes?.length ? m.dayTimes : m.days } : {}),
       };
     });
     // Valeurs Digiforma précédentes : une salle / un formateur changé sur Digiforma est repris.
@@ -427,14 +429,14 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     // Salle et formateur Digiforma → sessions déjà placées de ces modules : repris s'ils ont changé
     // sur Digiforma, ou si la session n'a pas encore de salle / de formateur (sinon le choix fait sur le planning reste).
     // Jours sans créneau sur Digiforma (férié travaillé, jour sauté…) : jours sans formation des sessions créées depuis Digiforma.
-    if (daysCol && !geiqSkipped) {
+    if (!geiqSkipped) {
       const { data: placedSess } = await supabase.from('digiforma_modules').select('placed_session_id').eq('df_session_id', s.id).not('placed_session_id', 'is', null);
       for (const sid of new Set(((placedSess as any[]) || []).map((x) => x.placed_session_id as string))) {
         if (Date.now() > deadline) break;
-        offDaysSet += await applyDigiformaDays(supabase, sid);
+        if (daysCol) offDaysSet += await applyDigiformaDays(supabase, sid);
         // Vrais noms des modules Digiforma (au lieu de « Jour 1, Jour 2… » ou d'aucun module).
-        const { data: onSess } = await supabase.from('digiforma_modules').select('name, start_at, end_at, trainees').eq('placed_session_id', sid);
-        modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [] })));
+        const { data: onSess } = await supabase.from('digiforma_modules').select(daysCol ? 'name, start_at, end_at, trainees, df_days' : 'name, start_at, end_at, trainees').eq('placed_session_id', sid);
+        modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [], days: (daysCol && x.df_days) || undefined })));
       }
     }
     if (placeCols && !geiqSkipped) {

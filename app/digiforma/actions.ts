@@ -125,7 +125,7 @@ export async function refreshSessionFromDigiforma(
   if (!byDf.size && ref && !ref.includes(':')) byDf.set(ref, []);
   if (!byDf.size) return { ok: false, error: 'Cette session n’est reliée à aucune session Digiforma.' };
 
-  const { digiformaSessionDetail, digiformaSessionModules } = await import('@/lib/digiforma');
+  const { digiformaSessionDetail, digiformaSessionModules, followsModule } = await import('@/lib/digiforma');
   const { addNewTrainees } = await import('@/lib/digiforma-sync');
   const { People, isPlaceholder } = await import('@/lib/digiforma-people');
   const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
@@ -140,7 +140,10 @@ export async function refreshSessionFromDigiforma(
       if (keys.length) {
         // Seulement les stagiaires prévus sur les créneaux des modules de cette session.
         const sm = await digiformaSessionModules(dfId);
-        const slotIds = sm.modules.filter((m) => keys.includes(`${dfId}:${m.key}`)).flatMap((m) => m.slotIds || []);
+        const mine = sm.modules.filter((m) => keys.includes(`${dfId}:${m.key}`));
+        const slotIds = mine.flatMap((m) => m.slotIds || []);
+        // Cochés sur au moins un de ces modules dans Digiforma.
+        if (mine.some((m) => m.name)) list = list.filter((t) => mine.some((m) => followsModule(detail.subsOf, t.id, m.name)));
         const known = slotIds.filter((id) => id in detail.bySlot);
         if (known.length) {
           const present = new Set(known.flatMap((id) => detail.bySlot[id]));
@@ -185,11 +188,11 @@ export async function digiformaModulesForSession(sessionId: string): Promise<Res
   const ref = String((sess as any).digiforma_ref || '');
   if (ref) dfIds.add(ref.split(':')[0]);
   if (!dfIds.size) return { ok: false, error: 'Cette session n’est reliée à aucune session Digiforma.' };
-  const { digiformaSessionDetail, digiformaSessionModules, toWallClock } = await import('@/lib/digiforma');
+  const { digiformaSessionDetail, digiformaSessionModules, toWallClock, followsModule } = await import('@/lib/digiforma');
   const { writeSessionModules } = await import('@/lib/digiforma-place');
   const a = String((sess as any).start_at).slice(0, 10);
   const b = String((sess as any).end_at).slice(0, 10);
-  const blocks: { name: string; start_at: string; end_at: string; trainees: any[] }[] = [];
+  const blocks: { name: string; start_at: string; end_at: string; trainees: any[]; days?: any[] | null }[] = [];
   try {
     for (const id of dfIds) {
       const [sm, detail] = await Promise.all([digiformaSessionModules(id), digiformaSessionDetail(id)]);
@@ -201,7 +204,8 @@ export async function digiformaModulesForSession(sessionId: string): Promise<Res
           name: m.name,
           start_at: toWallClock(m.start, m.startTime, '08:00'),
           end_at: toWallClock(m.end || m.start, m.endTime, '16:00'),
-          trainees: present ? detail.trainees.filter((t) => present.has(t.id)) : detail.trainees,
+          trainees: (present ? detail.trainees.filter((t) => present.has(t.id)) : detail.trainees).filter((t) => followsModule(detail.subsOf, t.id, m.name)),
+          days: m.dayTimes || m.days || null,
         });
       }
     }

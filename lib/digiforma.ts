@@ -240,7 +240,27 @@ export type DigiformaModule = {
   trainers?: DigiformaPerson[];
   /** Jours qui ont vraiment un créneau sur Digiforma (« AAAA-MM-JJ ») : les autres jours ouvrés ne sont pas des jours de formation. */
   days?: string[];
+  /** Horaire réel de chaque jour (demi-journées comprises : 08:30–12:00 le dernier jour d'un recyclage d'1,5 jour). */
+  dayTimes?: DayTime[];
 };
+export type DayTime = { day: string; start: string | null; end: string | null };
+
+/** Créneaux → horaire de chaque jour (du début du premier au fin du dernier créneau de la journée). */
+function dayTimesOf(list: { start: string; startTime?: string | null; endTime?: string | null }[]): DayTime[] {
+  const by = new Map<string, DayTime>();
+  for (const x of list) {
+    const day = String(x.start).slice(0, 10);
+    const st = x.startTime ? String(x.startTime).slice(0, 5) : null;
+    const en = x.endTime ? String(x.endTime).slice(0, 5) : null;
+    const e = by.get(day);
+    if (!e) by.set(day, { day, start: st, end: en });
+    else {
+      if (st && (!e.start || st < e.start)) e.start = st;
+      if (en && (!e.end || en > e.end)) e.end = en;
+    }
+  }
+  return [...by.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
 export type DigiformaPerson = { name: string; email: string | null };
 export type DigiformaSessionModules = { id: string; name: string; status: string | null; startAt: string | null; endAt: string | null; modules: DigiformaModule[]; fromSubsessions?: boolean };
 
@@ -474,7 +494,7 @@ function toSessionModules(s: any): DigiformaSessionModules {
         const subSlots = (sub.slots || []).map(mapDated).filter((x: any) => x.start);
         const long = m.end && day(m.end) - day(m.start) > 6 * 86400000;
         if (!long || !subSlots.length)
-          return long ? [] : [{ ...m, ...(subSlots.length ? { ...placeOf(subSlots), days: [...new Set(subSlots.map((x: any) => String(x.start).slice(0, 10)))].sort() } : {}) }];
+          return long ? [] : [{ ...m, ...(subSlots.length ? { ...placeOf(subSlots), days: [...new Set(subSlots.map((x: any) => String(x.start).slice(0, 10)))].sort(), dayTimes: dayTimesOf(subSlots) } : {}) }];
         return slotBlocks(subSlots.map((x: any) => ({ ...x, name: x.name || m.name }))).map((b) => ({ ...b, key: `${m.key}~${b.start.slice(0, 10)}` }));
       });
       // Sans sous-session : créneaux en blocs par semaine (et par module si le créneau en porte le nom).
@@ -610,11 +630,18 @@ function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
     ...b,
     ...placeOf(members.get(b) || []),
     days: [...new Set((members.get(b) || []).map((x) => x.start.slice(0, 10)))].sort(),
+    dayTimes: dayTimesOf(members.get(b) || []),
   }));
 }
 
 /** Stagiaires d'une session Digiforma, et par module quand l'API les donne. */
-export async function digiformaSessionDetail(id: string): Promise<{ trainees: DigiformaTrainee[]; byModule: Record<string, DigiformaTrainee[]>; bySlot: Record<string, string[]> }> {
+export async function digiformaSessionDetail(id: string): Promise<{
+  trainees: DigiformaTrainee[];
+  byModule: Record<string, DigiformaTrainee[]>;
+  bySlot: Record<string, string[]>;
+  /** Modules (sous-sessions) cochés pour chaque stagiaire sur Digiforma. */
+  subsOf: Record<string, string[]>;
+}> {
   const sh = await sessionShape();
   const ms = await moduleShape();
   if (!sh.oneField) throw new Error('Digiforma : session introuvable dans l’API de ce compte.');
@@ -633,9 +660,17 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
     data = await ask();
   } catch (e: any) {
     // Champ « entité du client » refusé par l'API de ce compte : on continue sans (comme avant).
-    if (entityBroken || /délai|injoignable|refusée/.test(String(e?.message))) throw e;
-    entityBroken = true;
-    data = await ask();
+    if ((entityBroken && subsBroken) || /délai|injoignable|refusée/.test(String(e?.message))) throw e;
+    // D'abord sans les modules cochés, puis sans les clients particuliers.
+    if (!subsBroken) subsBroken = true;
+    else entityBroken = true;
+    try {
+      data = await ask();
+    } catch (e2: any) {
+      if (entityBroken || /délai|injoignable|refusée/.test(String(e2?.message))) throw e2;
+      entityBroken = true;
+      data = await ask();
+    }
   }
   // Présence par créneau : stagiaires réellement prévus ce jour-là (inscrits d'une entreprise + clients particuliers).
   const bySlot: Record<string, string[]> = {};
@@ -664,7 +699,21 @@ export async function digiformaSessionDetail(id: string): Promise<{ trainees: Di
     }
   }
   const trainees = applyStatus(raw.map(mapTrainee), data?.session, raw).map((t) => (partIds.has(t.id) ? { ...t, particulier: true } : t));
-  return { trainees, byModule, bySlot };
+  // Modules cochés par stagiaire (inscription du stagiaire, sinon celles du client).
+  const subsOf: Record<string, string[]> = {};
+  for (const r of data?.session?.regs || []) {
+    const cust = ((r.css as any[]) || []).map((x) => String(x?.n || '')).filter(Boolean);
+    for (const c of (r.ct as any[]) || []) {
+      const tid = c?.one?.id != null ? String(c.one.id) : null;
+      if (!tid) continue;
+      const own = ((c.ss as any[]) || []).map((x) => String(x?.n || '')).filter(Boolean);
+      if (own.length) subsOf[tid] = own;
+      else if (cust.length) subsOf[tid] = cust;
+    }
+    const p = particulierOf(r);
+    if (p && cust.length) subsOf[String(p.id)] = cust;
+  }
+  return { trainees, byModule, bySlot, subsOf };
 }
 
 /** Date / heure Digiforma → heure locale du planning (« AAAA-MM-JJTHH:MM:00 »). */
@@ -741,6 +790,40 @@ async function particulierPart(custT: string | null, sub: string): Promise<strin
   if ((kind === 'UNION' || kind === 'INTERFACE') && (f[`${et}#possible`] || []).includes(traineeT)) return `pt: ${entF} { __typename ... on ${traineeT} { ${sub} } }`;
   return '';
 }
+/*
+ * Modules suivis : sur Digiforma, chaque stagiaire d'un client est coché sur
+ * les sous-sessions qu'il suit (ex. « INITIAL ACC BT » toute la semaine,
+ * « RECYCLAGE ACC BT » le mercredi). Lu sur l'inscription du stagiaire
+ * (CustomerTrainee.subsessions), sinon sur le client (Customer.subsessions).
+ */
+let subsBroken = false;
+async function subsessionsOfRegistration(custT: string | null, ctField: string | null): Promise<{ ct: string; cust: string }> {
+  const none = { ct: '', cust: '' };
+  if (!custT || subsBroken) return none;
+  const f = await schemaFields();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  const subT = f[`${sessT}.subsessions#type`]?.[0] || f[`${sessT}.subSessions#type`]?.[0] || (f.Subsession ? 'Subsession' : null);
+  if (!subT) return none;
+  const nameF = pick(f[`${subT}#leaf`], ['name', 'customName', 'title', 'label']);
+  if (!nameF) return none;
+  const listOf = (t: string | null) => (t ? (f[t] || []).find((n) => f[`${t}.${n}#type`]?.[0] === subT) || null : null);
+  const ctT = ctField ? f[`${custT}.${ctField}#type`]?.[0] || null : null;
+  const ctSub = listOf(ctT);
+  const custSub = listOf(custT);
+  return {
+    ct: ctSub ? `ss: ${ctSub} { id n: ${nameF} }` : '',
+    cust: custSub ? `css: ${custSub} { id n: ${nameF} }` : '',
+  };
+}
+const plain = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** Le stagiaire suit ce module d'après Digiforma (aucune case connue : oui). */
+export function followsModule(subsOf: Record<string, string[]> | undefined, traineeId: string, moduleName: string | null | undefined): boolean {
+  const list = subsOf?.[traineeId];
+  if (!list?.length || !moduleName) return true;
+  const n = plain(moduleName);
+  return list.some((x) => plain(x) === n);
+}
+
 /** Stagiaire « particulier » d'un client (entité = stagiaire), sinon null. */
 const particulierOf = (c: any) => (c?.pt && c.pt.id != null && (!c.pt.__typename || /trainee|student|participant/i.test(c.pt.__typename)) ? c.pt : null);
 
@@ -748,9 +831,11 @@ const particulierOf = (c: any) => (c?.pt && c.pt.id != null && (!c.pt.__typename
 async function statusPart(withNames = false): Promise<string> {
   const st = await statusShape();
   const parts: string[] = [];
-  const whoBase = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
+  // Modules (sous-sessions) cochés pour chaque stagiaire sur Digiforma (ex. INITIAL / RECYCLAGE) : session seulement.
+  const ss = withNames ? await subsessionsOfRegistration(st.custT, st.ctField) : { ct: '', cust: '' };
+  const whoBase = st.custTrainees ? `who: ${st.custTrainees} { id }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { id } ${ss.ct} }` : st.custTrainee ? `one: ${st.custTrainee} { id }` : '';
   const pt = await particulierPart(st.custT, withNames ? await traineeSelection() : 'id');
-  const who = [whoBase, pt].filter(Boolean).join(' ');
+  const who = [whoBase, pt, ss.cust].filter(Boolean).join(' ');
   if (st.custField && st.custStatus && who) parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custStatus2 ? `regStatus2: ${st.custStatus2}` : ''} ${who} }`);
   if (st.abField && (st.abDirect || st.abTrainee)) {
     const flags = [st.abFlag ? `isAbandon: ${st.abFlag}` : '', st.abBack ? `isBack: ${st.abBack}` : ''].join(' ');
