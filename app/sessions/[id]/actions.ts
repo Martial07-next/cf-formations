@@ -474,7 +474,7 @@ export async function deleteSessionModule(sessionId: string, moduleId: string): 
   return { ok: true };
 }
 
-/** Découpe rapide : un module par jour ouvré (« Jour 1 », « Jour 2 »…). */
+/** Découpe rapide : un module par jour ouvré (« Lun. 16/11 », « Mar. 17/11 »…). */
 export async function splitSessionByDay(sessionId: string): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
@@ -482,12 +482,12 @@ export async function splitSessionByDay(sessionId: string): Promise<ActionResult
   if (!session) return { ok: false, error: 'Session introuvable.' };
   const { count } = await supabase.from('session_modules').select('id', { count: 'exact', head: true }).eq('session_id', sessionId);
   if (count) return { ok: false, error: 'Cette session a déjà des modules.' };
-  const { weekdaysBetween } = await import('@/lib/week');
+  const { weekdaysBetween, dayModuleName } = await import('@/lib/week');
   const days = weekdaysBetween(session.start_at, session.end_at);
   if (days.length < 2) return { ok: false, error: 'La session ne dure qu’une journée.' };
   const { error } = await supabase
     .from('session_modules')
-    .insert(days.map((day, position) => ({ session_id: sessionId, position, name: `Jour ${position + 1}`, start_day: day, end_day: day })));
+    .insert(days.map((day, position) => ({ session_id: sessionId, position, name: dayModuleName(day), start_day: day, end_day: day })));
   if (error) return { ok: false, error: error.message };
   refreshSession(sessionId);
   return { ok: true };

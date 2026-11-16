@@ -4,7 +4,7 @@ import { markHolidaysAccounted } from '@/lib/holiday-shifts';
 import { People, isPlaceholder, personKey } from '@/lib/digiforma-people';
 import { findOrCreateTrainee } from '@/lib/trainee-conflict';
 import { trainingMinutes } from '@/lib/schedule';
-import { weekdaysBetween } from '@/lib/week';
+import { isDayModuleName, weekdaysBetween } from '@/lib/week';
 
 /* ------------------------------------------------------------------------
  * Plusieurs modules d'une même session Digiforma la même semaine (ex. IRVE
@@ -450,7 +450,7 @@ export type DfBlock = { name: string; start_at: string; end_at: string; trainees
 
 /** Modules qu'on peut remplacer sans perdre un choix fait à la main : aucun, ou un découpage « Jour N ». */
 export function replaceableModules(names: string[]): boolean {
-  return names.every((n) => /^jour\s*\d+$/i.test(n.trim()));
+  return names.every((n) => isDayModuleName(n));
 }
 
 /**

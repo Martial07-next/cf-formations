@@ -237,3 +237,13 @@ export function formatHours(h: number): string {
   const mm = total % 60;
   return mm ? `${hh} h ${String(mm).padStart(2, '0')}` : `${hh} h`;
 }
+
+/** Nom d'un module d'une journée : « Lun. 16/11 » (au lieu de « Jour 1 »). */
+export function dayModuleName(day: string): string {
+  const d = new Date(day.slice(0, 10) + 'T12:00:00Z');
+  const w = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'][d.getUTCDay()];
+  return `${w} ${day.slice(8, 10)}/${day.slice(5, 7)}`;
+}
+
+/** Module nommé automatiquement par jour (« Jour 3 » ou « Lun. 16/11 ») : remplaçable par les vrais modules. */
+export const isDayModuleName = (name: string) => /^(jour\s*\d+|(dim|lun|mar|mer|jeu|ven|sam)\.?\s\d{2}\/\d{2})$/i.test(name.trim());

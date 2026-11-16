@@ -1455,9 +1455,10 @@ export function ToAssignSection({
                 </div>
                 <button type="button" className="icon ghost" onClick={() => placeRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
               </div>
+              <div className="modal-body place-content">
               <div className="place-summary">
                 <strong>{tpl?.title || placing.title}</strong>
-                <span>
+                <span className="place-when">
                   {d2(placing.start_at)}
                   {placing.start_at.slice(0, 10) !== placing.end_at.slice(0, 10) ? ` → ${d2(placing.end_at)}` : ''} · {h(placing.start_at)}–{h(placing.end_at)}
                 </span>
@@ -1477,14 +1478,14 @@ export function ToAssignSection({
                   Salle
                   <select className="input" value={placeRoom} onChange={(e) => setPlaceRoom(e.target.value)}>
                     <option value="">À affecter (choisir plus tard)</option>
-                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.id === placing.roomId ? ' · indiquée sur Digiforma' : ''}</option>)}
+                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.id === placing.roomId ? ' (Digiforma)' : ''}</option>)}
                   </select>
                 </label>
                 <label>
                   Formateur
                   <select className="input" value={placeTrainer} onChange={(e) => setPlaceTrainer(e.target.value)}>
                     <option value="">À choisir plus tard</option>
-                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.id === placing.trainerId ? ' · indiqué sur Digiforma' : ''}</option>)}
+                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.id === placing.trainerId ? ' (Digiforma)' : ''}</option>)}
                   </select>
                 </label>
                 {programs.length > 0 && (
@@ -1498,8 +1499,10 @@ export function ToAssignSection({
                 )}
               </div>
               <div className="place-people">
-                <span className="hint">{placing.trainees} stagiaire{placing.trainees > 1 ? 's' : ''} :</span>
-                {placing.people.map((p) => <span key={p.key} className={`to-assign-person${p.waiting ? ' waiting' : ''}`}>{p.name}</span>)}
+                <span className="place-label">{placing.trainees} stagiaire{placing.trainees > 1 ? 's' : ''}</span>
+                <span className="place-chips">
+                  {placing.people.map((p) => <span key={p.key} className={`to-assign-person${p.waiting ? ' waiting' : ''}`}>{p.name}</span>)}
+                </span>
               </div>
               {placeError && <div role="alert" className="alert alert-error">{placeError}</div>}
               {placeWarning && (
@@ -1508,9 +1511,10 @@ export function ToAssignSection({
                   <button type="button" className="small" onClick={() => router.push(`/sessions/${placeWarning.sessionId}`)}>Ouvrir la session</button>
                 </div>
               )}
-              <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
-                <button type="button" className="small" onClick={() => placeRef.current?.close()}>Annuler</button>
-                <button type="button" className="small primary" disabled={busy === placing.id || Boolean(placeWarning)} onClick={confirmPlace}>
+              </div>
+              <div className="modal-foot">
+                <button type="button" onClick={() => placeRef.current?.close()}>Annuler</button>
+                <button type="button" className="primary" disabled={busy === placing.id || Boolean(placeWarning)} onClick={confirmPlace}>
                   {busy === placing.id ? 'Création…' : <>Placer la session <ChevronRight size={14} aria-hidden /></>}
                 </button>
               </div>

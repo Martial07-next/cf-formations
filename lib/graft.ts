@@ -1,4 +1,4 @@
-import { dayHours, formatHours, weekdaysBetween } from '@/lib/week';
+import { dayHours, dayModuleName, formatHours, weekdaysBetween } from '@/lib/week';
 
 /**
  * Greffe sur une session de parcours (POEC, GEIQ, parcours personnalisé…).
@@ -41,7 +41,7 @@ export async function graftOnCatalogHours(supabase: any, sessionId: string, trai
     if (days.length < 2) return null;
     const { data: created, error } = await supabase
       .from('session_modules')
-      .insert(days.map((day, position) => ({ session_id: sessionId, position, name: `Jour ${position + 1}`, start_day: day, end_day: day })))
+      .insert(days.map((day, position) => ({ session_id: sessionId, position, name: dayModuleName(day), start_day: day, end_day: day })))
       .select('id, name, start_day, end_day, duration_hours, position');
     if (error) return null;
     mods = created;

@@ -21,7 +21,7 @@ import { canEditStartTimes } from '@/lib/roles';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
-import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours } from '@/lib/week';
+import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours, dayModuleName } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
@@ -157,6 +157,16 @@ export default async function SessionDetailPage({
     supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').eq('session_id', id).order('position'),
     supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', id),
   ]);
+  // Anciens modules « Jour 1, Jour 2… » d'une journée : renommés par leur date (« Lun. 16/11 »).
+  if (editable) {
+    for (const m of (modules as any[]) || []) {
+      if (/^jour\s*\d+$/i.test(String(m.name).trim()) && String(m.start_day).slice(0, 10) === String(m.end_day).slice(0, 10)) {
+        const name = dayModuleName(String(m.start_day));
+        const { error: re } = await supabase.from('session_modules').update({ name }).eq('id', m.id);
+        if (!re) m.name = name;
+      }
+    }
+  }
   // Supports de cours et documents de la formation (fiche du catalogue).
   let templateId = (session as any).template_id as string | null;
   if (!templateId) {

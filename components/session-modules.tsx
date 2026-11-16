@@ -207,18 +207,17 @@ export function TraineeModuleToggles({
   // Clics rapides : seul le dernier choix est enregistré.
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Clic : ce module seul (MA1 → MA2 directement) ; re-clic sur le module seul
-   * choisi = session complète. Ctrl / Cmd + clic : plusieurs modules.
+   * Chaque clic ajoute ou retire ce module (les choix s'accumulent : Jour 1 + Jour 3…).
+   * Tous cochés = session complète. Au moins un module reste coché.
    */
-  function toggle(id: string, multi: boolean) {
+  function toggle(id: string) {
     const all = modules.map((m) => m.id);
-    let next: string[];
-    if (multi) {
-      next = full ? [id] : effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
-      if (!next.length) return;
-    } else {
-      next = !full && effective.length === 1 && effective[0] === id ? all : [id];
+    const picked = effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
+    if (!picked.length) {
+      setError('Un stagiaire suit au moins un module.');
+      return;
     }
+    const next = all.filter((x) => picked.includes(x));
     setError(null);
     setLocal(next);
     if (timer.current) clearTimeout(timer.current);
@@ -242,8 +241,8 @@ export function TraineeModuleToggles({
             type="button"
             className={`module-toggle${effective.includes(m.id) ? ' on' : ''}`}
             aria-pressed={effective.includes(m.id)}
-            onClick={(e) => toggle(m.id, e.ctrlKey || e.metaKey)}
-            title={`${m.name} : ${frDay(m.start_day)} · clic : ce module seul · Ctrl + clic : plusieurs`}
+            onClick={() => toggle(m.id)}
+            title={`${m.name} : ${frDay(m.start_day)} · clic : ${effective.includes(m.id) ? 'retirer' : 'ajouter'} ce module`}
           >
             {m.name}
           </button>
