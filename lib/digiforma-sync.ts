@@ -3,7 +3,7 @@ import { digiformaDateModules, digiformaListSessionsLight, digiformaSessionModul
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
-import { applyDigiformaDays, applyDigiformaPlace, attachToGroup, loadPlaceRefs, placeModuleRow } from '@/lib/digiforma-place';
+import { applyDigiformaDays, applyDigiformaPlace, attachToGroup, loadPlaceRefs, placeModuleRow, writeSessionModules } from '@/lib/digiforma-place';
 import { withoutSessionOnly } from '@/lib/template-edit';
 import { People, isPlaceholder } from '@/lib/digiforma-people';
 
@@ -244,6 +244,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   // Jours réels des créneaux Digiforma (migration 67) : les autres jours ouvrés sont « sans formation ».
   let daysCol = !(await supabase.from('digiforma_modules').select('df_days').limit(1)).error;
   let offDaysSet = 0;
+  let modulesNamed = 0;
   let roomsSet = 0;
   let trainersSet = 0;
   let newModules = 0;
@@ -431,6 +432,9 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       for (const sid of new Set(((placedSess as any[]) || []).map((x) => x.placed_session_id as string))) {
         if (Date.now() > deadline) break;
         offDaysSet += await applyDigiformaDays(supabase, sid);
+        // Vrais noms des modules Digiforma (au lieu de « Jour 1, Jour 2… » ou d'aucun module).
+        const { data: onSess } = await supabase.from('digiforma_modules').select('name, start_at, end_at, trainees').eq('placed_session_id', sid);
+        modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [] })));
       }
     }
     if (placeCols && !geiqSkipped) {
@@ -532,6 +536,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (placeCols
       ? `Salles / formateurs repris de Digiforma : ${roomsSet} salle(s), ${trainersSet} formateur(s)${placeIssues.length ? ` (non repris : ${placeIssues.slice(0, 8).join(' ; ')})` : ''}. `
       : 'Migration 66 à exécuter pour reprendre les salles et formateurs de Digiforma. ') +
+    (modulesNamed ? `${modulesNamed} module(s) Digiforma nommé(s) sur les sessions (au lieu de « Jour 1, Jour 2… »). ` : '') +
     (daysCol ? (offDaysSet ? `${offDaysSet} jour(s) sans créneau sur Digiforma retiré(s) des sessions (heures et émargement). ` : '') : 'Migration 67 à exécuter pour suivre les jours réels des créneaux Digiforma. ') +
     `${past} module(s) passé(s) ou lointain(s) ignoré(s).` +
     (remaining ? ` ${remaining} session(s) restante(s) : relance la synchronisation.` : '') +

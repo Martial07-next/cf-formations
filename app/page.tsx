@@ -21,7 +21,7 @@ import { withoutSessionOnly } from '@/lib/template-edit';
 const GEIQ_RE = /\bgeiq\b/i;
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
-import { groupKeyOf, groupable } from '@/lib/digiforma-place';
+import { groupKeyOf, groupable, loadPlaceRefs, matchRoom, matchTrainer } from '@/lib/digiforma-place';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
@@ -193,6 +193,8 @@ export default async function Page({
         const mods = mods0.error ? await modsQuery(false) : mods0;
         const modRows = (mods.data as any[]) || [];
 
+        // Salle et formateur indiqués sur Digiforma, reconnus sur la plateforme : proposés dans la fenêtre « Placer ».
+        const placeRefs = await loadPlaceRefs(supabase);
         // Corbeille de la page Stagiaires (migration 60) : ces personnes ne sont jamais proposées.
         const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
         const trashed = new People();
@@ -287,6 +289,8 @@ export default async function Page({
               program,
               covered,
               dismissed: m.covered_by === 'dismissed',
+              roomId: matchRoom(placeRefs, m.df_room),
+              trainerId: matchTrainer(placeRefs, Array.isArray(m.df_trainers) ? m.df_trainers : null),
               place: [m.df_room ? `salle ${m.df_room}` : null, Array.isArray(m.df_trainers) && m.df_trainers[0]?.name ? m.df_trainers.map((t: any) => t.name).join(', ') : null].filter(Boolean).join(' · ') || null,
               // GEIQ : parcours GEIQ, ou session Digiforma GEIQ (même si le module vient d'une session à part).
               geiq: GEIQ_RE.test(program?.title || '') || GEIQ_RE.test(m.df_session_name || '') || programs.some((p) => GEIQ_RE.test(p.title) && real.length > 0 && p.people.count(real) >= Math.max(1, Math.ceil(real.length / 2))),

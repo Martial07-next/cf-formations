@@ -953,7 +953,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} programs={toAssignPrograms} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} programs={toAssignPrograms} rooms={rooms.filter((r) => !r.is_holding && r.status !== 'exterieur').map((r) => ({ id: r.id, name: r.name }))} trainers={trainers.filter((t) => (t.status || 'actif') !== 'inactif').map((t) => ({ id: t.id, name: t.full_name }))} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
 
       {canEdit && (
         <dialog
@@ -1217,6 +1217,9 @@ export type ToAssign = {
   match: CatalogMatch | null;
   /** Salle et intervenant indiqués sur Digiforma (repris en plaçant le module). */
   place?: string | null;
+  /** Salle / formateur Digiforma reconnus sur la plateforme (proposés dans la fenêtre « Placer »). */
+  roomId?: string | null;
+  trainerId?: string | null;
   /** Plusieurs modules de la même session Digiforma cette semaine : placés en une session à modules. */
   modules?: { name: string; start_at: string; end_at: string; trainees: number }[];
 };
@@ -1232,11 +1235,16 @@ export function ToAssignSection({
   catalog,
   programs = [],
   week,
+  rooms = [],
+  trainers = [],
 }: {
   items: ToAssign[];
   catalog: { id: string; title: string; category: string | null; duration_hours: number }[];
   programs?: { id: string; title: string }[];
   week: string | null;
+  /** Salles et formateurs proposés dans la fenêtre « Placer ». */
+  rooms?: { id: string; name: string }[];
+  trainers?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -1261,8 +1269,36 @@ export function ToAssignSection({
     else if (after) after(r);
     else router.refresh();
   };
-  const place = (s: ToAssign) =>
-    run(s.id, async () => (await import('@/app/digiforma/actions')).placeDigiformaModule(s.id, tplOf(s) || null, progOf(s) || null), (r) => router.push(`/sessions/${r.sessionId}`));
+  // « Placer » : fenêtre pour vérifier formation, parcours, salle et formateur avant de créer la session.
+  const [placing, setPlacing] = useState<ToAssign | null>(null);
+  const [placeRoom, setPlaceRoom] = useState('');
+  const [placeTrainer, setPlaceTrainer] = useState('');
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const [placeWarning, setPlaceWarning] = useState<{ text: string; sessionId: string } | null>(null);
+  const placeRef = useRef<HTMLDialogElement>(null);
+  const openPlace = (s: ToAssign) => {
+    setPlacing(s);
+    setPlaceRoom(s.roomId || '');
+    setPlaceTrainer(s.trainerId || '');
+    setPlaceError(null);
+    setPlaceWarning(null);
+    placeRef.current?.showModal();
+  };
+  const confirmPlace = async () => {
+    if (!placing) return;
+    setBusy(placing.id);
+    setPlaceError(null);
+    const r = await (await import('@/app/digiforma/actions')).placeDigiformaModule(placing.id, tplOf(placing) || null, progOf(placing) || null, {
+      roomId: placeRoom || null,
+      trainerId: placeTrainer || null,
+    });
+    setBusy(null);
+    if (!r.ok) return setPlaceError(r.error);
+    if (r.warning) return setPlaceWarning({ text: r.warning, sessionId: r.sessionId });
+    placeRef.current?.close();
+    router.push(`/sessions/${r.sessionId}`);
+  };
+  const place = (s: ToAssign) => openPlace(s);
   const dismiss = (key: string, on: boolean) => run(key, async () => (await import('@/app/digiforma/actions')).dismissDigiformaModule(key, on));
   const removeSession = async (s: ToAssign) => {
     if (!(await askConfirm(`Supprimer la session « ${s.title} » ? Elle ne sera pas recréée par la synchronisation.`, { danger: true }))) return;
@@ -1406,6 +1442,82 @@ export function ToAssignSection({
           </ul>
         </details>
       )}
+      <dialog ref={placeRef} className="modal place-modal" aria-labelledby="place-title" onClose={() => setPlacing(null)}>
+        {placing && (() => {
+          const tpl = catalog.find((t) => t.id === tplOf(placing)) || null;
+          const d2 = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+          return (
+            <div className="place-body">
+              <div className="modal-head">
+                <div>
+                  <h2 id="place-title">Placer la session</h2>
+                  <small className="hint">Vérifie et complète : la salle et le formateur sont contrôlés avant la création.</small>
+                </div>
+                <button type="button" className="icon ghost" onClick={() => placeRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
+              </div>
+              <div className="place-summary">
+                <strong>{tpl?.title || placing.title}</strong>
+                <span>
+                  {d2(placing.start_at)}
+                  {placing.start_at.slice(0, 10) !== placing.end_at.slice(0, 10) ? ` → ${d2(placing.end_at)}` : ''} · {h(placing.start_at)}–{h(placing.end_at)}
+                </span>
+                {placing.parent && placing.parent !== placing.title && <small className="hint">Digiforma : {placing.parent}</small>}
+                {!tpl && <small className="fin-warn-inline">Aucune formation du catalogue choisie : la session gardera le nom Digiforma (modifiable ensuite).</small>}
+              </div>
+              {placing.modules && placing.modules.length > 1 && (
+                <div className="place-modules">
+                  <span className="hint">Une seule session avec ses modules :</span>
+                  {placing.modules.map((mo, i) => (
+                    <span key={i} className="ta-module"><b>{mo.name}</b> {d(mo.start_at)} · {h(mo.start_at)}–{h(mo.end_at)} · {mo.trainees} stag.</span>
+                  ))}
+                </div>
+              )}
+              <div className="place-fields">
+                <label>
+                  Salle
+                  <select className="input" value={placeRoom} onChange={(e) => setPlaceRoom(e.target.value)}>
+                    <option value="">À affecter (choisir plus tard)</option>
+                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.id === placing.roomId ? ' · indiquée sur Digiforma' : ''}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Formateur
+                  <select className="input" value={placeTrainer} onChange={(e) => setPlaceTrainer(e.target.value)}>
+                    <option value="">À choisir plus tard</option>
+                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.id === placing.trainerId ? ' · indiqué sur Digiforma' : ''}</option>)}
+                  </select>
+                </label>
+                {programs.length > 0 && (
+                  <label>
+                    Parcours
+                    <select className="input" value={progOf(placing)} onChange={(e) => setChosenProgram((c) => ({ ...c, [placing.id]: e.target.value }))}>
+                      <option value="">Aucun</option>
+                      {programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div className="place-people">
+                <span className="hint">{placing.trainees} stagiaire{placing.trainees > 1 ? 's' : ''} :</span>
+                {placing.people.map((p) => <span key={p.key} className={`to-assign-person${p.waiting ? ' waiting' : ''}`}>{p.name}</span>)}
+              </div>
+              {placeError && <div role="alert" className="alert alert-error">{placeError}</div>}
+              {placeWarning && (
+                <div role="alert" className="alert alert-warning">
+                  {placeWarning.text}{' '}
+                  <button type="button" className="small" onClick={() => router.push(`/sessions/${placeWarning.sessionId}`)}>Ouvrir la session</button>
+                </div>
+              )}
+              <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="small" onClick={() => placeRef.current?.close()}>Annuler</button>
+                <button type="button" className="small primary" disabled={busy === placing.id || Boolean(placeWarning)} onClick={confirmPlace}>
+                  {busy === placing.id ? 'Création…' : <>Placer la session <ChevronRight size={14} aria-hidden /></>}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </dialog>
     </section>
   );
 }

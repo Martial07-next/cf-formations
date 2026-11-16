@@ -436,7 +436,7 @@ export function SessionDetailView({
                         traineeId={t.id}
                         modules={modules}
                         chosen={traineeModules[t.id] || []}
-                        canEdit={canManageTrainees}
+                        canEdit={isAdmin}
                       />
                     </td>
                   )}
@@ -485,7 +485,7 @@ export function SessionDetailView({
                         traineeId={t.id}
                         modules={modules}
                         chosen={traineeModules[t.id] || []}
-                        canEdit={canManageTrainees}
+                        canEdit={isAdmin}
                       />
                     </td>
                   )}
@@ -743,6 +743,7 @@ export function SessionDetailView({
         traineeModules={traineeModules}
         validatedIds={validated.map((t) => t.id)}
         canEdit={isAdmin}
+        digiformaLinked={digiformaLinked}
       />
 
             </div>
@@ -824,6 +825,7 @@ export function SessionDetailView({
         traineeModules={traineeModules}
         validatedIds={validated.map((t) => t.id)}
         canEdit={isAdmin}
+        digiformaLinked={digiformaLinked}
       />
 
           {!isNew && traineeBlock}

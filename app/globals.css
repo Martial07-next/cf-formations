@@ -2413,3 +2413,13 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 .df-tech summary{cursor:pointer;font-size:13.5px}
 .df-tech{opacity:.85}
 .df-refresh{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+
+/* Fenêtre « Placer la session » (modules Digiforma). */
+.place-modal{width:min(620px,calc(100vw - 24px))}
+.place-body{display:flex;flex-direction:column;gap:14px}
+.place-summary{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
+.place-summary strong{font-size:16px}
+.place-modules{display:flex;flex-direction:column;gap:3px}
+.place-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.place-fields label{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:13px}
+.place-people{display:flex;flex-wrap:wrap;gap:5px;align-items:center}

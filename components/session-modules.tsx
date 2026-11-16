@@ -3,7 +3,7 @@
 import { submitWith } from '@/lib/form-submit';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Layers, Plus, Pencil, Trash2, Scissors } from 'lucide-react';
+import { Layers, Plus, Pencil, Trash2, Scissors, RefreshCw } from 'lucide-react';
 import {
   addSessionModule,
   updateSessionModule,
@@ -45,7 +45,10 @@ export function SessionModulesPanel({
   validatedIds,
   canEdit,
   overrides = [],
+  digiformaLinked = false,
 }: {
+  /** Session reliée à Digiforma : modules repris de Digiforma (vrais noms). */
+  digiformaLinked?: boolean;
   sessionId: string;
   startAt: string;
   endAt: string;
@@ -59,6 +62,7 @@ export function SessionModulesPanel({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const weekdays = weekdaysBetween(startAt, endAt);
   const days = weekdays.length ? weekdays : [startAt.slice(0, 10)];
@@ -87,7 +91,24 @@ export function SessionModulesPanel({
         <h2><Layers size={18} aria-hidden /> Modules de la session</h2>
         {canEdit && (
           <span className="row-actions">
-            {modules.length === 0 && days.length > 1 && (
+            {digiformaLinked && (
+              <button
+                className="small"
+                disabled={isPending}
+                title="Reprend les vrais modules de Digiforma (noms, jours, horaires) et les modules suivis par chaque stagiaire"
+                onClick={async () => {
+                  if (modules.length && !(await askConfirm('Remplacer les modules de la session par ceux de Digiforma ? Les modules suivis par chaque stagiaire seront repris de Digiforma.', { confirmLabel: 'Remplacer' }))) return;
+                  run(async () => {
+                    const r = await (await import('@/app/digiforma/actions')).digiformaModulesForSession(sessionId);
+                    if (r.ok) setInfo(r.count ? `${r.count} modules repris de Digiforma.` : 'Les modules sont déjà ceux de Digiforma.');
+                    return r;
+                  });
+                }}
+              >
+                <RefreshCw size={14} aria-hidden /> Modules de Digiforma
+              </button>
+            )}
+            {modules.length === 0 && days.length > 1 && !digiformaLinked && (
               <button className="small" disabled={isPending} onClick={() => run(() => splitSessionByDay(sessionId))}>
                 <Scissors size={14} aria-hidden /> Un module par jour
               </button>
@@ -103,6 +124,7 @@ export function SessionModulesPanel({
         dans la liste des stagiaires ci-dessous. Sans choix, il suit la session complète.
       </p>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
+      {info && <div role="status" className="alert alert-success">{info}</div>}
 
       {modules.length === 0 && !adding && <p className="hint">Aucun module : tous les stagiaires suivent la session complète.</p>}
 

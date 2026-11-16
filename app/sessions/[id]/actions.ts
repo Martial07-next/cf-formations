@@ -396,9 +396,7 @@ function refreshSession(sessionId: string) {
 /** Choisit les modules suivis par un stagiaire. Tous (ou aucun) = session complète. */
 export async function setTraineeModules(sessionId: string, traineeId: string, moduleIds: string[]): Promise<ActionResult> {
   if (!(await requireManager())) return FORBIDDEN;
-  // Session commencée : liste des stagiaires figée (sauf administrateur).
-  const locked = await traineesLockError(sessionId);
-  if (locked) return { ok: false, error: locked };
+  // Modules suivis : modifiables par le bureau même session commencée (la liste des stagiaires, elle, reste figée).
   const supabase = await createClient();
   const { data: all } = await supabase.from('session_modules').select('id').eq('session_id', sessionId);
   const allIds = (all || []).map((m: any) => m.id as string);
