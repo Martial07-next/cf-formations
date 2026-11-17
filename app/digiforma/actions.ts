@@ -125,59 +125,25 @@ export async function refreshSessionFromDigiforma(
   if (!byDf.size && ref && !ref.includes(':')) byDf.set(ref, []);
   if (!byDf.size) return { ok: false, error: 'Cette session n’est reliée à aucune session Digiforma.' };
 
-  const { digiformaSessionDetail, digiformaSessionModules, followsModule, withAttendance } = await import('@/lib/digiforma');
-  const { addNewTrainees, presentOn, dfBlocksInRange, companiesFor, syncReservations } = await import('@/lib/digiforma-sync');
-  const { writeSessionModules } = await import('@/lib/digiforma-place');
-  const { People, isPlaceholder } = await import('@/lib/digiforma-people');
-  const { data: trashedRows } = await supabase.from('trainees').select('email, full_name, first_name, last_name').not('trashed_at', 'is', null).limit(5000);
-  const trashed = new People();
-  for (const t of (trashedRows as any[]) || []) trashed.add(t);
-
+  const { digiformaSessionDetail, digiformaSessionModules } = await import('@/lib/digiforma');
+  const { refreshPlacedSession } = await import('@/lib/digiforma-sync');
+  const { isPlaceholder } = await import('@/lib/digiforma-people');
+  const { data: placedRows } = await supabase.from('digiforma_modules').select('name, df_session_id').eq('placed_session_id', sessionId);
+  const admin = createAdminClient();
   const people = new Map<string, any>();
-  const companies: any[] = [];
-  const refBlocks: any[] = [];
+  let added = 0;
   try {
-    for (const [dfId, keys] of byDf) {
-      const detail = await digiformaSessionDetail(dfId);
-      let list = detail.trainees;
-      let modNames: (string | null)[] | null = null;
-      if (keys.length) {
-        // Module par module : stagiaires prévus sur ses créneaux (émargement) et cochés sur ce module dans Digiforma.
-        const sm = await digiformaSessionModules(dfId);
-        const mine = sm.modules.filter((m) => keys.includes(`${dfId}:${m.key}`));
-        const union = new Map<string, any>();
-        for (const m of mine) {
-          const present = presentOn(detail, m.slotIds);
-          const own = detail.trainees.filter((t) => present(t.id) && followsModule(detail.subsOf, t.id, m.name));
-          await supabase
-            .from('digiforma_modules')
-            .update({ trainees: own, ...(m.dayTimes?.length ? { df_days: withAttendance(m.dayTimes, detail.bySlot) } : {}) })
-            .eq('key', `${dfId}:${m.key}`);
-          for (const t of own) union.set(t.id, t);
-        }
-        if (mine.length) list = [...union.values()];
-        modNames = mine.map((m) => m.name);
-      } else {
-        // Session reliée par son identifiant : modules Digiforma de ses dates.
-        refBlocks.push(...dfBlocksInRange(await digiformaSessionModules(dfId), detail, (sess as any).start_at, (sess as any).end_at));
-      }
-      companies.push(...companiesFor(detail.companies, modNames));
-      for (const t of list) if (!isPlaceholder(t) && !trashed.has(t)) people.set(t.email || t.id, t);
+    for (const dfId of byDf.keys()) {
+      // Tout relu sur Digiforma : stagiaires (prospects compris), modules et qui suit quoi, places réservées par entreprise.
+      const [detail, sm] = await Promise.all([digiformaSessionDetail(dfId), digiformaSessionModules(dfId)]);
+      const names = ((placedRows as any[]) || []).filter((r) => r.df_session_id === dfId).map((r) => r.name);
+      await refreshPlacedSession(admin, sess as any, sm, detail, names, (n) => (added += n));
+      for (const t of detail.trainees) if (!isPlaceholder(t)) people.set(t.id, t);
     }
   } catch (e: any) {
     return { ok: false, error: `Digiforma : ${e?.message || 'lecture impossible'}` };
   }
   const found = [...people.values()];
-  // Mise à jour venue de Digiforma : comme la synchronisation automatique (liste figée non concernée).
-  const added = await addNewTrainees(createAdminClient(), sess as any, found);
-  // Modules de la session et jours de présence de chacun, d'après Digiforma (émargement compris).
-  const { data: onSess } = await supabase.from('digiforma_modules').select('*').eq('placed_session_id', sessionId);
-  await writeSessionModules(supabase, sessionId, [
-    ...((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [], days: x.df_days || undefined })),
-    ...refBlocks,
-  ]);
-  // Places réservées par entreprise (apprenants prévus pas encore nommés).
-  await syncReservations(supabase, sessionId, companies);
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath('/');
   return {
@@ -260,6 +226,10 @@ export async function digiformaDiagnostic(sessionId: string): Promise<Result<{ t
     supabase.from('app_settings').select('digiforma_last_sync, digiforma_last_sync_status, digiforma_last_sync_log').eq('id', true).maybeSingle(),
   ]);
   lines.push(`Modules plateforme : ${((sm as any[]) || []).map((m) => `${m.name} ${m.start_day}→${m.end_day} ${m.duration_hours ?? '?'}h`).join(' ; ') || '(aucun)'}`);
+  {
+    const { data: stm } = await supabase.from('session_trainee_modules').select('module_id, trainees(full_name), session_modules(name)').eq('session_id', sessionId);
+    lines.push(`Modules suivis (lignes) : ${((stm as any[]) || []).map((l) => `${(Array.isArray(l.trainees) ? l.trainees[0] : l.trainees)?.full_name} → ${(Array.isArray(l.session_modules) ? l.session_modules[0] : l.session_modules)?.name}`).join(' ; ') || '(aucune : chacun suit tous les modules)'}`);
+  }
   lines.push(`Réservations : ${((res as any[]) || []).map((r) => `${r.company} ${r.seats} ${r.status || ''}${r.note ? ' (synchro)' : ''}`).join(' ; ') || '(aucune)'}`);
   lines.push(`Stagiaires plateforme : ${((st as any[]) || []).map((l) => { const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees; return `${t?.full_name} [${l.status}${t?.company ? ` · ${t.company}` : ''}]`; }).join(' ; ')}`);
   lines.push(`Dernière synchro : ${(lastSync as any)?.digiforma_last_sync || '?'} ${(lastSync as any)?.digiforma_last_sync_status || ''} · ${(lastSync as any)?.digiforma_last_sync_log || ''}`);

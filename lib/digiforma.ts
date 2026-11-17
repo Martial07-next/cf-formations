@@ -601,16 +601,16 @@ const mondayOfIso = (v: string) => {
  * (nom du créneau). Les parcours longs (GEIQ…) donnent ainsi les jours
  * réellement prévus chaque semaine, avec le module de la semaine.
  */
-function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
+export function slotBlocks(slots: DigiformaModule[]): DigiformaModule[] {
   const sorted = [...slots].sort((a, b) => `${a.start}${a.startTime || ''}`.localeCompare(`${b.start}${b.startTime || ''}`));
   const out: DigiformaModule[] = [];
   const members = new Map<DigiformaModule, DigiformaModule[]>();
   for (const sl of sorted) {
-    const last = out[out.length - 1];
-    const sameWeek = last && mondayOfIso(sl.start) === mondayOfIso(last.start);
-    const sameModule = last && (last.name || '') === (sl.name || '');
-    if (last && sameWeek && sameModule && day(sl.start) - day(last.end) <= 3 * 86400000) {
-      if (day(sl.end || sl.start) >= day(last.end)) {
+    // Bloc du même module la même semaine, même si d'autres modules s'intercalent
+    // (créneaux du matin / de l'après-midi de plusieurs modules en parallèle).
+    const last = [...out].reverse().find((b) => mondayOfIso(sl.start) === mondayOfIso(b.start) && (b.name || '').trim() === (sl.name || '').trim());
+    if (last && day(sl.start) - day(last.end) <= 3 * 86400000) {
+      if (day(sl.end || sl.start) > day(last.end) || (day(sl.end || sl.start) === day(last.end) && String(sl.endTime || '') > String(last.endTime || ''))) {
         last.end = sl.end || sl.start;
         last.endTime = sl.endTime;
       }
@@ -861,7 +861,7 @@ async function companyPart(custT: string | null): Promise<string> {
   const traineeT = f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant';
   const entF = pick(f[custT], ['entity', 'client', 'customerEntity', 'company']);
   const parts: string[] = [];
-  const cnt = pick(f[`${custT}#leaf`] || [], ['traineesCount', 'traineeCount', 'nbTrainees', 'numberOfTrainees', 'traineesNumber', 'nbLearners', 'quantity', 'headcount']);
+  const cnt = pick(f[`${custT}#leaf`] || [], ['estimatedTraineeCount', 'traineesCount', 'traineeCount', 'nbTrainees', 'numberOfTrainees', 'traineesNumber', 'nbLearners', 'quantity', 'headcount']);
   if (cnt) parts.push(`cnt: ${cnt}`);
   if (entF && !(f[`${custT}#leaf`] || []).includes(entF)) {
     const et = f[`${custT}.${entF}#type`]?.[0];

@@ -437,14 +437,11 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       for (const sid of new Set(((placedSess as any[]) || []).map((x) => x.placed_session_id as string))) {
         if (Date.now() > deadline) break;
         if (daysCol) offDaysSet += await applyDigiformaDays(supabase, sid);
-        // Vrais noms des modules Digiforma (au lieu de « Jour 1, Jour 2… » ou d'aucun module).
-        const { data: onSess } = await supabase.from('digiforma_modules').select(daysCol ? 'name, start_at, end_at, trainees, df_days' : 'name, start_at, end_at, trainees').eq('placed_session_id', sid);
-        // D'abord les stagiaires qui manquent (prospects en attente compris), pour qu'ils aient leurs modules tout de suite.
+        // Tout relu sur Digiforma (pas sur les lignes enregistrées, qui peuvent dater) : modules, stagiaires, places.
+        const { data: onSess } = await supabase.from('digiforma_modules').select('name').eq('placed_session_id', sid);
         const { data: sessRow } = await supabase.from('sessions').select('id, start_at, end_at').eq('id', sid).maybeSingle();
-        if (sessRow) addedLater += await addNewTrainees(supabase, sessRow as any, ((onSess as any[]) || []).flatMap((x) => (x.trainees as DigiformaTrainee[]) || []));
-        modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [], days: (daysCol && x.df_days) || undefined })));
-        // Places réservées par entreprise (apprenants prévus pas encore nommés), prospects en attente compris.
-        reservationsSet += await syncReservations(supabase, sid, companiesFor(detail.companies, ((onSess as any[]) || []).map((x) => x.name)));
+        if (!sessRow) continue;
+        reservationsSet += await refreshPlacedSession(supabase, sessRow as any, sessionMods, detail, ((onSess as any[]) || []).map((x) => x.name), (n) => (addedLater += n), (n) => (modulesNamed += n));
       }
     }
     if (placeCols && !geiqSkipped) {
@@ -527,10 +524,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
       // Stagiaires de la session Digiforma (clients particuliers et prospects compris), avec leur statut d'inscription ;
       // puis ses modules (noms, jours, qui suit quoi) et les places réservées par entreprise, comme une session placée.
       const [detail, sm] = await Promise.all([digiformaSessionDetail(row.digiforma_ref), digiformaSessionModules(row.digiforma_ref)]);
-      addedLater += await addNewTrainees(supabase, row, detail.trainees);
-      const blocks = dfBlocksInRange(sm, detail, row.start_at, row.end_at);
-      modulesNamed += await writeSessionModules(supabase, row.id, blocks);
-      reservationsSet += await syncReservations(supabase, row.id, companiesFor(detail.companies, null));
+      reservationsSet += await refreshPlacedSession(supabase, row, sm, detail, [], (n) => (addedLater += n), (n) => (modulesNamed += n));
     } catch {
       // session introuvable sur Digiforma : ignorée
     }
@@ -575,6 +569,31 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
 let ignoredTrainees = new People();
+
+/**
+ * Session du planning reliée à une session Digiforma : stagiaires qui manquent
+ * (prospects compris), modules (noms, jours, qui suit quoi) et places réservées
+ * par entreprise, relus sur Digiforma. placedNames : modules Digiforma placés sur
+ * cette session (un nom vide = toute la session) ; aucun = tous ceux de ses dates.
+ * Renvoie le nombre de réservations mises à jour.
+ */
+export async function refreshPlacedSession(
+  supabase: SupabaseClient,
+  sess: { id: string; start_at: string; end_at: string },
+  sm: Parameters<typeof dfBlocksInRange>[0],
+  detail: Parameters<typeof dfBlocksInRange>[1] & { companies: DigiformaCompany[] },
+  placedNames: (string | null | undefined)[],
+  onAdded: (n: number) => void = () => {},
+  onModules: (n: number) => void = () => {}
+): Promise<number> {
+  const names = placedNames.map((n) => String(n || '').trim());
+  const all = !names.length || names.some((n) => !n);
+  const blocks = dfBlocksInRange(sm, detail, sess.start_at, sess.end_at).filter((b) => all || names.includes(b.name.trim()));
+  // Stagiaires d'abord, pour qu'ils aient leurs modules tout de suite.
+  onAdded(await addNewTrainees(supabase, sess, blocks.length ? blocks.flatMap((b) => b.trainees) : detail.trainees));
+  onModules(await writeSessionModules(supabase, sess.id, blocks));
+  return syncReservations(supabase, sess.id, companiesFor(detail.companies, blocks.length ? blocks.map((b) => b.name) : null));
+}
 
 /** Modules Digiforma qui tombent dans les dates d'une session du planning, avec leurs stagiaires et leurs jours. */
 export function dfBlocksInRange(
