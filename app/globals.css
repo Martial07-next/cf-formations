@@ -435,7 +435,8 @@ table.monthly tr.total-row td{font-weight:800;background:var(--surface-2)}
 .module-toggle{min-height:28px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:800;border:1px dashed var(--line-strong);background:#fff;color:var(--muted)}
 .module-toggle.on{border-style:solid;border-color:var(--cf-mint-strong);background:var(--cf-mint-soft);color:var(--cf-mint-ink)}
 .module-plan{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
-.sc-module{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.85);border:1px solid color-mix(in srgb,var(--c) 35%,#fff);color:color-mix(in srgb,var(--c) 75%,#000);vertical-align:1px}
+.sc-modules{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;min-width:0}
+.sc-module{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.5;font-weight:700;padding:0 6px;border-radius:6px;background:rgba(255,255,255,.8);border:1px solid color-mix(in srgb,var(--c) 30%,#fff);color:color-mix(in srgb,var(--c) 75%,#000)}
 .workshop-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .workshop-chip{display:inline-flex;align-items:center;gap:2px;background:#fff;border:1px solid var(--line-strong);border-radius:999px;padding:3px 6px 3px 12px;font-size:13px;font-weight:700}
 button.tiny{width:24px;min-height:24px;padding:0}
@@ -1198,7 +1199,7 @@ input,select,textarea{max-width:100%}
 .density-tight .session-card .sc-title{font-size:10.5px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .density-tight .session-card .sc-top .status-pill{font-size:9px;padding:1px 5px}
 .density-tight .session-card .sc-meta{font-size:10px}
-.density-tight .sc-by,.density-tight .sc-poec,.density-tight .sc-module{display:none}
+.density-tight .sc-by,.density-tight .sc-poec,.density-tight .sc-modules{display:none}
 .density-tight .sc-dossier{font-size:9.5px;padding:1px 4px}
 .density-tight .cell-add{min-height:24px}
 

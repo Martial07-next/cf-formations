@@ -153,8 +153,14 @@ function SessionCard({
       <span className="sc-title">
         {!isStart && <CornerDownRight size={12} aria-label="suite" style={{ verticalAlign: '-2px', marginRight: 3 }} />}
         {s.title}
-        {info && info.modules.length > 0 && <span className="sc-module">{info.modules.join(' · ')}</span>}
       </span>
+      {info && info.modules.length > 0 && (
+        <span className="sc-modules" aria-label={`Modules du jour : ${info.modules.join(', ')}`}>
+          {info.modules.map((m) => (
+            <span key={m} className="sc-module" title={m}>{m}</span>
+          ))}
+        </span>
+      )}
       <span className="sc-meta">
         <span><Clock size={11} aria-hidden /> {start} – {end}</span>
         <span className="sc-trainer">{trainer || 'Formateur à définir'}</span>
