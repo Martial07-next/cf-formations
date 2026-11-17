@@ -26,7 +26,7 @@ import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
 import { GRIDS, gridRequired } from '@/lib/irve-grid';
-import { reussiteModels, reussiteModule } from '@/lib/reussite';
+import { reussiteModels, reussiteModules } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
@@ -306,8 +306,10 @@ export default async function SessionDetailPage({
   const allDays = dayHours(session.start_at, session.end_at, (dayRows as any) || []);
   const durationText = (h: number, d: number) => `${formatHours(h)} (${String(d).replace('.', ',')} jour${d > 1 ? 's' : ''})`;
   const arSeries = arModels.map((model) => {
-    const mod = reussiteModule(model, ((modules as any[]) || []) as { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[]);
+    const mods = reussiteModules(model, ((modules as any[]) || []) as { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[]);
+    const mod = mods[0];
     if (mod) {
+      const modIds = new Set(mods.map((m) => m.id));
       const days = allDays.filter((d) => d.day >= mod.start_day && d.day <= mod.end_day);
       const h = mod.duration_hours != null ? Number(mod.duration_hours) : Math.round(days.reduce((n, d) => n + d.minutes, 0) / 6) / 10;
       return {
@@ -315,7 +317,8 @@ export default async function SessionDetailPage({
         startDate: mod.start_day,
         endDate: mod.end_day,
         duration: durationText(h, countDays(days.map((d) => d.minutes))),
-        trainees: validatedTrainees.filter((t) => !traineeModules[t.id]?.length || traineeModules[t.id].includes(mod.id)),
+        // Stagiaires de l'un des modules qui comprennent ce modèle (ex. « P1 P2 » et « P1 P2 P3 » pour P1).
+        trainees: validatedTrainees.filter((t) => !traineeModules[t.id]?.length || traineeModules[t.id].some((m) => modIds.has(m))),
       };
     }
     return {

@@ -124,9 +124,19 @@ export function reussiteModels(value: string | null | undefined): ReussiteModel[
 
 /** Module de la session qui correspond au modèle (« P1 », « IRVE P2 », « MA3 - DC »…). */
 export function reussiteModule<T extends { name: string }>(model: ReussiteModel, modules: T[]): T | null {
+  return reussiteModules(model, modules)[0] || null;
+}
+
+/**
+ * Tous les modules de la session qui comprennent le modèle : « IRVE P1 P2 P3 »,
+ * « IRVE P1 P2 », « P1P2 »… comptent tous pour P1 (un stagiaire peut suivre
+ * l'un ou l'autre selon son parcours sur Digiforma).
+ */
+export function reussiteModules<T extends { name: string }>(model: ReussiteModel, modules: T[]): T[] {
   const code = model.label.replace(/^IRVE\s+/i, '');
-  const re = new RegExp(`(^|[^A-Z0-9])${code}([^0-9]|$)`, 'i');
-  return modules.find((m) => re.test(m.name)) || null;
+  // Pas de lettre juste avant (« P1P2 » contient bien P2), pas de chiffre juste après (P1 ≠ P10).
+  const re = new RegExp(`(^|[^A-Z])${code}([^0-9]|$)`, 'i');
+  return modules.filter((m) => re.test(m.name));
 }
 
 /** Représentant de l'organisme qui signe les attestations de réussite. */
