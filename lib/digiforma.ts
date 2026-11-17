@@ -1062,3 +1062,89 @@ export async function digiformaSample(): Promise<string> {
     `sous-sessions (${(sx.subsessions || []).length}) : ${cut(sx.subsessions)}`,
   ].join('\n');
 }
+
+/**
+ * Diagnostic d'une session (fiche session, administrateur) : ce que Digiforma
+ * renvoie vraiment (clients, apprenants, entreprises, modules cochés) et ce que
+ * la plateforme en tire. Lecture seule ; aucune clé ni en-tête dans le texte.
+ */
+export async function digiformaDebugSession(id: string): Promise<string> {
+  const out: string[] = [];
+  const short = (v: unknown, n = 1800) => {
+    const s = JSON.stringify(v);
+    return s && s.length > n ? `${s.slice(0, n)}…` : s;
+  };
+  const f = await schemaFields();
+  const sh = await sessionShape();
+  const st = await statusShape();
+  const sessT = f.TrainingSession ? 'TrainingSession' : 'Session';
+  out.push(`Session ${id} · type ${sessT} · requête ${sh.oneField}`);
+  out.push(`Clients : champ ${st.custField} → type ${st.custT} · statut ${st.custStatus}/${st.custStatus2} · apprenants ${st.custTrainees || st.ctField} → ${st.ctTrainee}`);
+  if (st.custT) out.push(`Champs ${st.custT} : ${(f[st.custT] || []).join(', ')}`);
+  const ctT = st.custT && st.ctField ? f[`${st.custT}.${st.ctField}#type`]?.[0] : null;
+  if (ctT) out.push(`Champs ${ctT} : ${(f[ctT] || []).join(', ')}`);
+  const entF = st.custT ? pick(f[st.custT], ['entity', 'client', 'customerEntity', 'company']) : null;
+  const et = entF ? f[`${st.custT}.${entF}#type`]?.[0] : null;
+  out.push(`Entité : ${entF} → ${et} (${et ? f[`${et}#kind`]?.[0] : '-'}) possibles : ${et ? (f[`${et}#possible`] || []).join(', ') : '-'}`);
+  out.push(`Champs session : ${(f[sessT] || []).join(', ')}`);
+  out.push(`Drapeaux : sous-sessions ${subsBroken ? 'REFUSÉES' : 'ok'} · entité ${entityBroken ? 'REFUSÉE' : 'ok'}`);
+
+  const tryQ = async (label: string, body: string) => {
+    try {
+      const d = await digiformaFetch(`query($id: ID!) { session: ${sh.oneField}(id: $id) { ${body} } }`, { id });
+      out.push(`\n# ${label} : OK\n${short(d?.session)}`);
+    } catch (e: any) {
+      out.push(`\n# ${label} : ERREUR ${e?.message || e}`);
+    }
+  };
+  const tSel = await traineeSelection();
+  if (st.custField && st.custT) {
+    const leaf = (f[`${st.custT}#leaf`] || []).filter((n) => !/html|url|signature|image|logo|token/i.test(n)).slice(0, 30);
+    await tryQ('Clients (champs simples)', `${st.custField} { ${leaf.join(' ')} }`);
+    if (st.ctField && st.ctTrainee && ctT) {
+      const ctLeaf = (f[`${ctT}#leaf`] || []).filter((n) => !/html|url|signature|image|logo|token/i.test(n)).slice(0, 20);
+      await tryQ('Apprenants des clients', `${st.custField} { ${st.ctField} { ${ctLeaf.join(' ')} ${st.ctTrainee} { ${tSel} } } }`);
+      const ctSubs = (f[ctT] || []).filter((n) => !(f[`${ctT}#leaf`] || []).includes(n) && n !== st.ctTrainee);
+      for (const n of ctSubs.slice(0, 6)) {
+        const t = f[`${ctT}.${n}#type`]?.[0];
+        const nm = t ? pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']) : null;
+        if (t && (f[`${t}#leaf`] || []).includes('id')) await tryQ(`Apprenant.${n} (${t})`, `${st.custField} { ${st.ctField} { ${n} { id ${nm || ''} } } }`);
+      }
+    }
+    const custObj = (f[st.custT] || []).filter((n) => !(f[`${st.custT}#leaf`] || []).includes(n) && n !== st.ctField && n !== entF);
+    for (const n of custObj.slice(0, 8)) {
+      const t = f[`${st.custT}.${n}#type`]?.[0];
+      const nm = t ? pick(f[`${t}#leaf`], ['name', 'customName', 'title', 'label']) : null;
+      if (t && (f[`${t}#leaf`] || []).includes('id')) await tryQ(`Client.${n} (${t})`, `${st.custField} { ${n} { id ${nm || ''} } }`);
+    }
+    if (entF && et) {
+      const kind = f[`${et}#kind`]?.[0];
+      const frags = kind === 'UNION' || kind === 'INTERFACE' ? (f[`${et}#possible`] || []).map((t) => `... on ${t} { ${(f[`${t}#leaf`] || []).filter((n) => /^(id|name|firstname|lastname|firstName|lastName)$/.test(n)).join(' ') || 'id'} }`).join(' ') : (f[`${et}#leaf`] || []).filter((n) => /^(id|name)$/.test(n)).join(' ');
+      await tryQ('Entité des clients', `${st.custField} { ${entF} { __typename ${frags} } }`);
+    }
+  }
+  for (const n of ['subsessions', 'subSessions']) if ((f[sessT] || []).includes(n)) await tryQ(`Sous-sessions (${n})`, `${n} { id ${pick(f[`${f[`${sessT}.${n}#type`]?.[0]}#leaf`], ['name', 'customName', 'title']) || ''} }`);
+  try {
+    await tryQ('Requête complète de la plateforme', `id ${await statusPart(true)}`);
+  } catch (e: any) {
+    out.push(`statusPart : ${e?.message}`);
+  }
+  try {
+    const d = await digiformaSessionDetail(id);
+    out.push(`\n# Résultat plateforme`);
+    out.push(`Stagiaires (${d.trainees.length}) : ${d.trainees.map((t) => `${t.fullName} [${t.status || '?'}${t.company ? ` · ${t.company}` : ''}${t.particulier ? ' · particulier' : ''}]`).join(' ; ')}`);
+    out.push(`Modules cochés : ${short(d.subsOf, 1200)}`);
+    out.push(`Entreprises : ${short(d.companies, 1200)}`);
+    out.push(`Émargement : ${Object.keys(d.bySlot).length} créneau(x) connus`);
+  } catch (e: any) {
+    out.push(`Résultat plateforme : ERREUR ${e?.message}`);
+  }
+  try {
+    const sm = await digiformaSessionModules(id);
+    out.push(`Modules (${sm.modules.length}) : ${sm.modules.map((m) => `${m.name || '(sans nom)'} ${m.start.slice(0, 10)}→${(m.end || m.start).slice(0, 10)} ${m.startTime || ''}-${m.endTime || ''}`).join(' ; ')}`);
+  } catch (e: any) {
+    out.push(`Modules : ERREUR ${e?.message}`);
+  }
+  out.push(`Drapeaux après lecture : sous-sessions ${subsBroken ? 'REFUSÉES' : 'ok'} · entité ${entityBroken ? 'REFUSÉE' : 'ok'}`);
+  return out.join('\n');
+}

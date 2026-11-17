@@ -22,6 +22,7 @@ import { SessionModulesPanel, TraineeModuleToggles } from '@/components/session-
 import type { SessionModule } from '@/lib/modules';
 import { DigiformaPanel } from '@/components/digiforma-panel';
 import { DigiformaRefresh } from '@/components/digiforma-refresh';
+import { DigiformaDiagnostic } from '@/components/digiforma-diagnostic';
 import { weekdaysBetween, effectiveDayTime, fullDateLabel, formatHours, type DayOverride } from '@/lib/week';
 import { SessionForm, type FormRoom, type FormTrainer } from '@/components/session-form';
 import { Trash2, AlertTriangle, Search, Link2, UserPlus, CheckCircle2, Lock, LockOpen, Settings2, Building2 } from 'lucide-react';
@@ -245,6 +246,7 @@ export function SessionDetailView({
             </span>
           )}
         </div>
+        {isAdmin && <DigiformaDiagnostic sessionId={session.id} />}
         {started && (
           <p className="panel-intro">
             {sameDayEdit && !unlocked

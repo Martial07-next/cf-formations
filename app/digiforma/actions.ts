@@ -238,3 +238,44 @@ export async function digiformaModulesForSession(sessionId: string): Promise<Res
   revalidatePath('/');
   return { ok: true, count };
 }
+
+/** Bouton « Diagnostic Digiforma » (fiche session) : ce que Digiforma renvoie pour la session, en texte. */
+export async function digiformaDiagnostic(sessionId: string): Promise<Result<{ text: string }>> {
+  if (!(await requireManager())) return FORBIDDEN;
+  if (!process.env.DIGIFORMA_API_TOKEN) return { ok: false, error: 'Digiforma n’est pas connecté (clé à configurer dans Vercel).' };
+  const supabase = await createClient();
+  const [{ data: sess }, { data: mods }] = await Promise.all([
+    supabase.from('sessions').select('id, title, start_at, end_at, digiforma_ref').eq('id', sessionId).maybeSingle(),
+    supabase.from('digiforma_modules').select('df_session_id').eq('placed_session_id', sessionId),
+  ]);
+  if (!sess) return { ok: false, error: 'Session introuvable.' };
+  const dfIds = new Set(((mods as any[]) || []).map((m) => String(m.df_session_id)));
+  const ref = String((sess as any).digiforma_ref || '');
+  if (ref) dfIds.add(ref.split(':')[0]);
+  const lines: string[] = [`Plateforme : ${(sess as any).title} · ${String((sess as any).start_at).slice(0, 16)} → ${String((sess as any).end_at).slice(0, 16)} · réf ${ref || '(aucune)'}`];
+  const [{ data: sm }, { data: res }, { data: st }, { data: lastSync }] = await Promise.all([
+    supabase.from('session_modules').select('name, start_day, end_day, duration_hours').eq('session_id', sessionId).order('position'),
+    supabase.from('session_reservations').select('company, seats, status, note').eq('session_id', sessionId),
+    supabase.from('session_trainees').select('status, trainees(full_name, company)').eq('session_id', sessionId),
+    supabase.from('app_settings').select('digiforma_last_sync, digiforma_last_sync_status, digiforma_last_sync_log').eq('id', true).maybeSingle(),
+  ]);
+  lines.push(`Modules plateforme : ${((sm as any[]) || []).map((m) => `${m.name} ${m.start_day}→${m.end_day} ${m.duration_hours ?? '?'}h`).join(' ; ') || '(aucun)'}`);
+  lines.push(`Réservations : ${((res as any[]) || []).map((r) => `${r.company} ${r.seats} ${r.status || ''}${r.note ? ' (synchro)' : ''}`).join(' ; ') || '(aucune)'}`);
+  lines.push(`Stagiaires plateforme : ${((st as any[]) || []).map((l) => { const t = Array.isArray(l.trainees) ? l.trainees[0] : l.trainees; return `${t?.full_name} [${l.status}${t?.company ? ` · ${t.company}` : ''}]`; }).join(' ; ')}`);
+  lines.push(`Dernière synchro : ${(lastSync as any)?.digiforma_last_sync || '?'} ${(lastSync as any)?.digiforma_last_sync_status || ''} · ${(lastSync as any)?.digiforma_last_sync_log || ''}`);
+  if (!dfIds.size) {
+    lines.push('Aucune session Digiforma reliée à cette session.');
+    return { ok: true, text: lines.join('\n') };
+  }
+  const { digiformaDebugSession } = await import('@/lib/digiforma');
+  for (const id of dfIds) {
+    const { data: rows } = await supabase.from('digiforma_modules').select('key, name, start_at, end_at, placed_session_id, trainees, df_days').eq('df_session_id', id);
+    lines.push(`\nModules Digiforma enregistrés (${id}) : ${((rows as any[]) || []).map((r) => `${r.name} ${String(r.start_at).slice(0, 10)}→${String(r.end_at).slice(0, 10)} ${((r.trainees as any[]) || []).length} stag. ${r.placed_session_id === sessionId ? '[cette session]' : r.placed_session_id ? '[autre session]' : '[à placer]'}`).join(' ; ') || '(aucun)'}`);
+    try {
+      lines.push(await digiformaDebugSession(id));
+    } catch (e: any) {
+      lines.push(`Diagnostic ${id} : ERREUR ${e?.message || e}`);
+    }
+  }
+  return { ok: true, text: lines.join('\n') };
+}
