@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { digiformaDateModules, digiformaListSessionsLight, followsModule, withAttendance, type DayTime, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaTrainee } from '@/lib/digiforma';
+import { digiformaDateModules, digiformaListSessionsLight, followsModule, withAttendance, type DayTime, digiformaSessionModules, digiformaSessionDetail, isPlannedStatus, particuliersReadable, seenParticuliers, seenRegStatus, toWallClock, type DigiformaCompany, type DigiformaTrainee } from '@/lib/digiforma';
 import { findOrCreateTrainee, findTraineeConflict } from '@/lib/trainee-conflict';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
 import { randomBytes } from 'crypto';
@@ -258,6 +258,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
   let stagePeriods = 0;
   let geiqCleaned = 0;
   let addedLater = 0;
+  let reservationsSet = 0;
   for (const [idx, c] of todo.entries()) {
     if (Date.now() > deadline) {
       remaining++;
@@ -372,7 +373,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         if (hasProgRef && !byRef && autoProgram) await supabase.from('poec_programs').update({ digiforma_ref: s.id }).eq('id', programId);
         // Stagiaires du parcours : les vrais, sans doublon.
         for (const t of real) {
-          const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
+          const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email, t.company || null);
           if (trainee) await supabase.from('poec_trainees').upsert({ program_id: programId, trainee_id: trainee.id }, { onConflict: 'program_id,trainee_id', ignoreDuplicates: true });
         }
         await supabase.from('digiforma_modules').update({ program_id: programId }).eq('df_session_id', s.id);
@@ -442,6 +443,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
         const { data: sessRow } = await supabase.from('sessions').select('id, start_at, end_at').eq('id', sid).maybeSingle();
         if (sessRow) addedLater += await addNewTrainees(supabase, sessRow as any, ((onSess as any[]) || []).flatMap((x) => (x.trainees as DigiformaTrainee[]) || []));
         modulesNamed += await writeSessionModules(supabase, sid, ((onSess as any[]) || []).map((x) => ({ name: x.name || '', start_at: x.start_at, end_at: x.end_at, trainees: x.trainees || [], days: (daysCol && x.df_days) || undefined })));
+        // Places réservées par entreprise (apprenants prévus pas encore nommés), prospects en attente compris.
+        reservationsSet += await syncReservations(supabase, sid, companiesFor(detail.companies, ((onSess as any[]) || []).map((x) => x.name)));
       }
     }
     if (placeCols && !geiqSkipped) {
@@ -521,8 +524,13 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     if (Date.now() > deadline) break;
     if (String(row.digiforma_ref).includes(':')) continue; // module placé : traité ci-dessus
     try {
-      // Stagiaires de la session Digiforma, clients particuliers compris, avec leur statut d'inscription.
-      addedLater += await addNewTrainees(supabase, row, (await digiformaSessionDetail(row.digiforma_ref)).trainees);
+      // Stagiaires de la session Digiforma (clients particuliers et prospects compris), avec leur statut d'inscription ;
+      // puis ses modules (noms, jours, qui suit quoi) et les places réservées par entreprise, comme une session placée.
+      const [detail, sm] = await Promise.all([digiformaSessionDetail(row.digiforma_ref), digiformaSessionModules(row.digiforma_ref)]);
+      addedLater += await addNewTrainees(supabase, row, detail.trainees);
+      const blocks = dfBlocksInRange(sm, detail, row.start_at, row.end_at);
+      modulesNamed += await writeSessionModules(supabase, row.id, blocks);
+      reservationsSet += await syncReservations(supabase, row.id, companiesFor(detail.companies, null));
     } catch {
       // session introuvable sur Digiforma : ignorée
     }
@@ -539,6 +547,7 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (geiqCleaned ? `${geiqCleaned} session(s) Digiforma effacée(s) : leur parcours GEIQ est déjà sur le planning. ` : '') +
     (decisions.length ? `Parcours : ${decisions.slice(0, 20).join(' ; ')}. ` : '') +
     `${addedLater} stagiaire(s) ajouté(s) depuis Digiforma aux sessions déjà placées. ` +
+    (reservationsSet ? `${reservationsSet} réservation(s) de places par entreprise mise(s) à jour. ` : '') +
     (placeCols
       ? `Salles / formateurs repris de Digiforma : ${roomsSet} salle(s), ${trainersSet} formateur(s)${placeIssues.length ? ` (non repris : ${placeIssues.slice(0, 8).join(' ; ')})` : ''}. `
       : 'Migration 66 à exécuter pour reprendre les salles et formateurs de Digiforma. ') +
@@ -560,12 +569,35 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     past,
     log,
     remaining,
-    changed: offDaysSet + newModules + linked + autoPlaced + addedLater + roomsSet + trainersSet + programsCreated + stagePeriods + geiqCleaned + legacyIds.length,
+    changed: offDaysSet + newModules + linked + autoPlaced + addedLater + reservationsSet + modulesNamed + roomsSet + trainersSet + programsCreated + stagePeriods + geiqCleaned + legacyIds.length,
   };
 }
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */
 let ignoredTrainees = new People();
+
+/** Modules Digiforma qui tombent dans les dates d'une session du planning, avec leurs stagiaires et leurs jours. */
+export function dfBlocksInRange(
+  sm: { modules: { name: string | null; start: string; end: string | null; startTime: string | null; endTime: string | null; slotIds?: string[]; days?: string[]; dayTimes?: DayTime[] }[] },
+  detail: { trainees: DigiformaTrainee[]; bySlot: Record<string, string[]>; subsOf: Record<string, string[]> },
+  startAt: string,
+  endAt: string
+) {
+  const a = String(startAt).slice(0, 10);
+  const b = String(endAt).slice(0, 10);
+  return sm.modules
+    .filter((m) => m.name && m.start.slice(0, 10) <= b && (m.end || m.start).slice(0, 10) >= a)
+    .map((m) => {
+      const present = presentOn(detail, m.slotIds);
+      return {
+        name: m.name!,
+        start_at: toWallClock(m.start, m.startTime, '08:00'),
+        end_at: toWallClock(m.end || m.start, m.endTime, '16:00'),
+        trainees: detail.trainees.filter((t) => present(t.id) && followsModule(detail.subsOf, t.id, m.name)),
+        days: (m.dayTimes?.length ? withAttendance(m.dayTimes, detail.bySlot) : m.days) || null,
+      };
+    });
+}
 
 /**
  * Émargement Digiforma des créneaux d'un module : le stagiaire y est-il prévu ?
@@ -578,6 +610,65 @@ export function presentOn(detail: { bySlot: Record<string, string[]> }, slotIds:
   const here = new Set(known.flatMap((id) => detail.bySlot[id]));
   const anywhere = new Set(Object.values(detail.bySlot).flat());
   return (id) => here.has(id) || !anywhere.has(id);
+}
+
+const DF_NOTE = 'Places prévues sur Digiforma (synchronisation)';
+const companyKey2 = (v: string | null | undefined) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const plainName = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Clients entreprise concernés par une session du planning (modules cochés sur Digiforma ∩ modules de la session). */
+export function companiesFor(companies: DigiformaCompany[], moduleNames: (string | null | undefined)[] | null): DigiformaCompany[] {
+  const mods = new Set((moduleNames || []).filter(Boolean).map((n) => plainName(String(n))));
+  return companies.filter((c) => !mods.size || !c.subs.length || c.subs.some((x) => mods.has(plainName(x))));
+}
+
+/**
+ * Places réservées par entreprise d'après Digiforma : apprenants prévus par un
+ * client entreprise mais pas encore nommés (ex. « CTI ELEC · 1 » sans nom).
+ * En attente si le client est un prospect. Seules les réservations créées par la
+ * synchronisation sont modifiées ; une réservation faite à la main est gardée.
+ */
+export async function syncReservations(supabase: SupabaseClient, sessionId: string, companies: DigiformaCompany[]): Promise<number> {
+  const probe = await supabase.from('session_reservations').select('id, company, seats, status, note').eq('session_id', sessionId);
+  if (probe.error) return 0; // migrations 20 / 50 absentes
+  const rows = (probe.data as any[]) || [];
+  // Places voulues par entreprise et par statut.
+  const want = new Map<string, { company: string; status: 'validee' | 'en_attente'; unnamed: number }>();
+  for (const c of companies) {
+    const k = `${companyKey2(c.name)}|${c.status}`;
+    const e = want.get(k) || { company: c.name, status: c.status, unnamed: 0 };
+    e.unnamed += Math.max(0, c.total - c.named.length);
+    want.set(k, e);
+  }
+  // Places validées : un stagiaire validé de la même entreprise occupe une place (voir lib/reservations) ; on les ajoute.
+  const { data: links } = await supabase.from('session_trainees').select('status, trainees(company)').eq('session_id', sessionId).eq('status', 'validee');
+  const validatedOf = (company: string) => ((links as any[]) || []).filter((l) => companyKey2((Array.isArray(l.trainees) ? l.trainees[0] : l.trainees)?.company) === companyKey2(company)).length;
+  let changed = 0;
+  const kept = new Set<string>();
+  for (const w of want.values()) {
+    const manual = rows.find((r) => r.note !== DF_NOTE && companyKey2(r.company) === companyKey2(w.company));
+    if (manual) continue; // réservation faite à la main : on n'y touche pas
+    const mine = rows.find((r) => r.note === DF_NOTE && companyKey2(r.company) === companyKey2(w.company) && (r.status || 'validee') === w.status);
+    const seats = Math.min(200, w.unnamed + (w.status === 'validee' && w.unnamed ? validatedOf(w.company) : 0));
+    if (!w.unnamed) continue;
+    if (mine) {
+      kept.add(mine.id);
+      if (mine.seats !== seats) {
+        await supabase.from('session_reservations').update({ seats }).eq('id', mine.id);
+        changed++;
+      }
+    } else {
+      const { error } = await supabase.from('session_reservations').insert({ session_id: sessionId, company: w.company, seats, note: DF_NOTE, status: w.status });
+      if (!error) changed++;
+    }
+  }
+  // Places nommées depuis (ou client retiré) : réservation de la synchronisation supprimée.
+  const gone = rows.filter((r) => r.note === DF_NOTE && !kept.has(r.id)).map((r) => r.id);
+  if (gone.length) {
+    await supabase.from('session_reservations').delete().in('id', gone);
+    changed += gone.length;
+  }
+  return changed;
 }
 
 export async function addNewTrainees(supabase: SupabaseClient, row: { id: string; start_at: string; end_at: string }, remoteAll: DigiformaTrainee[]): Promise<number> {
@@ -605,7 +696,7 @@ export async function addNewTrainees(supabase: SupabaseClient, row: { id: string
       }
       continue;
     }
-    const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email);
+    const trainee = await findOrCreateTrainee(supabase, { first_name: t.firstName, last_name: t.lastName }, t.email, t.company || null);
     if (!trainee) continue;
     const conflict = await findTraineeConflict(supabase, trainee.id, row.start_at, row.end_at, row.id);
     const { data: ins, error } = await supabase

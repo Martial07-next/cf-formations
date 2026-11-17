@@ -1,3 +1,4 @@
+import { isPlaceholder } from '@/lib/digiforma-people';
 // Client pour l'API GraphQL de Digiforma : SERVEUR UNIQUEMENT.
 // La clé DIGIFORMA_API_TOKEN est lue ici depuis les variables d'environnement
 // du serveur (Vercel) : elle n'est jamais envoyée au navigateur ni stockée en base.
@@ -66,6 +67,8 @@ export type DigiformaTrainee = {
   status?: 'validee' | 'en_attente';
   /** Client particulier sur Digiforma (le client est le stagiaire). */
   particulier?: boolean;
+  /** Entreprise cliente sur Digiforma. */
+  company?: string;
 };
 
 export type DigiformaSession = {
@@ -643,6 +646,8 @@ export async function digiformaSessionDetail(id: string): Promise<{
   bySlot: Record<string, string[]>;
   /** Modules (sous-sessions) cochés pour chaque stagiaire sur Digiforma. */
   subsOf: Record<string, string[]>;
+  /** Clients entreprise (places réservées par entreprise). */
+  companies: DigiformaCompany[];
 }> {
   const sh = await sessionShape();
   const ms = await moduleShape();
@@ -703,7 +708,24 @@ export async function digiformaSessionDetail(id: string): Promise<{
       known.add(String(w.id));
     }
   }
-  const trainees = applyStatus(raw.map(mapTrainee), data?.session, raw).map((t) => (partIds.has(t.id) ? { ...t, particulier: true } : t));
+  // Entreprise de chaque apprenant (client entreprise) et places prévues par entreprise.
+  const companyOf = new Map<string, string>();
+  const companies: DigiformaCompany[] = [];
+  for (const r of data?.session?.regs || []) {
+    if (particulierOf(r)) continue;
+    const name = String(r.co?.cn || '').trim();
+    const pick2 = (v: unknown) => (v == null || /^\s*\d*\s*$/.test(String(v)) ? null : v);
+    const st = registrationOf(pick2(r.regStatus2) ?? pick2(r.regStatus));
+    if (st === 'exclu') continue;
+    const people = [...(r.who || []), ...((r.ct || []).map((c: any) => c?.one).filter(Boolean)), ...(r.one ? [r.one] : [])].filter((w: any) => w?.id != null);
+    const real = people.filter((w: any) => !isPlaceholder(mapTrainee(w)));
+    if (name) for (const w of real) companyOf.set(String(w.id), name);
+    const cnt = Number(r.cnt);
+    const total = Math.max(Number.isFinite(cnt) ? cnt : 0, people.length);
+    if (!name || !total) continue;
+    companies.push({ name, status: st, total, named: real.map((w: any) => String(w.id)), subs: ((r.css as any[]) || []).map((x) => String(x?.n || '')).filter(Boolean) });
+  }
+  const trainees = applyStatus(raw.map(mapTrainee), data?.session, raw).map((t) => ({ ...t, ...(partIds.has(t.id) ? { particulier: true } : {}), ...(companyOf.has(t.id) ? { company: companyOf.get(t.id) } : {}) }));
   // Modules cochés par stagiaire (inscription du stagiaire, sinon celles du client).
   const subsOf: Record<string, string[]> = {};
   for (const r of data?.session?.regs || []) {
@@ -718,7 +740,7 @@ export async function digiformaSessionDetail(id: string): Promise<{
     const p = particulierOf(r);
     if (p && cust.length) subsOf[String(p.id)] = cust;
   }
-  return { trainees, byModule, bySlot, subsOf };
+  return { trainees, byModule, bySlot, subsOf, companies };
 }
 
 /**
@@ -832,6 +854,29 @@ async function subsessionsOfRegistration(custT: string | null, ctField: string |
     cust: custSub ? `css: ${custSub} { id n: ${nameF} }` : '',
   };
 }
+/** Entreprise cliente (entité du client = une entreprise) : son nom ; et le nombre d'apprenants prévus s'il existe. */
+async function companyPart(custT: string | null): Promise<string> {
+  if (!custT || entityBroken) return '';
+  const f = await schemaFields();
+  const traineeT = f.Trainee ? 'Trainee' : f.Student ? 'Student' : 'Participant';
+  const entF = pick(f[custT], ['entity', 'client', 'customerEntity', 'company']);
+  const parts: string[] = [];
+  const cnt = pick(f[`${custT}#leaf`] || [], ['traineesCount', 'traineeCount', 'nbTrainees', 'numberOfTrainees', 'traineesNumber', 'nbLearners', 'quantity', 'headcount']);
+  if (cnt) parts.push(`cnt: ${cnt}`);
+  if (entF && !(f[`${custT}#leaf`] || []).includes(entF)) {
+    const et = f[`${custT}.${entF}#type`]?.[0];
+    const kind = et ? f[`${et}#kind`]?.[0] : null;
+    if (et && (kind === 'UNION' || kind === 'INTERFACE')) {
+      const comp = (f[`${et}#possible`] || []).filter((t) => t !== traineeT && (f[`${t}#leaf`] || []).includes('name'));
+      if (comp.length) parts.push(`co: ${entF} { __typename ${comp.map((t) => `... on ${t} { cn: name }`).join(' ')} }`);
+    } else if (et && et !== traineeT && (f[`${et}#leaf`] || []).includes('name')) parts.push(`co: ${entF} { cn: name }`);
+  }
+  return parts.join(' ');
+}
+
+/** Client entreprise d'une session Digiforma : places prévues, apprenants nommés, modules cochés. */
+export type DigiformaCompany = { name: string; status: 'validee' | 'en_attente'; total: number; named: string[]; subs: string[] };
+
 const plain = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Le stagiaire suit ce module d'après Digiforma (aucune case connue : oui). */
 export function followsModule(subsOf: Record<string, string[]> | undefined, traineeId: string, moduleName: string | null | undefined): boolean {
@@ -854,7 +899,8 @@ async function statusPart(withNames = false): Promise<string> {
   const tw = withNames ? await traineeSelection() : 'id';
   const whoBase = st.custTrainees ? `who: ${st.custTrainees} { ${tw} }` : st.ctField && st.ctTrainee ? `ct: ${st.ctField} { one: ${st.ctTrainee} { ${tw} } ${ss.ct} }` : st.custTrainee ? `one: ${st.custTrainee} { ${tw} }` : '';
   const pt = await particulierPart(st.custT, tw);
-  const who = [whoBase, pt, ss.cust].filter(Boolean).join(' ');
+  const co = withNames ? await companyPart(st.custT) : '';
+  const who = [whoBase, pt, ss.cust, co].filter(Boolean).join(' ');
   if (st.custField && st.custStatus && who) parts.push(`regs: ${st.custField} { regStatus: ${st.custStatus} ${st.custStatus2 ? `regStatus2: ${st.custStatus2}` : ''} ${who} }`);
   if (st.abField && (st.abDirect || st.abTrainee)) {
     const flags = [st.abFlag ? `isAbandon: ${st.abFlag}` : '', st.abBack ? `isBack: ${st.abBack}` : ''].join(' ');
