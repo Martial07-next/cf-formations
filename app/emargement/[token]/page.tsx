@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RgpdLink } from '@/components/rgpd-link';
 import { CalendarClock } from 'lucide-react';
 import { loadSigningContext } from '@/lib/emargement';
 import { HALF_LABEL } from '@/lib/dossier';
@@ -45,6 +46,7 @@ export default async function EmargementPage({ params }: { params: Promise<{ tok
             )}
           </>
         )}
+        <RgpdLink />
       </div>
     </main>
   );

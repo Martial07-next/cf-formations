@@ -34,6 +34,8 @@ export async function updateSession(request: NextRequest) {
     isLogin || path.startsWith('/emargement/') || path.startsWith('/convention/') ||
     path.startsWith('/france-travail/') ||
     path.startsWith('/autorisations/') ||
+    // Protection des données (lien depuis les pages des QR codes, sans compte).
+    path === '/confidentialite' ||
     path.startsWith('/depart/') ||
     path.startsWith('/salarie/') ||
     // Dépôt du titre d'habilitation par le stagiaire (QR code de la session).

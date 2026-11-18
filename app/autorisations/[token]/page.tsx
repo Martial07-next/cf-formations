@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RgpdLink } from '@/components/rgpd-link';
 import { loadAutorContext } from '@/lib/autorisations-server';
 import { AUTH_KIND } from '@/lib/autorisations';
 import { AutorSign } from '@/components/autorisations/autor-sign';
@@ -28,6 +29,7 @@ export default async function AutorisationsPage({ params }: { params: Promise<{ 
             <AutorSign token={token} trainees={ctx.trainees} />
           </>
         )}
+        <RgpdLink />
       </div>
     </main>
   );

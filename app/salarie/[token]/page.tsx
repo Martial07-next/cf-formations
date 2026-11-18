@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RgpdLink } from '@/components/rgpd-link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EMPLOYEE_DOC_SELECT, validEmployeeToken, type EmployeeDoc } from '@/lib/salaries';
 import { EmployeeSign, type ExtraDoc } from '@/components/salaries/employee-sign';
@@ -61,6 +62,7 @@ export default async function SalariePage({ params }: { params: Promise<{ token:
             <EmployeeSign link={token} name={emp.full_name} address={emp.address} docs={docs} cachet={cachet} extras={extras} />
           </>
         )}
+        <RgpdLink />
       </div>
     </main>
   );

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RgpdLink } from '@/components/rgpd-link';
 import { loadDepartContext } from '@/lib/departs-server';
 import { DepartSign } from '@/components/departs/depart-sign';
 
@@ -28,6 +29,7 @@ export default async function DepartPage({ params }: { params: Promise<{ token: 
             <DepartSign token={token} formationTitle={ctx.formationTitle} trainees={ctx.trainees} />
           </>
         )}
+        <RgpdLink />
       </div>
     </main>
   );

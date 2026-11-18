@@ -2430,3 +2430,24 @@ dialog.place-modal{width:min(640px,calc(100vw - 24px))}
 .place-label{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 .place-chips{display:flex;flex-wrap:wrap;gap:6px}
 @media (max-width:640px){.place-fields{grid-template-columns:1fr}.place-content{padding:14px 16px}}
+
+/* Protection des données (page publique /confidentialite et lien sur les pages des QR codes). */
+.rgpd-link{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.rgpd-link a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.sign-card.rgpd{max-width:760px;padding:24px 22px}
+.sign-card.rgpd h1{display:flex;align-items:center;gap:8px;font-size:22px;margin:6px 0 2px}
+.sign-card.rgpd h1 svg{color:var(--cf-mint-strong);flex-shrink:0}
+.rgpd-sub{margin:0 0 12px;font-weight:700;color:var(--muted)}
+.rgpd-intro{line-height:1.55}
+.sign-card.rgpd section{margin-top:22px}
+.sign-card.rgpd h2{display:flex;align-items:center;gap:10px;font-size:16.5px;margin:0 0 8px}
+.rgpd-num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--cf-mint);color:var(--cf-mint-ink);font-size:13px;font-weight:800;flex-shrink:0}
+.sign-card.rgpd p,.sign-card.rgpd li{line-height:1.55;font-size:14.5px}
+.sign-card.rgpd ul{margin:6px 0 10px;padding-left:20px;display:grid;gap:4px}
+.rgpd-note{background:var(--cf-mint-soft);color:var(--cf-mint-ink);border-radius:10px;padding:10px 12px;font-size:13.5px !important}
+.rgpd-table{overflow-x:auto;margin:6px 0 10px;border:1px solid var(--line);border-radius:12px}
+.rgpd-table table{width:100%;border-collapse:collapse;font-size:13.5px}
+.rgpd-table th,.rgpd-table td{text-align:left;vertical-align:top;padding:9px 11px;border-top:1px solid var(--line);line-height:1.45}
+.rgpd-table thead th{border-top:0;background:var(--cf-dark);color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.rgpd-table tbody th{font-weight:700;width:38%}
+.rgpd-version{margin-top:22px;text-align:right}

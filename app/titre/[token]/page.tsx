@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RgpdLink } from '@/components/rgpd-link';
 import { loadTitleContext } from '@/lib/titres-public';
 import { TitleUploadPublic } from '@/components/titre-upload';
 import { BackLink } from '@/components/back-link';
@@ -24,6 +25,7 @@ export default async function TitrePage({ params }: { params: Promise<{ token: s
             <TitleUploadPublic token={token} trainees={ctx.trainees} />
           </>
         )}
+        <RgpdLink />
       </div>
     </main>
   );
