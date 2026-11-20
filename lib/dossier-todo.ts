@@ -77,6 +77,12 @@ export async function computeDossierTodo(
     supabase.from('session_forms').select('session_id, completed').eq('kind', 'habilitation').in('session_id', sessionIds),
   ]);
   const habOn = new Set(habErr ? [] : ((habTpl as any[]) || []).filter((t) => formationSymbols(t.habilitation_symbols, t.title || '').length).map((t) => t.id as string));
+  // Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur.
+  const [{ data: certTpl, error: certErr }, { data: certForms }] = await Promise.all([
+    templateIds.length ? supabase.from('templates').select('id, certificat_realisation').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
+    supabase.from('session_forms').select('session_id, completed').eq('kind', 'certificat').in('session_id', sessionIds),
+  ]);
+  const certOn = new Set(certErr ? [] : ((certTpl as any[]) || []).filter((t) => t.certificat_realisation).map((t) => t.id as string));
   for (const s of sessions) {
     const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
     if (!traineeIds.length) continue;
@@ -104,6 +110,7 @@ export async function computeDossierTodo(
           : []),
         ...(s.template_id && arOn.has(s.template_id) ? [{ completed: ((arForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
         ...(s.template_id && habOn.has(s.template_id) ? [{ completed: ((habForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
+        ...(s.template_id && certOn.has(s.template_id) ? [{ completed: ((certForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
         ...(dfOn.has(s.id) ? [{ completed: ((dfForms as any[]) || []).some((f) => f.session_id === s.id && f.completed) }] : []),
       ],
     };

@@ -535,6 +535,32 @@ export async function getSessionForm(sessionId: string, kind: FormKind): Promise
   return { ok: true, data: (data as any)?.data || {}, completed: Boolean((data as any)?.completed) };
 }
 
+/** Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur pour chaque stagiaire. */
+export async function saveCertificats(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
+  const r = await fillRights(sessionId);
+  if (!r) return FORBIDDEN;
+  const { isCertNature } = await import('@/lib/certificat');
+  // Seules les natures connues sont gardées.
+  const trainees: Record<string, { nature: string }> = {};
+  for (const [id, v] of Object.entries(((data as any)?.trainees as Record<string, any>) || {}).slice(0, 500)) {
+    if (/^[0-9a-f-]{36}$/i.test(id) && isCertNature(v?.nature)) trainees[id] = { nature: v.nature };
+  }
+  const { data: before } = await r.supabase.from('session_forms').select('completed').eq('session_id', sessionId).eq('kind', 'certificat').maybeSingle();
+  const now = new Date().toISOString();
+  const { error } = await r.supabase.from('session_forms').upsert(
+    { session_id: sessionId, kind: 'certificat', data: { trainees }, completed, completed_at: completed ? now : null, updated_by: r.profile.id, updated_at: now },
+    { onConflict: 'session_id,kind' }
+  );
+  if (error) {
+    return {
+      ok: false,
+      error: /session_forms|kind_check|schema cache|does not exist/i.test(error.message) ? 'Exécute d’abord la migration 72 (supabase/migration_phase72.sql) dans Supabase.' : error.message,
+    };
+  }
+  if (Boolean((before as any)?.completed) !== completed) refresh(sessionId);
+  return { ok: true };
+}
+
 /** Certificats d'habilitation (migration 51) : avis et symboles attribués par stagiaire. */
 export async function saveHabilitation(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
   const r = await fillRights(sessionId);

@@ -211,6 +211,10 @@ export default async function SessionDetailPage({
     supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'appreciation').maybeSingle(),
     supabase.from('sessions').select('fiche_appreciation').eq('id', id).maybeSingle(),
   ]);
+  // Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur.
+  const { data: certRow } = (tplOpt as any)?.certificat_realisation
+    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'certificat').maybeSingle()
+    : { data: null };
   // Attestations de réussite (migration 39) : modèles choisis sur la formation.
   const arModels = reussiteModels((tplOpt as any)?.attestation_reussite);
   const { data: arRow } = arModels.length
@@ -648,9 +652,11 @@ export default async function SessionDetailPage({
                     }
               }
               certificats={
-                // Certificats de réalisation (migration 72) : bureau et administrateur.
-                editable && (tplOpt as any)?.certificat_realisation
+                // Certificats de réalisation (migration 72) : rempli par le formateur, téléchargé par le bureau.
+                (tplOpt as any)?.certificat_realisation
                   ? {
+                      data: ((certRow as any)?.data as any) || null,
+                      canDownload: editable,
                       actionTitle: session.title,
                       startDate: session.start_at.slice(0, 10),
                       endDate: session.end_at.slice(0, 10),

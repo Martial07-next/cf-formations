@@ -301,7 +301,7 @@ export function TemplateFields({
         <input type="hidden" name="cert_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="certificat_realisation" defaultChecked={t?.certificat_realisation === true} />
-          Certificats de réalisation (un par stagiaire, générés automatiquement)
+          Certificats de réalisation (un par stagiaire, nature de l’action choisie par le formateur)
         </label>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">

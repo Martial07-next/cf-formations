@@ -724,6 +724,8 @@ export type CertificatInput = {
   agrement: string;
   cachet: string | null;
   legal?: Legal | null;
+  /** Nature de l'action choisie par le formateur, par stagiaire. */
+  natures?: Record<string, string | null | undefined>;
 };
 
 export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8Array> {
@@ -760,11 +762,12 @@ export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8
     // Nature de l'action
     y -= 34;
     heading(page, ctx, 'NATURE DE L’ACTION CONCOURANT AU DÉVELOPPEMENT DES COMPÉTENCES', y);
+    const chosen = input.natures?.[t.id] || null;
     const natures: [string, boolean][] = [
-      ['action de formation ¹', true],
-      ['bilan de compétences', false],
-      ['action de VAE', false],
-      ['action de formation par apprentissage', false],
+      ['action de formation ¹', chosen === 'formation'],
+      ['bilan de compétences', chosen === 'bilan'],
+      ['action de VAE', chosen === 'vae'],
+      ['action de formation par apprentissage', chosen === 'apprentissage'],
     ];
     y -= 6;
     for (const [label, on] of natures) {
