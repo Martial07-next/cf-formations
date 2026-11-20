@@ -225,11 +225,14 @@ export default async function DashboardPage() {
       .gte('end_at', `${ago120}T00:00:00`)
       .order('end_at');
     if (!billErr) {
-      toBill = ((bill as any[]) || []).map((s) => ({
+      // Documents complets : prêts à facturer, en tête. La session quitte la liste quand
+      // « Facturation faite » est cochée (fiche session › Facturation, ou page Facturation).
+      const rows = ((bill as any[]) || []).sort((a, b) => Number(Boolean(dossierComplete[b.id])) - Number(Boolean(dossierComplete[a.id])));
+      toBill = rows.map((s) => ({
         href: `/sessions/${s.id}#facturation`,
         title: s.title,
         meta: period(s),
-        badge: dossierComplete[s.id] ? { text: 'Dossier complet', tone: 'ok' } : { text: 'À facturer', tone: 'todo' },
+        badge: dossierComplete[s.id] ? { text: 'Prêt à facturer', tone: 'ok' } : { text: 'Documents en cours', tone: 'todo' },
       }));
     }
   }
