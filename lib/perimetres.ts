@@ -11,8 +11,7 @@ export const PERIMETRES: Perimetre[] = [
   { key: 'aer-ep', label: 'Module Aérien Éclairage Public (Aer-EP)', image: '/templates/perimetres/aer-ep.png' },
   { key: 'aer-res', label: 'Module Aérien Réseau (Aer-Res)', image: '/templates/perimetres/aer-res.png' },
   { key: 'souterrain', label: 'Module Souterrain (SOU)', image: '/templates/perimetres/souterrain.png' },
-  // Schéma à recevoir : choix grisé tant que l'image n'est pas ajoutée.
-  { key: 'terminal', label: 'Module Terminal (TER)', image: null },
+  { key: 'terminal', label: 'Module Terminal (TER)', image: '/templates/perimetres/terminal.png' },
 ];
 
 export function perimetreOf(key: string | null | undefined): Perimetre | null {
