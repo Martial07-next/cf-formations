@@ -21,6 +21,7 @@ import { canEditStartTimes } from '@/lib/roles';
 import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
+import { perimetreOf } from '@/lib/perimetres';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours, dayModuleName } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
@@ -640,6 +641,8 @@ export default async function SessionDetailPage({
                             signataire: ((settings as any)?.signataire as string) || 'GRÉBERT MATTHIEU',
                             agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
                             cachet: ((settings as any)?.cachet_image as string) || null,
+                            // Périmètre d'habilitation (migration 71) : 3e page de l'appréciation des compétences.
+                            perimetre: perimetreOf((tplOpt as any)?.perimetre_habilitation),
                           }
                         : null,
                     }

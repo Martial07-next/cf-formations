@@ -37,6 +37,8 @@ export type FinFormationInput = {
   signataire: string;
   agrement: string;
   cachet: string | null; // data URL
+  /** Périmètre d'habilitation (comité) : 3e page de l'appréciation des compétences. */
+  perimetre?: { label: string; image: string | null } | null;
 };
 
 type Fonts = { title: PDFFont; regular: PDFFont; semibold: PDFFont; bold: PDFFont };
@@ -427,6 +429,13 @@ export async function buildCompetencesPdf(input: FinFormationInput): Promise<Uin
   ctx.cachet = await embedCachet(ctx.doc, input.cachet);
   const [bg1, bg2] = await ctx.doc.embedPdf(tpl, [0, 1]);
   const { f } = ctx;
+  // Schéma du périmètre habilitable (image PNG), une fois pour tout le document.
+  let peri: PDFImage | null = null;
+  if (input.perimetre?.image) {
+    const r = await fetch(input.perimetre.image);
+    if (!r.ok) throw new Error('Schéma du périmètre d’habilitation introuvable.');
+    peri = await ctx.doc.embedPng(await r.arrayBuffer());
+  }
   for (const t of input.trainees) {
     const e = input.entries[t.id] || {};
     let k = 1;
@@ -447,6 +456,27 @@ export async function buildCompetencesPdf(input: FinFormationInput): Promise<Uin
     text(p2, 'PAGE 2', 546.7, 803.7, 7.89, f.bold);
     competencesPage2(p2, ctx, input, e);
     footer(p2, f, 'FICHE D’APPRÉCIATION DES', 'COMPÉTENCES PROFESSIONNELLES', 176.8, input);
+
+    // Page 3 : périmètre d'habilitation transmis par le comité (si choisi pour la formation).
+    if (peri && input.perimetre) {
+      const p3 = ctx.doc.addPage([W, H]);
+      p3.drawPage(bg2, { x: 0, y: -7.83, width: W, height: H });
+      text(p3, 'PAGE 3', 546.7, 803.7, 7.89, f.bold);
+      heading(p3, ctx, 'PÉRIMÈTRE D’HABILITATION', 748.2);
+      const label = input.perimetre.label;
+      const lines = wrapText(f.bold, label, 13.5, 572 - 23.1);
+      lines.slice(0, 2).forEach((l, i) => text(p3, l, 23.1, 722 - i * 17, 13.5, f.bold));
+      text(p3, `Stagiaire : ${t.name}`, 23.1, 722 - Math.min(2, lines.length) * 17 - 2, 11.5, f.regular);
+      // Schéma à pleine largeur, centré dans l'espace libre au-dessus du pied de page.
+      const top = 722 - Math.min(2, lines.length) * 17 - 22;
+      const bottom = 120;
+      const maxW = 572 - 23.1;
+      const scale = Math.min(maxW / peri.width, (top - bottom) / peri.height);
+      const w = peri.width * scale;
+      const h = peri.height * scale;
+      p3.drawImage(peri, { x: 23.1 + (maxW - w) / 2, y: top - h, width: w, height: h });
+      footer(p3, f, 'FICHE D’APPRÉCIATION DES', 'COMPÉTENCES PROFESSIONNELLES', 176.8, input);
+    }
   }
   return ctx.doc.save();
 }

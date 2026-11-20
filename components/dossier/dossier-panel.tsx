@@ -154,6 +154,7 @@ export function DossierPanel({
       signataire: string;
       agrement: string;
       cachet: string | null;
+      perimetre?: { label: string; image: string | null } | null;
     } | null;
   } | null;
 }) {

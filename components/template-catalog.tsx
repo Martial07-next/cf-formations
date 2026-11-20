@@ -1,5 +1,6 @@
 'use client';
 
+import { PERIMETRES } from '@/lib/perimetres';
 import { submitWith } from '@/lib/form-submit';
 import { departureAllowed } from '@/lib/departs';
 import { AUTH_KINDS } from '@/lib/autorisations';
@@ -55,6 +56,7 @@ type Template = {
   early_departure?: boolean | null;
   grille_irve?: boolean | null;
   grille_maintenance?: boolean | null;
+  perimetre_habilitation?: string | null;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -304,6 +306,18 @@ export function TemplateFields({
           <label style={{ fontWeight: 600 }}>
             Codification SERECT (fiche d’appréciation)
             <input name="codification" defaultValue={t?.codification || ''} placeholder="Vide = intitulé de la formation en majuscules" />
+          </label>
+          <input type="hidden" name="perimetre_present" value="1" />
+          <label style={{ fontWeight: 600 }}>
+            Périmètre d’habilitation (3e page de l’appréciation des compétences)
+            <select name="perimetre_habilitation" defaultValue={t?.perimetre_habilitation || ''}>
+              <option value="">Aucun périmètre</option>
+              {PERIMETRES.map((p) => (
+                <option key={p.key} value={p.key} disabled={!p.image}>
+                  {p.label}{p.image ? '' : ' (schéma à ajouter)'}
+                </option>
+              ))}
+            </select>
           </label>
           <label style={{ fontWeight: 600 }}>
             Objectifs de fin de formation (attestation de fin de formation)
