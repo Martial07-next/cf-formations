@@ -31,6 +31,8 @@ function readTemplate(formData: FormData) {
       ? { fiche_appreciation: formData.get('fiche_appreciation') === 'on', codification: get('codification') || null }
       : {}),
     // Périmètre d'habilitation (migration 71) : 3e page de l'appréciation des compétences.
+    // Certificats de réalisation (migration 72).
+    ...(formData.has('cert_present') ? { certificat_realisation: formData.get('certificat_realisation') === 'on' } : {}),
     ...(formData.has('perimetre_present') ? { perimetre_habilitation: get('perimetre_habilitation') || null } : {}),
     // Attestation de réussite remplie par le formateur (migration 39).
     // Plusieurs modèles possibles (ex. P1 + P2 + P3) : une attestation séparée pour chacun.
@@ -74,7 +76,7 @@ function readTemplate(formData: FormData) {
 
 /** Sans la migration 17, on enregistre la formation sans l'option tour de table. */
 // Colonnes ajoutées par migration, de la plus récente à la plus ancienne.
-const GROUPS = [['perimetre_habilitation'], ['grille_maintenance'], ['grille_irve'], ['early_departure'], ['duration_hours_recyclage'], ['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
+const GROUPS = [['certificat_realisation'], ['perimetre_habilitation'], ['grille_maintenance'], ['grille_irve'], ['early_departure'], ['duration_hours_recyclage'], ['objectifs_habilitation'], ['habilitation_symbols'], ['titre_habilitation'], ['attestation_reussite'], ['recyclage_available', 'objectifs_recyclage', 'competences_recyclage'], ['authorizations'], ['objectifs', 'competences'], ['fiche_appreciation', 'codification'], ['tour_de_table']];
 const missingTdt = (msg: string) => GROUPS.flat().some((c) => msg.includes(c));
 /**
  * Retire les colonnes absentes de la base (migrations 17 / 21 / 22 pas encore

@@ -47,6 +47,8 @@ export default async function ModelesPage() {
   const { data: maintOpts } = await supabase.from('templates').select('id, grille_maintenance');
   // Périmètre d'habilitation (migration 71).
   const { data: periOpts } = await supabase.from('templates').select('id, perimetre_habilitation');
+  // Certificats de réalisation (migration 72).
+  const { data: certOpts } = await supabase.from('templates').select('id, certificat_realisation');
   const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
 
   // Paramètres propres à une session (migration 62) : pas dans le catalogue.
@@ -77,6 +79,7 @@ export default async function ModelesPage() {
     grille_irve: ((irveOpts as any[]) || []).find((x) => x.id === t.id)?.grille_irve ?? null,
     grille_maintenance: ((maintOpts as any[]) || []).find((x) => x.id === t.id)?.grille_maintenance ?? null,
     perimetre_habilitation: ((periOpts as any[]) || []).find((x) => x.id === t.id)?.perimetre_habilitation ?? null,
+    certificat_realisation: Boolean(((certOpts as any[]) || []).find((x) => x.id === t.id)?.certificat_realisation),
   }));
   // Dossiers fermés par ce collaborateur lors de sa dernière visite.
   const stateCookie = `cf_closed_folders_${(profile?.id || 'anon').slice(0, 8)}`;

@@ -705,3 +705,105 @@ export async function buildDepartPdf(input: DepartPdfInput): Promise<Uint8Array>
   }
   return ctx.doc.save();
 }
+
+// ---------------------------------------------------------------------------
+// Certificat de réalisation (1 page par stagiaire) : texte du modèle officiel
+// du ministère du Travail, dans l'identité de CF Réseaux.
+// ---------------------------------------------------------------------------
+
+export type CertificatInput = {
+  trainees: { id: string; name: string; company: string | null; cursus?: 'initial' | 'recyclage' | null }[];
+  actionTitle: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  hours: number;
+  hoursRecyclage?: number | null;
+  /** Représentant légal de CF Réseaux (signataire du certificat). */
+  representant: string;
+  agrement: string;
+  cachet: string | null;
+  legal?: Legal | null;
+};
+
+export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8Array> {
+  const { ctx, tpl } = await setup('/templates/attestation-fin-formation.pdf');
+  ctx.doc.setTitle(`Certificats de réalisation - ${input.actionTitle}`);
+  ctx.doc.setAuthor('CF Réseaux');
+  ctx.cachet = await embedCachet(ctx.doc, input.cachet);
+  const [bg] = await ctx.doc.embedPdf(tpl, [0]);
+  const { f } = ctx;
+  const B = 12.5;
+  const step = 17.3;
+  for (const t of input.trainees) {
+    const page = ctx.doc.addPage([W, H]);
+    page.drawPage(bg, { x: 0, y: -7.83, width: W, height: H });
+    text(page, 'CERTIFICAT DE', 18.7, 726.3, 38.7, f.title);
+    text(page, 'RÉALISATION', 18.7, 685.9, 38.7, f.title);
+
+    let y = labelValue(page, { text: 'Je soussigné(e) ', font: f.regular }, { text: input.representant, font: f.bold }, 14, 632.5, 19);
+    y = richLine(page, f, [
+      { t: 'représentant légal du dispensateur de l’action concourant au développement des compétences ', font: f.regular },
+      { t: 'CF Réseaux', font: f.bold },
+      { t: ', atteste que :', font: f.regular },
+    ], 14, y - 19, 19);
+
+    // Stagiaire
+    y -= 34;
+    heading(page, ctx, 'STAGIAIRE', y);
+    y -= 24;
+    text(page, `M./Mme → ${t.name}`, 23.1, y, 13.88, f.bold);
+    const company = t.company && !/^particulier$/i.test(t.company.trim()) ? t.company : null;
+    y = labelValue(page, { text: company ? 'Salarié(e) de l’entreprise → ' : 'Statut → ', font: f.semibold }, { text: company ? company.toUpperCase() : 'Particulier', font: f.regular }, 12.88, y - step - 1, 18);
+    y = labelValue(page, { text: 'a suivi l’action → ', font: f.semibold }, { text: codificationFor(input.actionTitle, t.cursus), font: f.regular }, 12.88, y - step - 1, 18);
+
+    // Nature de l'action
+    y -= 34;
+    heading(page, ctx, 'NATURE DE L’ACTION CONCOURANT AU DÉVELOPPEMENT DES COMPÉTENCES', y);
+    const natures: [string, boolean][] = [
+      ['action de formation ¹', true],
+      ['bilan de compétences', false],
+      ['action de VAE', false],
+      ['action de formation par apprentissage', false],
+    ];
+    y -= 6;
+    for (const [label, on] of natures) {
+      y -= step;
+      checkbox(page, 24, y, on);
+      text(page, label, 38, y, B, on ? f.bold : f.regular);
+    }
+
+    // Déroulement
+    y -= 34;
+    heading(page, ctx, 'DÉROULEMENT DE L’ACTION', y);
+    y -= 22;
+    const recH = t.cursus === 'recyclage' && input.hoursRecyclage ? Number(input.hoursRecyclage) : null;
+    const recDays = recH ? Math.max(0.5, Math.round((recH / 7) * 2) / 2) : null;
+    const period = longPeriod(input.startDate, input.endDate);
+    text(page, `qui s’est déroulée → ${period.charAt(0).toLowerCase()}${period.slice(1)}`, 23.1, y, B, f.bold);
+    y -= step;
+    text(page, `pour une durée de → ${hoursText(recH ?? input.hours)} (${formatDays(recDays ?? input.days)}) ²`, 23.1, y, B, f.bold);
+
+    // Conservation des pièces (mention du modèle officiel)
+    y -= 28;
+    const keepText =
+      'Sans préjudice des délais imposés par les règles fiscales, comptables ou commerciales, je m’engage à conserver l’ensemble des pièces justificatives qui ont permis d’établir le présent certificat pendant une durée de 3 ans à compter de la fin de l’année du dernier paiement. En cas de cofinancement des fonds européens, la durée de conservation est étendue conformément aux obligations conventionnelles spécifiques.';
+    for (const l of wrapText(f.regular, keepText, 10.6, 572 - 23.1)) {
+      text(page, l, 23.1, y, 10.6, f.regular);
+      y -= 14;
+    }
+
+    // Signature
+    stamp(page, ctx.cachet, { x: 376.5, y: 92, w: 150, h: 70 });
+    text(page, 'CACHET ET SIGNATURE', 390.5, 168, 13.65, f.semibold);
+    text(page, `Fait à ${input.legal?.city || 'Cuincy'}, le ${faitLe(input.endDate)}`, 23.1, 160, 13.88, f.bold);
+    text(page, `Par ${input.representant}`, 23.1, 141.3, 13.88, f.bold);
+    text(page, 'Représentant légal de CF Réseaux', 23.1, 123.3, 12.88, f.regular);
+
+    // Notes du modèle officiel
+    text(page, '¹ Lorsque l’action est mise en œuvre dans le cadre d’un projet de transition professionnelle, le certificat doit être transmis mensuellement.', 23.1, 80, 6.9, f.regular);
+    text(page, '² Formations à distance : prendre en compte la réalisation des activités pédagogiques et le temps estimé pour les réaliser.', 23.1, 70.5, 6.9, f.regular);
+    footer(page, f, 'CERTIFICAT DE RÉALISATION', 'DE L’ACTION DE FORMATION', 206.8, input);
+  }
+  return ctx.doc.save();
+}

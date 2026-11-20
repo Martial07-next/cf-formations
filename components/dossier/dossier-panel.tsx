@@ -89,6 +89,7 @@ export function DossierPanel({
   titleRequired = false,
   me = null,
   habilitation = null,
+  certificats = null,
   evalGrids = null,
 }: {
   sessionId: string;
@@ -124,6 +125,8 @@ export function DossierPanel({
   titleRequired?: boolean;
   /** Certificats d'habilitation électrique (migration 51) : symboles de la formation. */
   habilitation?: { session: Omit<HabSession, 'sessionId' | 'trainees'>; data: HabData | null } | null;
+  /** Certificats de réalisation (migration 72), bureau : null si non demandés. */
+  certificats?: Omit<import('@/lib/pdf-fin-formation').CertificatInput, 'trainees' | 'legal'> | null;
   /** Grilles d'évaluation pratique (IRVE : migration 63, Maintenance : 64) ; absente si sa migration manque. */
   evalGrids?: { dates: string; trainer: string; grids: Partial<Record<GridKind, EvalGridProp>> } | null;
   /** Personne connectée : présence sur les fiches remplies à plusieurs. */
@@ -192,6 +195,23 @@ export function DossierPanel({
   // Attestation de fin de formation : en plus, titre d'habilitation fourni.
   const attReady = finReady.filter((t) => hasTitle(t.id));
   const fin = appreciation?.finFormation || null;
+  async function downloadCertificats(only?: string) {
+    if (!certificats) return;
+    setError(null);
+    setBusy(`cert-${only || 'all'}`);
+    try {
+      const m = await import('@/lib/pdf-fin-formation');
+      const { downloadPdf } = await import('@/lib/pdf-dossier');
+      const list = only ? trainees.filter((t) => t.id === only) : trainees;
+      if (!list.length) throw new Error('Aucun stagiaire validé sur la session.');
+      const bytes = await m.buildCertificatsPdf({ ...certificats, trainees: list, legal });
+      downloadPdf(bytes, `Certificat${only ? '' : 's'} de réalisation${only ? ` - ${list[0]?.name}` : ''} - ${title}.pdf`);
+    } catch (e: any) {
+      setError(e?.message || 'Certificats impossibles à générer.');
+    } finally {
+      setBusy(null);
+    }
+  }
   async function downloadFin(kind: 'attestation' | 'competences', only?: string) {
     if (!fin || !appreciation) return;
     setError(null);
@@ -408,6 +428,10 @@ export function DossierPanel({
           if (attReady.length) parts.push(await m.buildAttestationsPdf({ ...input, trainees: attReady }));
           parts.push(await m.buildCompetencesPdf(input));
         }
+      }
+      if (certificats && trainees.length) {
+        const m = await import('@/lib/pdf-fin-formation');
+        parts.push(await m.buildCertificatsPdf({ ...certificats, trainees, legal }));
       }
       if (arSession && arTotal) {
         const { buildReussitePdf } = await import('@/lib/pdf-reussite');
@@ -920,8 +944,45 @@ export function DossierPanel({
           </details>
         </div>
       )}
+      {certificats && (
+        <div className="fin-docs">
+          <div className="fin-docs-head">
+            <span className="doc-item-main">
+              <strong><Award size={15} aria-hidden style={{ verticalAlign: '-2px' }} /> Certificats de réalisation (bureau administratif)</strong>
+              <small className="hint">Un certificat par stagiaire validé, rempli automatiquement : stagiaire, entreprise, action, dates et durée.</small>
+            </span>
+            <span className="badge validee">{trainees.length} stagiaire{trainees.length > 1 ? 's' : ''}</span>
+          </div>
+          {!certificats.cachet && <p className="hint fin-warn">Cachet et signature non ajoutés : Administration › Paramètres.</p>}
+          <div className="row-actions" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
+            <button className="small primary" disabled={!trainees.length || !!busy} onClick={() => downloadCertificats()}>
+              {busy === 'cert-all' ? <Loader2 size={14} className="spin" aria-hidden /> : <Download size={14} aria-hidden />} Tous les certificats de réalisation
+            </button>
+          </div>
+          {trainees.length > 1 && (
+            <details>
+              <summary>Par stagiaire</summary>
+              <div className="fin-list">
+                {trainees.map((t) => (
+                  <div key={t.id} className="fin-row">
+                    <span>
+                      <strong>{t.name}</strong>
+                      {t.company && <small className="hint">{t.company}</small>}
+                    </span>
+                    <span className="row-actions">
+                      <button className="small" disabled={!!busy} onClick={() => downloadCertificats(t.id)}>
+                        {busy === `cert-${t.id}` ? <Loader2 size={13} className="spin" aria-hidden /> : <Download size={13} aria-hidden />} Certificat
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
       {documents.length === 0 ? (
-        !tdt && !faiOn && !arOn && <p className="hint">
+        !tdt && !faiOn && !arOn && !certificats && <p className="hint">
           Aucun document à remplir.{canManage ? ' Ajoute-les une fois pour toutes dans Formations disponibles › Dossier, ou pour cette session ci-dessous.' : ''}
         </p>
       ) : (

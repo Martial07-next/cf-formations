@@ -57,6 +57,7 @@ type Template = {
   grille_irve?: boolean | null;
   grille_maintenance?: boolean | null;
   perimetre_habilitation?: string | null;
+  certificat_realisation?: boolean;
   competences_recyclage?: string | null;
   codification?: string | null;
   objectifs?: string | null;
@@ -297,6 +298,11 @@ export function TemplateFields({
             ))}
           </div>
         </fieldset>
+        <input type="hidden" name="cert_present" value="1" />
+        <label className="check-line">
+          <input type="checkbox" name="certificat_realisation" defaultChecked={t?.certificat_realisation === true} />
+          Certificats de réalisation (un par stagiaire, générés automatiquement)
+        </label>
         <input type="hidden" name="fai_present" value="1" />
         <label className="check-line">
           <input type="checkbox" name="fiche_appreciation" checked={fai} onChange={(e) => setFai(e.target.checked)} />
@@ -566,6 +572,7 @@ export function TemplateCatalog({
                             <span className="tpl-flag" title={`Certificat d’habilitation : ${formationSymbols(t.habilitation_symbols, t.title).join(' ')}`}>Certificat {formationSymbols(t.habilitation_symbols, t.title).join(' ')}</span>
                           )}
                           {t.fiche_appreciation && <span className="tpl-flag">Fiche d’appréciation</span>}
+                          {t.certificat_realisation && <span className="tpl-flag">Certificat de réalisation</span>}
                           {reussiteModels(t.attestation_reussite).length > 0 && (
                             <span className="tpl-flag">Attestations {reussiteModels(t.attestation_reussite).map((m) => m.label.replace(/^IRVE\s+/, '')).join(' · ')}</span>
                           )}

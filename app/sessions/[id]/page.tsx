@@ -27,7 +27,7 @@ import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
 import { formationSymbols } from '@/lib/habilitation';
 import { GRIDS, gridRequired } from '@/lib/irve-grid';
-import { reussiteModels, reussiteModules } from '@/lib/reussite';
+import { REUSSITE_SIGNATAIRE, reussiteModels, reussiteModules } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
@@ -646,6 +646,22 @@ export default async function SessionDetailPage({
                           }
                         : null,
                     }
+              }
+              certificats={
+                // Certificats de réalisation (migration 72) : bureau et administrateur.
+                editable && (tplOpt as any)?.certificat_realisation
+                  ? {
+                      actionTitle: session.title,
+                      startDate: session.start_at.slice(0, 10),
+                      endDate: session.end_at.slice(0, 10),
+                      days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
+                      hours,
+                      hoursRecyclage: (tplOpt as any)?.duration_hours_recyclage ?? null,
+                      representant: REUSSITE_SIGNATAIRE,
+                      agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
+                      cachet: ((settings as any)?.cachet_image as string) || null,
+                    }
+                  : null
               }
               dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
               place={room?.is_holding ? null : trainingPlace(room)}
