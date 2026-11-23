@@ -142,7 +142,7 @@ function AutorForm({ token, trainee, onBack, onDone }: { token: string; trainee:
         <section className="autor-card">
           <h3>Vêtements TST prêtés</h3>
           <p className="hint">
-            CF Réseaux te prête : <strong>{loans.map((l) => clothesText(l.vestes, l.pantalons)).join(' + ')}</strong>. À nettoyer puis à ramener au siège.{' '}
+            CF Réseaux te prête : <strong>{loans.map((l) => clothesText(l.vestes, l.pantalons, (l as any).baudriers || 0)).join(' + ')}</strong>. À nettoyer puis à ramener au siège.{' '}
             <a href="/templates/vetements-tst.pdf" target="_blank" rel="noreferrer" className="autor-doc-link"><FileText size={13} aria-hidden /> Lire le document</a>
           </p>
         </section>

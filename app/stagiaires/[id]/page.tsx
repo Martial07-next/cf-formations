@@ -122,7 +122,14 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
         <TraineeSignedDocs docs={traineeDocs} sigs={docSigs} traineeName={trainee.full_name} sessionTitles={sessionTitles} isAdmin={profile?.role === 'admin'} />
 
         <TraineeLoans
+          traineeId={trainee.id}
           traineeName={trainee.full_name}
+          // Nouveau prêt rattaché à une formation : en cours ou à venir d'abord, puis les plus récentes.
+          lendSessions={[...sessions]
+            .sort((a, b) => Number(a.s.end_at < now) - Number(b.s.end_at < now) || (a.s.end_at < now ? b.s.start_at.localeCompare(a.s.start_at) : a.s.start_at.localeCompare(b.s.start_at)))
+            .slice(0, 15)
+            .map((x) => ({ id: x.s.id as string, title: `${x.s.title} · ${new Date(x.s.start_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}` }))}
+          canLend={canManage(profile?.role)}
           address={(extra as any)?.address || null}
           loans={(loanRows as ClothingLoan[]) || []}
           sessionTitles={sessionTitles}

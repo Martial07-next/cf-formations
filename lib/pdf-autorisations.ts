@@ -155,6 +155,13 @@ async function fill(page: PDFPage, ctx: Ctx, item: AuthPdfItem) {
   put(page, ctx, d.address, 142, L(528.2, 18.8), 377);
   over(page, ctx, String(d.vestes ?? 0), 53, L(445.7, 17), 13, 15);
   over(page, ctx, String(d.pantalons ?? 0), 53, L(427.7, 17), 13, 15);
+  // Baudriers (migration 74) : 3e ligne de la liste, sous les pantalons.
+  const nb = Number(d.baudriers ?? 0);
+  if (nb > 0) {
+    const by = L(409.7, 17) + DY;
+    page.drawCircle({ x: 39.6, y: by + 4.4, size: 2.4, color: INK });
+    page.drawText(keep(ctx.value, `${nb} baudrier${nb > 1 ? 's' : ''}`), { x: 53, y: by, size: 13.5, font: ctx.value, color: INK });
+  }
   put(page, ctx, city, 74, L(211, 16), 242, 13);
   put(page, ctx, date.full, 45, L(189.2, 16), 176, 13);
   image(page, sig, 26, L(160.9, 15.8) - 8, 230, 54);
@@ -164,14 +171,15 @@ async function fill(page: PDFPage, ctx: Ctx, item: AuthPdfItem) {
     const x = 318, y = 18, w = 252, h = 132;
     page.drawRectangle({ x, y, width: w, height: h, color: WHITE, borderColor: INK, borderWidth: 1.2 });
     const t = (str: string, ty: number, size = 8.5, color = INK) => page.drawText(keep(ctx.value, str), { x: x + 10, y: ty, size, font: ctx.value, color });
-    const rv = Number(d.returned_vestes ?? 0), rp = Number(d.returned_pantalons ?? 0);
-    const mv = Math.max(0, Number(d.vestes ?? 0) - rv), mp = Math.max(0, Number(d.pantalons ?? 0) - rp);
-    const txt = (v: number, p: number) => [v ? `${v} veste${v > 1 ? 's' : ''}` : '', p ? `${p} pantalon${p > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ') || 'aucun';
-    t('Restitution des vêtements', y + h - 16, 9.5);
+    const rv = Number(d.returned_vestes ?? 0), rp = Number(d.returned_pantalons ?? 0), rb = Number(d.returned_baudriers ?? 0);
+    const mv = Math.max(0, Number(d.vestes ?? 0) - rv), mp = Math.max(0, Number(d.pantalons ?? 0) - rp), mb = Math.max(0, nb - rb);
+    const txt = (v: number, p: number, b: number) =>
+      [v ? `${v} veste${v > 1 ? 's' : ''}` : '', p ? `${p} pantalon${p > 1 ? 's' : ''}` : '', b ? `${b} baudrier${b > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ') || 'aucun';
+    t(nb ? 'Restitution du matériel' : 'Restitution des vêtements', y + h - 16, 9.5);
     t(`Date de restitution : ${parts(a.returned_at).full}`, y + h - 32);
-    t(`Rendus : ${txt(rv, rp)}`, y + h - 46);
-    if (mv + mp > 0) t(`MANQUE : ${txt(mv, mp)}`, y + h - 60, 9.5, RED);
-    else t('Tous les vêtements ont été rendus.', y + h - 60);
+    t(`Rendus : ${txt(rv, rp, rb)}`, y + h - 46);
+    if (mv + mp + mb > 0) t(`MANQUE : ${txt(mv, mp, mb)}`, y + h - 60, 9.5, RED);
+    else t(nb ? 'Tout le matériel a été rendu.' : 'Tous les vêtements ont été rendus.', y + h - 60);
     if (d.return_note) t(String(d.return_note).slice(0, 60), y + h - 73, 7.5);
     t('Signature du stagiaire :', y + 34, 8);
     image(page, await embedDataUrl(ctx.doc, a.return_signature), x + 120, y + 50, 120, 26);

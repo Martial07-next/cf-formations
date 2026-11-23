@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Shirt, X, PenLine, PackageCheck, Trash2, AlertTriangle } from 'lucide-react';
-import { lendClothes, signLoan, returnClothes, deleteLoan } from '@/app/vetements/actions';
+import { lendClothes, lendFromTrainee, signLoan, returnClothes, deleteLoan } from '@/app/vetements/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
-import { LOAN_STATUS_LABEL, clothesText, loanStatus, missingOf, missingText, type ClothingLoan } from '@/lib/vetements';
+import { LOAN_STATUS_LABEL, clothesText, loanStatus, loanText, missingOf, missingText, type ClothingLoan } from '@/lib/vetements';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -53,8 +53,8 @@ export const loanPdf = (l: ClothingLoan, name: string) => ({
     returned_at: l.returned_at,
     return_signature: l.return_signature,
     data: {
-      address: l.address, vestes: l.vestes, pantalons: l.pantalons,
-      returned_vestes: l.returned_vestes, returned_pantalons: l.returned_pantalons, return_note: l.return_note,
+      address: l.address, vestes: l.vestes, pantalons: l.pantalons, baudriers: l.baudriers || 0,
+      returned_vestes: l.returned_vestes, returned_pantalons: l.returned_pantalons, returned_baudriers: l.returned_baudriers ?? null, return_note: l.return_note,
     },
   },
   traineeName: name,
@@ -72,7 +72,7 @@ function SignStep({ address: initial, onSign, isPending, label }: { address: str
       <label className="field">Adresse du stagiaire<textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="N°, rue, code postal, ville" /></label>
       <label className="field" style={{ marginTop: 8 }}>Fait à<input value={city} onChange={(e) => setCity(e.target.value)} /></label>
       <label className="check-line" style={{ margin: '10px 0' }}>
-        <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} /> Lu et approuvé : je m’engage à nettoyer les vêtements et à les ramener au siège de CF Réseaux.
+        <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} /> Lu et approuvé : je m’engage à nettoyer les vêtements, à garder le matériel en bon état et à tout ramener au siège de CF Réseaux.
       </label>
       <SignaturePad ref={pad} height={160} onChange={setEmpty} />
       <div className="sign-actions">
@@ -93,7 +93,10 @@ function SignStep({ address: initial, onSign, isPending, label }: { address: str
 }
 
 /** Retour : vêtements rendus (au total) + signature ; ce qui manque est signalé. */
-function ReturnStep({ loan, onDone, isPending }: { loan: ClothingLoan; onDone: (r: { vestes: number; pantalons: number; note: string; signature: string }) => void; isPending: boolean }) {
+function ReturnStep({ loan, onDone, isPending }: { loan: ClothingLoan; onDone: (r: { vestes: number; pantalons: number; baudriers: number; note: string; signature: string }) => void; isPending: boolean }) {
+  const lentB = loan.baudriers || 0;
+  const [baudriers, setBaudriers] = useState(loan.returned_at ? Math.max(loan.returned_baudriers ?? 0, lentB) : lentB);
+  const mb = lentB - baudriers;
   const [vestes, setVestes] = useState(loan.returned_at ? Math.max(loan.returned_vestes ?? 0, loan.vestes) : loan.vestes);
   const [pantalons, setPantalons] = useState(loan.returned_at ? Math.max(loan.returned_pantalons ?? 0, loan.pantalons) : loan.pantalons);
   const [note, setNote] = useState(loan.return_note || '');
@@ -103,17 +106,18 @@ function ReturnStep({ loan, onDone, isPending }: { loan: ClothingLoan; onDone: (
   const mp = loan.pantalons - pantalons;
   return (
     <>
-      <p className="hint" style={{ marginTop: 0 }}>Prêtés : <strong>{clothesText(loan.vestes, loan.pantalons)}</strong>. Indique ce qui est rendu (au total).</p>
+      <p className="hint" style={{ marginTop: 0 }}>Prêtés : <strong>{loanText(loan)}</strong>. Indique ce qui est rendu (au total).</p>
       <div className="autor-counts">
         {loan.vestes > 0 && <Stepper label="Vestes rendues" value={vestes} max={loan.vestes} onChange={setVestes} />}
         {loan.pantalons > 0 && <Stepper label="Pantalons rendus" value={pantalons} max={loan.pantalons} onChange={setPantalons} />}
+        {lentB > 0 && <Stepper label="Baudriers rendus" value={baudriers} max={lentB} onChange={setBaudriers} />}
       </div>
-      {mv + mp > 0 ? (
+      {mv + mp + mb > 0 ? (
         <div role="alert" className="alert alert-warning" style={{ marginTop: 10 }}>
-          <AlertTriangle size={15} aria-hidden style={{ verticalAlign: '-3px' }} /> Manque : <strong>{clothesText(mv, mp)}</strong>. Ce sera noté sur l’attestation et sur la fiche du stagiaire.
+          <AlertTriangle size={15} aria-hidden style={{ verticalAlign: '-3px' }} /> Manque : <strong>{clothesText(mv, mp, mb)}</strong>. Ce sera noté sur l’attestation et sur la fiche du stagiaire.
         </div>
       ) : (
-        <p className="hint">Tous les vêtements sont rendus.</p>
+        <p className="hint">Tout est rendu.</p>
       )}
       <label className="field" style={{ marginTop: 8 }}>Remarque (facultatif)<input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex. pantalon oublié, le ramène lundi" /></label>
       <p className="sub-heading" style={{ margin: '12px 0 6px' }}>Signature du stagiaire pour le retour</p>
@@ -125,7 +129,7 @@ function ReturnStep({ loan, onDone, isPending }: { loan: ClothingLoan; onDone: (
           disabled={isPending || empty}
           onClick={() => {
             const signature = pad.current?.toDataURL();
-            if (signature) onDone({ vestes, pantalons, note, signature });
+            if (signature) onDone({ vestes, pantalons, baudriers, note, signature });
           }}
         >
           Valider le retour
@@ -161,7 +165,7 @@ function LoanItem({
   return (
     <li className={`loan-item ${st}`}>
       <span className="loan-main">
-        <strong>{name}</strong> · {clothesText(loan.vestes, loan.pantalons)}
+        <strong>{name}</strong> · {loanText(loan)}
         <span className={`loan-status ${st}`}>{LOAN_STATUS_LABEL[st]}</span>
         {miss && <span className="autor-refus"><AlertTriangle size={12} aria-hidden /> {miss}</span>}
         <span className="hint loan-dates">
@@ -176,18 +180,18 @@ function LoanItem({
         {(st === 'prete' || st === 'incomplet') && (
           <button type="button" className="small" onClick={() => setMode('return')}><PackageCheck size={14} aria-hidden /> {st === 'incomplet' ? 'Compléter le retour' : 'Retour'}</button>
         )}
-        {loan.signed_at && <AuthPdfButton items={[loanPdf(loan, name)]} cachet={cachet} fileName={`Vêtements TST - ${name}.pdf`} />}
+        {loan.signed_at && <AuthPdfButton items={[loanPdf(loan, name)]} cachet={cachet} fileName={`Prêt de matériel - ${name}.pdf`} />}
         {canManage && (
-          <button type="button" className="small icon ghost" aria-label="Supprimer le prêt" disabled={isPending} onClick={async () => (await askConfirm('Supprimer ce prêt de vêtements ?')) && run(() => deleteLoan(loan.id))}>
+          <button type="button" className="small icon ghost" aria-label="Supprimer le prêt" disabled={isPending} onClick={async () => (await askConfirm('Supprimer ce prêt ?')) && run(() => deleteLoan(loan.id))}>
             <Trash2 size={14} />
           </button>
         )}
       </span>
-      <Modal open={mode === 'sign'} onClose={() => setMode(null)} title={`Prêt de vêtements · ${name}`}>
-        <p className="hint" style={{ marginTop: 0 }}>Prêtés : <strong>{clothesText(loan.vestes, loan.pantalons)}</strong>.</p>
+      <Modal open={mode === 'sign'} onClose={() => setMode(null)} title={`Prêt de matériel · ${name}`}>
+        <p className="hint" style={{ marginTop: 0 }}>Prêtés : <strong>{loanText(loan)}</strong>.</p>
         <SignStep address={loan.address || address} isPending={isPending} label="Signer le prêt" onSign={(s) => run(() => signLoan(loan.id, s), () => setMode(null))} />
       </Modal>
-      <Modal open={mode === 'return'} onClose={() => setMode(null)} title={`Retour des vêtements · ${name}`}>
+      <Modal open={mode === 'return'} onClose={() => setMode(null)} title={`Retour du matériel · ${name}`}>
         <ReturnStep loan={loan} isPending={isPending} onDone={(r) => run(() => returnClothes(loan.id, r), () => setMode(null))} />
       </Modal>
     </li>
@@ -209,9 +213,100 @@ function useRun() {
   return { error, isPending, run };
 }
 
+type Qty = { vestes: number; pantalons: number; baudriers: number };
+type Sign = { address: string; city: string; signature: string };
+
 /**
- * Fiche session : prêts de vêtements TST, seulement aux stagiaires choisis
- * (ceux qui ont leurs propres EPI n'ont rien à signer).
+ * Nouveau prêt : stagiaire (choisi dans la liste, ou déjà connu), session
+ * éventuelle (fiche stagiaire), quantités, puis signature maintenant ou plus tard.
+ */
+function LendModal({
+  open,
+  onClose,
+  people,
+  fixed,
+  sessions,
+  error,
+  isPending,
+  onLend,
+}: {
+  open: boolean;
+  onClose: () => void;
+  people: Person[];
+  fixed?: Person;
+  sessions?: { id: string; title: string }[];
+  error: string | null;
+  isPending: boolean;
+  onLend: (who: string, sessionId: string | null, qty: Qty, sign: Sign | null, done: () => void) => void;
+}) {
+  const [who, setWho] = useState(fixed?.id || '');
+  const [sessionId, setSessionId] = useState(sessions?.[0]?.id || '');
+  const [vestes, setVestes] = useState(0);
+  const [pantalons, setPantalons] = useState(0);
+  const [baudriers, setBaudriers] = useState(0);
+  const [step, setStep] = useState<'choose' | 'sign'>('choose');
+  const reset = () => { setWho(fixed?.id || ''); setVestes(0); setPantalons(0); setBaudriers(0); setStep('choose'); onClose(); };
+  const person = fixed || people.find((t) => t.id === who);
+  const total = vestes + pantalons + baudriers;
+  const qty = { vestes, pantalons, baudriers };
+  return (
+    <Modal open={open} onClose={reset} title={fixed ? `Prêter du matériel · ${fixed.name}` : 'Prêter du matériel'}>
+      {error && <div role="alert" className="alert alert-error">{error}</div>}
+      {step === 'choose' ? (
+        <>
+          {!fixed && (
+            <label className="field">
+              Stagiaire
+              <select value={who} onChange={(e) => setWho(e.target.value)}>
+                <option value="">Choisir le stagiaire…</option>
+                {people.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+          )}
+          {sessions && (
+            <label className="field">
+              Formation concernée
+              <select value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+                {sessions.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+                <option value="">Aucune formation en particulier</option>
+              </select>
+            </label>
+          )}
+          <div className="autor-counts" style={{ marginTop: 10 }}>
+            <Stepper label="Veste(s) TST" value={vestes} onChange={setVestes} />
+            <Stepper label="Pantalon(s) TST" value={pantalons} onChange={setPantalons} />
+            <Stepper label="Baudrier(s)" value={baudriers} onChange={setBaudriers} />
+          </div>
+          <div className="form-actions" style={{ marginTop: 14 }}>
+            <button type="button" className="primary" disabled={!person || total === 0} onClick={() => setStep('sign')}>
+              <PenLine size={15} aria-hidden /> Faire signer maintenant
+            </button>
+            <button
+              type="button"
+              disabled={!person || total === 0 || isPending}
+              onClick={() => onLend(person!.id, sessionId || null, qty, null, reset)}
+              title="Le stagiaire signera plus tard (bouton « Faire signer », ou QR code des autorisations de la session)"
+            >
+              Signer plus tard
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="hint" style={{ marginTop: 0 }}>
+            <strong>{person?.name}</strong> emprunte {clothesText(vestes, pantalons, baudriers)}.{' '}
+            <button type="button" className="small ghost" onClick={() => setStep('choose')}>Modifier</button>
+          </p>
+          <SignStep address={person?.address || null} isPending={isPending} label="Signer le prêt" onSign={(s) => onLend(person!.id, sessionId || null, qty, s, reset)} />
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * Fiche session : prêts de vêtements TST et de baudriers, seulement aux
+ * stagiaires choisis (ceux qui ont leur propre équipement n'ont rien à signer).
  */
 export function SessionLoans({
   sessionId,
@@ -224,38 +319,33 @@ export function SessionLoans({
   sessionId: string;
   trainees: Person[];
   loans: ClothingLoan[];
-  /** Vêtements pas (entièrement) rendus d'une formation précédente. */
+  /** Matériel pas (entièrement) rendu d'une formation précédente. */
   otherOpen: ClothingLoan[];
   canManage: boolean;
   cachet: string | null;
 }) {
   const { error, isPending, run } = useRun();
   const [lending, setLending] = useState(false);
-  const [who, setWho] = useState('');
-  const [vestes, setVestes] = useState(1);
-  const [pantalons, setPantalons] = useState(1);
-  const [step, setStep] = useState<'choose' | 'sign'>('choose');
   const person = (id: string) => trainees.find((t) => t.id === id);
-  const reset = () => { setLending(false); setWho(''); setVestes(1); setPantalons(1); setStep('choose'); };
 
   return (
     <section className="panel" id="vetements">
       <div className="panel-head">
-        <h2><Shirt size={17} aria-hidden /> Vêtements TST prêtés</h2>
-        {trainees.length > 0 && <button type="button" className="small" onClick={() => setLending(true)}><Shirt size={14} aria-hidden /> Prêter des vêtements</button>}
+        <h2><Shirt size={17} aria-hidden /> Vêtements TST et baudriers prêtés</h2>
+        {trainees.length > 0 && <button type="button" className="small" onClick={() => setLending(true)}><Shirt size={14} aria-hidden /> Prêter du matériel</button>}
       </div>
       {error && !lending && <div role="alert" className="alert alert-error">{error}</div>}
       {otherOpen.length > 0 && (
         <div role="alert" className="alert alert-warning">
-          <AlertTriangle size={15} aria-hidden style={{ verticalAlign: '-3px' }} /> Vêtements d’une formation précédente pas rendus :{' '}
+          <AlertTriangle size={15} aria-hidden style={{ verticalAlign: '-3px' }} /> Matériel d’une formation précédente pas rendu :{' '}
           {otherOpen.map((l) => {
             const m = missingOf(l);
-            return `${person(l.trainee_id)?.name || 'Stagiaire'} (${clothesText(m.vestes, m.pantalons)})`;
+            return `${person(l.trainee_id)?.name || 'Stagiaire'} (${clothesText(m.vestes, m.pantalons, m.baudriers)})`;
           }).join(' · ')}
         </div>
       )}
       {!loans.length ? (
-        <p className="hint" style={{ margin: 0 }}>Aucun prêt : seuls les stagiaires sans leurs propres EPI signent l’attestation.</p>
+        <p className="hint" style={{ margin: 0 }}>Aucun prêt : seuls les stagiaires sans leur propre équipement signent l’attestation.</p>
       ) : (
         <ul className="loan-list">
           {loans.map((l) => (
@@ -263,99 +353,90 @@ export function SessionLoans({
           ))}
         </ul>
       )}
-
-      <Modal open={lending} onClose={reset} title="Prêter des vêtements TST">
-        {error && <div role="alert" className="alert alert-error">{error}</div>}
-        {step === 'choose' ? (
-          <>
-            <label className="field">
-              Stagiaire
-              <select value={who} onChange={(e) => setWho(e.target.value)}>
-                <option value="">Choisir le stagiaire…</option>
-                {trainees.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </label>
-            <div className="autor-counts" style={{ marginTop: 10 }}>
-              <Stepper label="Veste(s) TST" value={vestes} onChange={setVestes} />
-              <Stepper label="Pantalon(s) TST" value={pantalons} onChange={setPantalons} />
-            </div>
-            <div className="form-actions" style={{ marginTop: 14 }}>
-              <button type="button" className="primary" disabled={!who || vestes + pantalons === 0} onClick={() => setStep('sign')}>
-                <PenLine size={15} aria-hidden /> Faire signer maintenant
-              </button>
-              <button
-                type="button"
-                disabled={!who || vestes + pantalons === 0 || isPending}
-                onClick={() => run(async () => lendClothes(sessionId, who, { vestes, pantalons }, null), reset)}
-                title="Le stagiaire signera plus tard (QR code des autorisations ou bouton « Faire signer »)"
-              >
-                Signer plus tard
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="hint" style={{ marginTop: 0 }}>
-              <strong>{person(who)?.name}</strong> emprunte {clothesText(vestes, pantalons)}.{' '}
-              <button type="button" className="small ghost" onClick={() => setStep('choose')}>Modifier</button>
-            </p>
-            <SignStep
-              address={person(who)?.address || null}
-              isPending={isPending}
-              label="Signer le prêt"
-              onSign={(s) => run(async () => lendClothes(sessionId, who, { vestes, pantalons }, s), reset)}
-            />
-          </>
-        )}
-      </Modal>
+      <LendModal
+        open={lending}
+        onClose={() => setLending(false)}
+        people={trainees}
+        error={error}
+        isPending={isPending}
+        onLend={(who, _s, qty, sign, done) => run(async () => lendClothes(sessionId, who, qty, sign), done)}
+      />
     </section>
   );
 }
 
-/** Fiche stagiaire : tous ses prêts, avec le retour possible à tout moment. */
+/** Fiche stagiaire : tous ses prêts, nouveau prêt possible, retour à tout moment. */
 export function TraineeLoans({
+  traineeId,
   traineeName,
   address,
   loans,
   sessionTitles,
+  lendSessions = [],
+  canLend = false,
   canManage,
   cachet,
 }: {
+  traineeId: string;
   traineeName: string;
   address: string | null;
   loans: ClothingLoan[];
   sessionTitles: Record<string, string>;
+  /** Sessions proposées pour rattacher un nouveau prêt (en cours et à venir d'abord). */
+  lendSessions?: { id: string; title: string }[];
+  canLend?: boolean;
   canManage: boolean;
   cachet: string | null;
 }) {
   const { error, isPending, run } = useRun();
-  if (!loans.length) return null;
+  const [lending, setLending] = useState(false);
+  if (!loans.length && !canLend) return null;
   const open = loans.filter((l) => ['prete', 'incomplet'].includes(loanStatus(l)));
+  const me = { id: traineeId, name: traineeName, address };
   return (
     <section className="panel" id="vetements">
-      <h2><Shirt size={17} aria-hidden /> Vêtements TST prêtés</h2>
+      <div className="panel-head">
+        <h2><Shirt size={17} aria-hidden /> Vêtements TST et baudriers prêtés</h2>
+        {canLend && <button type="button" className="small" onClick={() => setLending(true)}><Shirt size={14} aria-hidden /> Prêter du matériel</button>}
+      </div>
       {open.length > 0 && (
         <div role="alert" className="alert alert-warning">
           <AlertTriangle size={15} aria-hidden style={{ verticalAlign: '-3px' }} /> À rendre :{' '}
-          {open.map((l) => { const m = missingOf(l); return clothesText(m.vestes, m.pantalons); }).join(' + ')}
+          {open.map((l) => { const m = missingOf(l); return clothesText(m.vestes, m.pantalons, m.baudriers); }).join(' + ')}
         </div>
       )}
-      {error && <div role="alert" className="alert alert-error">{error}</div>}
-      <ul className="loan-list">
-        {[...loans].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((l) => (
-          <LoanItem
-            key={l.id}
-            loan={l}
-            name={traineeName}
-            address={address}
-            extra={l.session_id ? sessionTitles[l.session_id] : undefined}
-            canManage={canManage}
-            cachet={cachet}
-            run={run}
-            isPending={isPending}
-          />
-        ))}
-      </ul>
+      {error && !lending && <div role="alert" className="alert alert-error">{error}</div>}
+      {!loans.length ? (
+        <p className="hint" style={{ margin: 0 }}>Aucun prêt pour ce stagiaire.</p>
+      ) : (
+        <ul className="loan-list">
+          {[...loans].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((l) => (
+            <LoanItem
+              key={l.id}
+              loan={l}
+              name={traineeName}
+              address={address}
+              extra={l.session_id ? sessionTitles[l.session_id] : undefined}
+              canManage={canManage}
+              cachet={cachet}
+              run={run}
+              isPending={isPending}
+            />
+          ))}
+        </ul>
+      )}
+      {canLend && (
+        <LendModal
+          open={lending}
+          onClose={() => setLending(false)}
+          people={[me]}
+          fixed={me}
+          sessions={lendSessions}
+          error={error}
+          isPending={isPending}
+          onLend={(who, sessionId, qty, sign, done) => run(async () => lendFromTrainee(who, sessionId, qty, sign), done)}
+        />
+      )}
     </section>
   );
 }

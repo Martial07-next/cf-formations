@@ -37,27 +37,23 @@ function checkSign(s: SignInput) {
   return null;
 }
 
-/**
- * Prêt de vêtements TST à un stagiaire de la session (choisi : certains ont
- * leurs propres EPI). Signature tout de suite, ou plus tard via le QR code.
- */
-export async function lendClothes(
-  sessionId: string,
-  traineeId: string,
-  qty: { vestes: number; pantalons: number },
-  sign: SignInput | null
-): Promise<Result<{ id: string }>> {
-  if (!(await staffOf(sessionId))) return FORBIDDEN;
+type Qty = { vestes: number; pantalons: number; baudriers?: number };
+
+/** Enregistre un prêt (vêtements TST, baudriers), signé tout de suite ou à faire signer plus tard. */
+async function createLoan(traineeId: string, sessionId: string | null, qty: Qty, sign: SignInput | null): Promise<Result<{ id: string }>> {
   const vestes = clampQty(qty.vestes);
   const pantalons = clampQty(qty.pantalons);
-  if (vestes + pantalons === 0) return { ok: false, error: 'Indique au moins une veste ou un pantalon.' };
+  const baudriers = clampQty(qty.baudriers);
+  if (vestes + pantalons + baudriers === 0) return { ok: false, error: 'Indique au moins une veste, un pantalon ou un baudrier.' };
   if (sign) {
     const err = checkSign(sign);
     if (err) return { ok: false, error: err };
   }
   const admin = createAdminClient();
-  const { data: enrolled } = await admin.from('session_trainees').select('trainee_id').eq('session_id', sessionId).eq('trainee_id', traineeId).maybeSingle();
-  if (!enrolled) return { ok: false, error: 'Ce stagiaire n’est pas inscrit à la session.' };
+  if (sessionId) {
+    const { data: enrolled } = await admin.from('session_trainees').select('trainee_id').eq('session_id', sessionId).eq('trainee_id', traineeId).maybeSingle();
+    if (!enrolled) return { ok: false, error: 'Ce stagiaire n’est pas inscrit à la session.' };
+  }
   const now = new Date().toISOString();
   const { data, error } = await admin
     .from('clothing_loans')
@@ -66,14 +62,32 @@ export async function lendClothes(
       session_id: sessionId,
       vestes,
       pantalons,
+      // Colonne de la migration 74 : seulement si des baudriers sont prêtés.
+      ...(baudriers ? { baudriers } : {}),
       ...(sign ? { address: sign.address.trim().slice(0, 300), city: sign.city.trim().slice(0, 120), signature: sign.signature, signed_at: now } : {}),
     })
     .select('id')
     .single();
-  if (error) return { ok: false, error: MIGRATION };
+  if (error) return { ok: false, error: /baudriers|clothing_loans_some/i.test(error.message) ? 'Exécute d’abord la migration 74 (supabase/migration_phase74.sql) dans Supabase.' : MIGRATION };
   if (sign) await admin.from('trainees').update({ address: sign.address.trim().slice(0, 300) }).eq('id', traineeId);
   refresh({ trainee_id: traineeId, session_id: sessionId });
   return { ok: true, id: data.id };
+}
+
+/**
+ * Prêt à un stagiaire de la session (choisi : certains ont leur propre
+ * équipement). Signature tout de suite, ou plus tard via le QR code.
+ */
+export async function lendClothes(sessionId: string, traineeId: string, qty: Qty, sign: SignInput | null): Promise<Result<{ id: string }>> {
+  if (!(await staffOf(sessionId))) return FORBIDDEN;
+  return createLoan(traineeId, sessionId, qty, sign);
+}
+
+/** Prêt depuis la fiche du stagiaire : rattaché à une de ses sessions, ou à aucune. */
+export async function lendFromTrainee(traineeId: string, sessionId: string | null, qty: Qty, sign: SignInput | null): Promise<Result<{ id: string }>> {
+  const allowed = sessionId ? (await staffOf(sessionId)) || (await requireManager()) : await requireManager();
+  if (!allowed) return FORBIDDEN;
+  return createLoan(traineeId, sessionId || null, qty, sign);
 }
 
 /** Signature d'un prêt resté « à signer ». */
@@ -99,18 +113,20 @@ export async function signLoan(id: string, sign: SignInput): Promise<Result> {
  * stagiaire. S'il manque un vêtement, le prêt reste « rendu incomplet » et
  * peut être complété plus tard.
  */
-export async function returnClothes(id: string, ret: { vestes: number; pantalons: number; note: string; signature: string }): Promise<Result> {
+export async function returnClothes(id: string, ret: { vestes: number; pantalons: number; baudriers?: number; note: string; signature: string }): Promise<Result> {
   const { admin, loan } = await loanById(id);
   if (!loan) return { ok: false, error: 'Prêt introuvable.' };
   if (!(await canHandle(loan))) return FORBIDDEN;
   if (!validSignature(ret.signature)) return { ok: false, error: 'Le stagiaire doit signer le retour.' };
   const vestes = Math.min(loan.vestes, clampQty(ret.vestes));
   const pantalons = Math.min(loan.pantalons, clampQty(ret.pantalons));
+  const baudriers = Math.min(loan.baudriers || 0, clampQty(ret.baudriers));
   const { error } = await admin
     .from('clothing_loans')
     .update({
       returned_vestes: vestes,
       returned_pantalons: pantalons,
+      ...(loan.baudriers ? { returned_baudriers: baudriers } : {}),
       return_note: String(ret.note || '').trim().slice(0, 300) || null,
       return_signature: ret.signature,
       returned_at: new Date().toISOString(),
