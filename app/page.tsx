@@ -17,7 +17,6 @@ import { alertHorizon, sessionAlerts, sessionsWithoutDigiforma, type SessionAler
 import { SessionAlerts } from '@/components/session-alerts';
 import type { ToAssign } from '@/components/planning';
 import { matchCatalog, matchModule } from '@/lib/catalog-match';
-import { withoutSessionOnly } from '@/lib/template-edit';
 const GEIQ_RE = /\bgeiq\b/i;
 import { People, isPlaceholder, personKey, personName } from '@/lib/digiforma-people';
 import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
@@ -52,17 +51,18 @@ export default async function Page({
   });
   const currentView = view === 'month' ? 'month' : view === 'day' ? 'day' : 'week';
 
-  const [{ data: rooms }, { data: trainers }, { data: templates0 }] = await Promise.all([
+  const [{ data: rooms }, { data: trainers }, { data: templates0 }, { data: sessionOnlyRows }] = await Promise.all([
     supabase.from('rooms').select('id, name, capacity, is_holding, status, location').order('name'),
     supabase.from('trainers').select('*').order('full_name'),
     supabase
       .from('templates')
       .select('id, title, category, duration_hours, max_trainees, template_trainers(trainer_id), template_modules(name, duration_hours, position)')
       .order('title'),
+    // Paramètres propres à une session (migration 62) : hors catalogue (vide si la migration manque).
+    supabase.from('templates').select('id').eq('session_only', true),
   ]);
-
-  // Paramètres propres à une session (migration 62) : hors catalogue.
-  const templates = await withoutSessionOnly(supabase, (templates0 as any[]) || []);
+  const hiddenTpl = new Set(((sessionOnlyRows as any[]) || []).map((x) => x.id as string));
+  const templates = ((templates0 as any[]) || []).filter((t) => !hiddenTpl.has(t.id));
 
   const safeDate = (v: string | undefined, suffix = '') => {
     if (!v) return null;
@@ -441,8 +441,8 @@ export default async function Page({
       ? supabase.from('planning_event_employees').select('event_id, employee_id, employee_name').in('event_id', eventIds)
       : Promise.resolve({ data: [] as any[] }),
     canManage(profile?.role) ? supabase.rpc('event_employee_choices') : Promise.resolve({ data: [] as any[] }),
-    // Entreprises de la base (formation INTRA : choix de l'entreprise sans faute de frappe).
-    canManage(profile?.role) ? supabase.from('trainees').select('company').not('company', 'is', null).limit(20000) : Promise.resolve({ data: [] as any[] }),
+    // Entreprises (formation INTRA) : chargées seulement à l'ouverture de la fenêtre INTRA.
+    Promise.resolve({ data: [] as any[] }),
   ]);
   const companies = (() => {
     const byKey = new Map<string, { name: string; n: number }>();

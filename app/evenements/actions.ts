@@ -108,3 +108,28 @@ export async function deleteEvent(id: string): Promise<Result> {
   revalidatePath('/');
   return { ok: true };
 }
+
+/**
+ * Entreprises connues (formation INTRA) : chargées seulement à l'ouverture de
+ * la fenêtre INTRA, et non plus à chaque affichage du planning.
+ */
+export async function intraCompanies(): Promise<{ name: string; trainees: number }[]> {
+  if (!(await requireManager())) return [];
+  const { companyKey } = await import('@/lib/company');
+  const supabase = await createClient();
+  const byKey = new Map<string, { name: string; n: number }>();
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await supabase.from('trainees').select('company').not('company', 'is', null).range(from, from + 999);
+    if (error || !data) break;
+    for (const r of data as any[]) {
+      const name = String(r.company || '').trim();
+      const k = companyKey(name);
+      if (!k) continue;
+      const cur = byKey.get(k);
+      if (cur) cur.n++;
+      else byKey.set(k, { name, n: 1 });
+    }
+    if (data.length < 1000) break;
+  }
+  return [...byKey.values()].sort((a, b) => b.n - a.n).map((c) => ({ name: c.name, trainees: c.n }));
+}

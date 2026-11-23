@@ -1,10 +1,10 @@
 'use client';
 
 import { submitWith } from '@/lib/form-submit';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { MapPin, Utensils, Award, Handshake, Megaphone, Pin, CalendarOff, X, Plus, Pencil, Trash2, Users, Briefcase, ArrowRight } from 'lucide-react';
-import { createEvent, updateEvent, deleteEvent } from '@/app/evenements/actions';
+import { createEvent, updateEvent, deleteEvent, intraCompanies } from '@/app/evenements/actions';
 import { EVENT_KINDS, EVENT_KIND, eventTimeLabel, type EventKind, type PlanningEvent } from '@/lib/events';
 import { absenceText, type Absence } from '@/lib/absences';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
@@ -226,6 +226,16 @@ export function EventForm({
   const [isPending, startTransition] = useTransition();
   // « Formation extérieure (INTRA) » : une vraie session, avec sa colonne au planning.
   const [mode, setMode] = useState<'event' | 'intra'>('event');
+  // Entreprises connues : lues à la première ouverture du mode INTRA (pas à chaque planning).
+  const [companies, setCompanies] = useState<{ name: string; trainees: number }[] | null>(intra?.companies?.length ? intra.companies : null);
+  useEffect(() => {
+    if (mode !== 'intra' || companies) return;
+    let alive = true;
+    intraCompanies().then((list) => alive && setCompanies(list)).catch(() => alive && setCompanies([]));
+    return () => {
+      alive = false;
+    };
+  }, [mode, companies]);
 
   const head = (
     <div className="modal-head">
@@ -261,7 +271,7 @@ export function EventForm({
           <SessionForm
             formId="intra-form"
             external
-            companies={intra.companies || []}
+            companies={companies || []}
             rooms={[]}
             trainers={intra.trainers}
             templates={intra.templates}

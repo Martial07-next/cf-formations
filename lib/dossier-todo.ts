@@ -45,44 +45,49 @@ export async function computeDossierTodo(
     if (data.length < 1000) break;
   }
   const templateIds = [...new Set((sessions).map((x) => x.template_id).filter(Boolean))];
-  const [{ data: docs }, { data: entries }, { data: forms, error: formsError }, { data: tplOpts }] = await Promise.all([
+  // Tout est lu en une seule série parallèle (au lieu de 5 séries l'une après l'autre).
+  // Formations et sessions : « * » = chaque option ajoutée par une migration, sans erreur si elle manque.
+  const formsOf = (kind: string) => supabase.from('session_forms').select('session_id, completed').eq('kind', kind).in('session_id', sessionIds);
+  const [
+    { data: docs },
+    { data: entries },
+    { data: forms, error: formsError },
+    { data: tplRows },
+    { data: faiForms, error: faiErr },
+    { data: sessRows },
+    { data: dfForms },
+    { data: arForms },
+    { data: habForms },
+    { data: certForms },
+  ] = await Promise.all([
     supabase
       .from('dossier_documents')
       .select('id, template_id, session_id, required, filled_by')
       .or([`session_id.in.(${sessionIds.join(',')})`, templateIds.length ? `template_id.in.(${templateIds.join(',')})` : ''].filter(Boolean).join(',')),
     supabase.from('dossier_entries').select('session_id, document_id, completed').in('session_id', sessionIds),
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'tour_de_table').in('session_id', sessionIds),
-    templateIds.length ? supabase.from('templates').select('id, tour_de_table').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
-  ]);
-  const tdtOff = new Set(((tplOpts as any[]) || []).filter((t) => t.tour_de_table === false).map((t) => t.id));
-  // Fiches d'appréciation (migration 21) : ignorées si la migration manque.
-  const [{ data: faiForms, error: faiErr }, { data: faiSess }, { data: faiTpl }, { data: dfSess, error: dfErr }, { data: dfForms }] = await Promise.all([
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'appreciation').in('session_id', sessionIds),
-    supabase.from('sessions').select('id, fiche_appreciation').in('id', sessionIds),
-    templateIds.length ? supabase.from('templates').select('id, fiche_appreciation').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
+    formsOf('tour_de_table'),
+    templateIds.length ? supabase.from('templates').select('*').in('id', templateIds) : Promise.resolve({ data: [] as any[] }),
+    formsOf('appreciation'),
+    supabase.from('sessions').select('*').in('id', sessionIds),
     // Autres documents sur Digiforma (migration 36) : lien renseigné → case « fait » du formateur.
-    supabase.from('sessions').select('id').in('id', sessionIds).not('digiforma_docs_url', 'is', null),
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'digiforma').in('session_id', sessionIds),
+    formsOf('digiforma'),
+    formsOf('reussite'),
+    formsOf('habilitation'),
+    formsOf('certificat'),
   ]);
-  const dfOn = new Set(dfErr ? [] : ((dfSess as any[]) || []).map((r) => r.id as string));
+  const tpls = (tplRows as any[]) || [];
+  const sess = (sessRows as any[]) || [];
+  const tdtOff = new Set(tpls.filter((t) => t.tour_de_table === false).map((t) => t.id));
+  // Fiches d'appréciation (migration 21) : ignorées si la migration manque.
+  const faiSess = sess.map((x) => ({ id: x.id, fiche_appreciation: x.fiche_appreciation }));
+  const faiTpl = tpls.map((t) => ({ id: t.id, fiche_appreciation: t.fiche_appreciation }));
+  const dfOn = new Set(sess.filter((x) => x.digiforma_docs_url).map((x) => x.id as string));
   // Attestations de réussite (migration 39) : formations avec un modèle choisi.
-  const [{ data: arTpl, error: arErr }, { data: arForms }] = await Promise.all([
-    templateIds.length ? supabase.from('templates').select('id, attestation_reussite').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'reussite').in('session_id', sessionIds),
-  ]);
-  const arOn = new Set(arErr ? [] : ((arTpl as any[]) || []).filter((t) => reussiteModels(t.attestation_reussite).length).map((t) => t.id as string));
+  const arOn = new Set(tpls.filter((t) => reussiteModels(t.attestation_reussite).length).map((t) => t.id as string));
   // Certificats d'habilitation (migration 51) : formations avec des symboles (réglage ou intitulé).
-  const [{ data: habTpl, error: habErr }, { data: habForms }] = await Promise.all([
-    templateIds.length ? supabase.from('templates').select('id, title, habilitation_symbols').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'habilitation').in('session_id', sessionIds),
-  ]);
-  const habOn = new Set(habErr ? [] : ((habTpl as any[]) || []).filter((t) => formationSymbols(t.habilitation_symbols, t.title || '').length).map((t) => t.id as string));
+  const habOn = new Set(tpls.filter((t) => formationSymbols(t.habilitation_symbols, t.title || '').length).map((t) => t.id as string));
   // Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur.
-  const [{ data: certTpl, error: certErr }, { data: certForms }] = await Promise.all([
-    templateIds.length ? supabase.from('templates').select('id, certificat_realisation').in('id', templateIds) : Promise.resolve({ data: [] as any[], error: null }),
-    supabase.from('session_forms').select('session_id, completed').eq('kind', 'certificat').in('session_id', sessionIds),
-  ]);
-  const certOn = new Set(certErr ? [] : ((certTpl as any[]) || []).filter((t) => t.certificat_realisation).map((t) => t.id as string));
+  const certOn = new Set(tpls.filter((t) => t.certificat_realisation).map((t) => t.id as string));
   for (const s of sessions) {
     const traineeIds = (s.session_trainees || []).filter((t: any) => t.status === 'validee').map((t: any) => t.trainee_id);
     if (!traineeIds.length) continue;

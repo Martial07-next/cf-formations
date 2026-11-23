@@ -68,6 +68,18 @@ export default async function DashboardPage() {
   const ago120 = isoDate(addDays(new Date(today + 'T00:00:00Z'), -120));
   const in30 = isoDate(addDays(new Date(today + 'T00:00:00Z'), 30));
 
+  // Lectures des encarts lancées tout de suite, en parallèle du reste (attendues plus bas).
+  const run = <T,>(q: PromiseLike<T>) => Promise.resolve(q);
+  const absP = trainerId
+    ? run(supabase.from('trainer_absences').select('id, kind, start_date, end_date, note').eq('trainer_id', trainerId).gte('end_date', today).lte('start_date', in30).order('start_date'))
+    : Promise.resolve({ data: [] as any[] });
+  const nextP = staff
+    ? run(supabase.from('sessions').select('id, title, start_at, status, trainer_id, session_trainees(status)').gte('start_at', today).lt('start_at', alertHorizon(today)).order('start_at'))
+    : Promise.resolve({ data: [] as any[] });
+  const billP = billing
+    ? run(supabase.from('sessions').select('id, title, start_at, end_at, status, billing_done').eq('billing_done', false).neq('status', 'brouillon').lt('end_at', `${nowKey}`).gte('end_at', `${ago120}T00:00:00`).order('end_at'))
+    : Promise.resolve({ data: [] as any[], error: null as any });
+
   // Sessions des 60 derniers jours jusqu'aux 7 prochains : aujourd'hui, semaine, dossiers.
   const scope = supabase
     .from('sessions')
@@ -136,9 +148,7 @@ export default async function DashboardPage() {
       meta: period(s),
       badge: { text: `${todo[s.id].trainer} à remplir`, tone: s.end_at.slice(0, 16) <= nowKey ? 'urgent' : 'warn' },
     }));
-  const { data: absRows } = trainerId
-    ? await supabase.from('trainer_absences').select('id, kind, start_date, end_date, note').eq('trainer_id', trainerId).gte('end_date', today).lte('start_date', in30).order('start_date')
-    : { data: [] as any[] };
+  const { data: absRows } = await absP;
   const myLeaves: Item[] = ((absRows as any[]) || []).map((a) => ({
     href: `/formateurs/${trainerId}`,
     title: ABSENCE_LABEL[a.kind] || 'Absence',
@@ -152,12 +162,7 @@ export default async function DashboardPage() {
   let officeTodo: Item[] = [];
   let poecItems: Item[] = [];
   if (staff) {
-    const { data: next } = await supabase
-      .from('sessions')
-      .select('id, title, start_at, status, trainer_id, session_trainees(status)')
-      .gte('start_at', today)
-      .lt('start_at', alertHorizon(today))
-      .order('start_at');
+    const { data: next } = await nextP;
     const noDf = await sessionsWithoutDigiforma(supabase, ((next as any[]) || []).map((s) => s.id));
     toPrepare = sessionAlerts((next as any[]) || [], today, noDf).map((a) => ({
       href: `/sessions/${a.id}`,
@@ -216,14 +221,7 @@ export default async function DashboardPage() {
   // ---- Facturation ----------------------------------------------------------
   let toBill: Item[] = [];
   if (billing) {
-    const { data: bill, error: billErr } = await supabase
-      .from('sessions')
-      .select('id, title, start_at, end_at, status, billing_done')
-      .eq('billing_done', false)
-      .neq('status', 'brouillon')
-      .lt('end_at', `${nowKey}`)
-      .gte('end_at', `${ago120}T00:00:00`)
-      .order('end_at');
+    const { data: bill, error: billErr } = await billP;
     if (!billErr) {
       // Documents complets : prêts à facturer, en tête. La session quitte la liste quand
       // « Facturation faite » est cochée (fiche session › Facturation, ou page Facturation).

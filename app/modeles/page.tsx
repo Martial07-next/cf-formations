@@ -2,57 +2,32 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { TemplateCatalog } from '@/components/template-catalog';
-import { withoutSessionOnly } from '@/lib/template-edit';
 
 export default async function ModelesPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   // Réservé à l'équipe (administrateur, bureau) : un formateur n'a pas accès à cette page.
   if (!canManage(profile?.role)) redirect('/');
-  const [{ data: templates }, { data: trainers }, { data: folders }] = await Promise.all([
+  // Tout en une fois, en parallèle. Options des formations : « * » (chaque option ajoutée par
+  // une migration est lue si elle existe, sans erreur sinon).
+  const [{ data: templates }, { data: trainers }, { data: folders }, { data: links }, { data: optRows }, { data: docs }] = await Promise.all([
     supabase
       .from('templates')
       .select('id, title, category, folder_id, position, duration_hours, max_trainees, description, sessions(count), template_modules(name, duration_hours, position), template_trainers(trainer_id)')
       .order('title'),
     supabase.from('trainers').select('id, full_name, color, status').order('full_name'),
     supabase.from('template_folders').select('id, name, parent_id, position').order('position'),
+    supabase.from('template_links').select('id, template_id, label, url, position').order('position'),
+    supabase.from('templates').select('*'),
+    supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position'),
   ]);
-
-  // Liens des formations (supports de cours…). Erreur ignorée si la migration 15 manque.
-  const { data: links } = await supabase.from('template_links').select('id, template_id, label, url, position').order('position');
-  // Documents du dossier de chaque formation (migration 16).
-  const { data: tdtOpts } = await supabase.from('templates').select('id, tour_de_table');
-  // Fiche d'appréciation (migration 21) : requête séparée, ignorée si absente.
-  const { data: faiOpts } = await supabase.from('templates').select('id, fiche_appreciation, codification');
-  // Objectifs et compétences (migration 22).
-  const { data: objOpts } = await supabase.from('templates').select('id, objectifs, competences');
-  // Autorisations stagiaire (migration 24).
-  const { data: authOpts } = await supabase.from('templates').select('id, authorizations');
-  // Recyclage (migration 33).
-  const { data: recOpts } = await supabase.from('templates').select('id, recyclage_available, objectifs_recyclage, competences_recyclage');
-  // Attestation de réussite (migration 39).
-  const { data: arOpts } = await supabase.from('templates').select('id, attestation_reussite');
-  // Titre d'habilitation exigé (migration 47).
-  const { data: titreOpts } = await supabase.from('templates').select('id, titre_habilitation');
-  // Certificats d'habilitation (migration 51) : null = symboles détectés dans l'intitulé.
-  const { data: habOpts } = await supabase.from('templates').select('id, habilitation_symbols');
-  const { data: habObj } = await supabase.from('templates').select('id, objectifs_habilitation');
-  // Durée du recyclage (migration 54).
-  const { data: recDur } = await supabase.from('templates').select('id, duration_hours_recyclage');
-  // Départ anticipé (migration 56).
-  const { data: depOpts } = await supabase.from('templates').select('id, early_departure');
-  // Grille IRVE (migration 63).
-  const { data: irveOpts } = await supabase.from('templates').select('id, grille_irve');
-  // Grille Maintenance IRVE (migration 64).
-  const { data: maintOpts } = await supabase.from('templates').select('id, grille_maintenance');
-  // Périmètre d'habilitation (migration 71).
-  const { data: periOpts } = await supabase.from('templates').select('id, perimetre_habilitation');
-  // Certificats de réalisation (migration 72).
-  const { data: certOpts } = await supabase.from('templates').select('id, certificat_realisation');
-  const { data: docs } = await supabase.from('dossier_documents').select('*').not('template_id', 'is', null).order('position');
-
   // Paramètres propres à une session (migration 62) : pas dans le catalogue.
-  const rows = (await withoutSessionOnly(supabase, (templates as any[]) || [])).map((t: any) => ({
+  const sessionOnly = new Set(((optRows as any[]) || []).filter((x) => x.session_only === true).map((x) => x.id as string));
+  const tdtOpts = optRows, faiOpts = optRows, objOpts = optRows, authOpts = optRows, recOpts = optRows, arOpts = optRows;
+  const titreOpts = optRows, habOpts = optRows, habObj = optRows, recDur = optRows, depOpts = optRows, irveOpts = optRows;
+  const maintOpts = optRows, periOpts = optRows, certOpts = optRows;
+
+  const rows = ((templates as any[]) || []).filter((t: any) => !sessionOnly.has(t.id)).map((t: any) => ({
     ...t,
     sessions_count: Array.isArray(t.sessions) ? t.sessions[0]?.count ?? 0 : 0,
     modules: [...(t.template_modules || [])]

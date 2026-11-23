@@ -154,10 +154,42 @@ export default async function SessionDetailPage({
     ]),
   };
 
-  const [{ data: modules }, { data: moduleLinks }] = await Promise.all([
+  // Lectures indépendantes lancées toutes ensemble (au lieu de l'une après l'autre).
+  // Catalogue (changement de formation) et lien Digiforma : lus pendant le reste.
+  const catalogP = editable
+    ? start(supabase.from('templates').select('id, title, category, duration_hours').order('title')).then(({ data }) => withoutSessionOnly(supabase, (data as any[]) || []))
+    : Promise.resolve([] as any[]);
+  const dfPlacedP = editable
+    ? start(supabase.from('digiforma_modules').select('key', { count: 'exact', head: true }).eq('placed_session_id', id)).then((r) => r.count || 0)
+    : Promise.resolve(0);
+  const formsP = start(supabase.from('session_forms').select('kind, data, completed, completed_at').eq('session_id', id));
+  const sessFlagsP = start(supabase.from('sessions').select('*').eq('id', id).maybeSingle());
+  const modulesP = Promise.all([
     supabase.from('session_modules').select('id, session_id, position, name, start_day, end_day, duration_hours').eq('session_id', id).order('position'),
     supabase.from('session_trainee_modules').select('trainee_id, module_id').eq('session_id', id),
   ]);
+  const sigP = start(supabase.from('attendance_signatures').select('signer, trainee_id, day, half, status').eq('session_id', id));
+  const entriesP = start(supabase.from('dossier_entries').select('document_id, data, completed, updated_at').eq('session_id', id));
+  // Jours fériés de la période (migration 48) et titres d'habilitation (migration 46).
+  const shiftsP = start(supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday'));
+  const titlesP = start(supabase.from('habilitation_titles').select('id, trainee_id, file_name, mime, size, source, created_at').eq('session_id', id).order('created_at'));
+  // Supports de cours et documents de la formation (fiche du catalogue).
+  const templateIdP: Promise<string | null> = (session as any).template_id
+    ? Promise.resolve((session as any).template_id as string)
+    : Promise.resolve(supabase.from('templates').select('id').eq('title', session.title).limit(1)).then(({ data }) => (data as any[])?.[0]?.id ?? null);
+  const tplP = templateIdP.then((tid) =>
+    Promise.all([
+      tid ? supabase.from('template_links').select('id, label, url').eq('template_id', tid).order('position') : Promise.resolve({ data: [] as any[] }),
+      // Formateurs habilités pour cette formation (seuls proposés).
+      tid ? supabase.from('template_trainers').select('trainer_id').eq('template_id', tid) : Promise.resolve({ data: [] as any[] }),
+      tid
+        ? supabase.from('dossier_documents').select('*').or(`session_id.eq.${id},template_id.eq.${tid}`).order('position')
+        : supabase.from('dossier_documents').select('*').eq('session_id', id).order('position'),
+      tid ? supabase.from('templates').select('*').eq('id', tid).maybeSingle() : Promise.resolve({ data: null }),
+    ])
+  );
+
+  const [{ data: modules }, { data: moduleLinks }] = await modulesP;
   // Anciens modules « Jour 1, Jour 2… » d'une journée : renommés par leur date (« Lun. 16/11 »).
   if (editable) {
     for (const m of (modules as any[]) || []) {
@@ -168,19 +200,7 @@ export default async function SessionDetailPage({
       }
     }
   }
-  // Supports de cours et documents de la formation (fiche du catalogue).
-  let templateId = (session as any).template_id as string | null;
-  if (!templateId) {
-    const { data: same } = await supabase.from('templates').select('id').eq('title', session.title).limit(1);
-    templateId = same?.[0]?.id ?? null;
-  }
-  const [{ data: formationLinks }, { data: qualifiedRows }] = templateId
-    ? await Promise.all([
-        supabase.from('template_links').select('id, label, url').eq('template_id', templateId).order('position'),
-        // Formateurs habilités pour cette formation (seuls proposés).
-        supabase.from('template_trainers').select('trainer_id').eq('template_id', templateId),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const [{ data: formationLinks }, { data: qualifiedRows }, { data: docRows }, { data: tplOpt }] = await tplP;
   const qualifiedTrainerIds = ((qualifiedRows as any[]) || []).map((r) => r.trainer_id as string);
 
   const traineeModules: Record<string, string[]> = {};
@@ -194,70 +214,46 @@ export default async function SessionDetailPage({
     .filter(Boolean) as any[];
 
   // Dossier de formation : émargement + documents (vide si la migration 16 n'est pas faite).
-  const [{ data: sigRows, error: dossierError }, { data: docRows }, { data: entryRows }] = await Promise.all([
-    supabase.from('attendance_signatures').select('signer, trainee_id, day, half, status').eq('session_id', id),
-    templateId
-      ? supabase.from('dossier_documents').select('*').or(`session_id.eq.${id},template_id.eq.${templateId}`).order('position')
-      : supabase.from('dossier_documents').select('*').eq('session_id', id).order('position'),
-    supabase.from('dossier_entries').select('document_id, data, completed, updated_at').eq('session_id', id),
-  ]);
+  const [{ data: sigRows, error: dossierError }, { data: entryRows }] = await Promise.all([sigP, entriesP]);
+  // Toutes les fiches de la session en une lecture (tour de table, appréciation, réussite, habilitation, grilles, certificats).
+  const [{ data: formRows, error: formsError }, { data: sessRow }] = await Promise.all([formsP, sessFlagsP]);
+  const formOf = (kind: string) => ((formRows as any[]) || []).find((f) => f.kind === kind) || null;
   // Tour de table intégré (migration 17) : activé par défaut, désactivable par formation.
-  const [{ data: formRow, error: formError }, { data: tplOpt }] = await Promise.all([
-    supabase.from('session_forms').select('data, completed, completed_at').eq('session_id', id).eq('kind', 'tour_de_table').maybeSingle(),
-    templateId ? supabase.from('templates').select('*').eq('id', templateId).maybeSingle() : Promise.resolve({ data: null }),
-  ]);
+  const formRow = formOf('tour_de_table');
+  const formError = formsError;
   // Fiches d'appréciation individuelle (migration 21) : réglage de la session, sinon de la formation.
-  const [{ data: faiRow, error: faiError }, { data: sessFlag, error: flagError }] = await Promise.all([
-    supabase.from('session_forms').select('data, completed').eq('session_id', id).eq('kind', 'appreciation').maybeSingle(),
-    supabase.from('sessions').select('fiche_appreciation').eq('id', id).maybeSingle(),
-  ]);
+  const faiRow = formOf('appreciation');
+  const faiError = formsError;
+  const sessFlag = sessRow && 'fiche_appreciation' in (sessRow as any) ? { fiche_appreciation: (sessRow as any).fiche_appreciation } : null;
+  const flagError = sessRow && !('fiche_appreciation' in (sessRow as any)) ? { message: 'migration 21' } : null;
   // Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur.
-  const { data: certRow } = (tplOpt as any)?.certificat_realisation
-    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'certificat').maybeSingle()
-    : { data: null };
+  const certRow = (tplOpt as any)?.certificat_realisation ? formOf('certificat') : null;
   // Attestations de réussite (migration 39) : modèles choisis sur la formation.
   const arModels = reussiteModels((tplOpt as any)?.attestation_reussite);
-  const { data: arRow } = arModels.length
-    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'reussite').maybeSingle()
-    : { data: null };
+  const arRow = arModels.length ? formOf('reussite') : null;
   // Certificats d'habilitation (migration 51) : symboles de la formation (réglage, sinon intitulé).
   const habSymbols = (tplOpt as any) ? formationSymbols((tplOpt as any).habilitation_symbols, (tplOpt as any).title || session.title) : [];
-  const { data: habRow } = habSymbols.length
-    ? await supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', 'habilitation').maybeSingle()
-    : { data: null };
+  const habRow = habSymbols.length ? formOf('habilitation') : null;
   // Grilles d'évaluation pratique (IRVE : migration 63, Maintenance IRVE : 64) :
   // réglage de la session, sinon de la formation, sinon d'après l'intitulé.
   const gridTitle = (tplOpt as any)?.title || session.title;
-  const evalGridEntries = await Promise.all(
-    GRIDS.map(async (def) => {
-      const col = def.kind === 'maint_grille' ? 'grille_maintenance' : 'grille_irve';
-      const [{ data: flagRow, error: flagErr }, { data: formRow2, error: formErr }] = await Promise.all([
-        supabase.from('sessions').select(col).eq('id', id).maybeSingle(),
-        supabase.from('session_forms').select('data').eq('session_id', id).eq('kind', def.kind).maybeSingle(),
-      ]);
-      // Migration absente : pas de grille.
-      if (flagErr) return null;
-      const tplFlag: boolean | null = typeof (tplOpt as any)?.[col] === 'boolean' ? (tplOpt as any)[col] : null;
-      const sessFlag2: boolean | null = (flagRow as any)?.[col] ?? null;
-      return [def.kind, {
-        sessionFlag: sessFlag2,
-        templateFlag: tplFlag,
-        on: gridRequired(def, sessFlag2, tplFlag, gridTitle),
-        data: formErr ? null : ((formRow2 as any)?.data as any) || null,
-      }] as const;
-    })
-  );
+  const evalGridEntries = GRIDS.map((def) => {
+    const col = def.kind === 'maint_grille' ? 'grille_maintenance' : 'grille_irve';
+    // Migration absente : pas de grille.
+    if (!sessRow || !(col in (sessRow as any))) return null;
+    const tplFlag: boolean | null = typeof (tplOpt as any)?.[col] === 'boolean' ? (tplOpt as any)[col] : null;
+    const sessFlag2: boolean | null = (sessRow as any)?.[col] ?? null;
+    return [def.kind, {
+      sessionFlag: sessFlag2,
+      templateFlag: tplFlag,
+      on: gridRequired(def, sessFlag2, tplFlag, gridTitle),
+      data: formsError ? null : ((formOf(def.kind) as any)?.data as any) || null,
+    }] as const;
+  });
   // Grille affichée dans le dossier seulement si sa case est cochée.
   const evalGrids = Object.fromEntries(evalGridEntries.filter((x): x is NonNullable<typeof x> => x !== null && x[1].on));
-  // Jours fériés de la période (migration 48) : décalage automatique ou à replanifier.
-  const { data: shiftRows } = await supabase.from('session_holiday_shifts').select('holiday, label, status, detail').eq('session_id', id).order('holiday');
+  const [{ data: shiftRows }, { data: titleRows, error: titleError }] = await Promise.all([shiftsP, titlesP]);
   const holidayShifts = ((shiftRows as any[]) || []).filter((h) => isClosedHoliday(String(h.holiday).slice(0, 10)));
-  // Titres d'habilitation déposés (migration 46) : null si la migration manque.
-  const { data: titleRows, error: titleError } = await supabase
-    .from('habilitation_titles')
-    .select('id, trainee_id, file_name, mime, size, source, created_at')
-    .eq('session_id', id)
-    .order('created_at');
   const tourDeTable =
     formError || (tplOpt as any)?.tour_de_table === false
       ? null
@@ -804,7 +800,7 @@ export default async function SessionDetailPage({
           session={session as any}
           template={template}
           personalised={Boolean((tplOpt as any)?.session_only)}
-          catalog={editable ? await withoutSessionOnly(supabase, ((await supabase.from('templates').select('id, title, category, duration_hours').order('title')).data as any[]) || []) : []}
+          catalog={await catalogP}
           rooms={[...((rooms as any[]) || [])].sort(compareRooms)}
           trainers={(trainers as any) || []}
           enrolled={enrolled}
@@ -819,7 +815,7 @@ export default async function SessionDetailPage({
           sameDayEdit={profile?.role === 'bureau' && started && firstDayOpen(session.start_at)}
           digiformaLinked={
             Boolean((session as any).digiforma_ref) ||
-            Boolean(editable && (await supabase.from('digiforma_modules').select('key', { count: 'exact', head: true }).eq('placed_session_id', session.id)).count)
+            Boolean(await dfPlacedP)
           }
           workPanels={workPanels}
           intraCompany={room?.status === 'exterieur' ? room.name : null}
