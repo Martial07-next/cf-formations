@@ -5,6 +5,8 @@
  * Pour ajouter une réponse : une entrée de plus dans FAQ.
  */
 
+import { FAQ_PLUS, FAQ_UPDATES, KEY_PATCH } from '@/lib/matthias-faq-2';
+
 export type FaqEntry = {
   id: string;
   /** Question type, affichée dans « Questions proches ». */
@@ -17,7 +19,7 @@ export type FaqEntry = {
   bureau?: boolean;
 };
 
-export const FAQ: FaqEntry[] = [
+const BASE_FAQ: FaqEntry[] = [
   // ---------------------------------------------------------------- Digiforma
   {
     id: 'df-qr',
@@ -439,6 +441,12 @@ Tous les liens : bouton **« Liens utiles »** du planning.`,
   },
 ];
 
+/** Base complète : réponses d'origine (mises à jour si besoin) + nouveaux sujets. */
+export const FAQ: FaqEntry[] = [...BASE_FAQ.map((e) => FAQ_UPDATES.find((u) => u.id === e.id) || e), ...FAQ_PLUS].map((e) => {
+  const p = KEY_PATCH[e.id];
+  return p ? { ...e, keys: [...e.keys.filter((k) => !(p.remove || []).includes(k)), ...(p.add || [])] } : e;
+});
+
 /** Réponses de politesse (sans recherche). */
 export const SMALL_TALK: { keys: string[]; a: string }[] = [
   { keys: ['bonjour', 'salut', 'hello', 'coucou', 'bonsoir', 'yo'], a: 'Salut 👋 Pose-moi ta question : planning, Digiforma, dossier, documents à remplir…' },
@@ -449,7 +457,7 @@ export const SMALL_TALK: { keys: string[]; a: string }[] = [
 export function matthiasSuggestions(role: string | null | undefined): string[] {
   const formateur = role === 'formateur' || role === 'referent' || role === 'consultation';
   const ids = formateur
-    ? ['do-tdt', 'df-trainer', 'do-irve', 'do-depart', 'df-what']
-    : ['df-qr', 'df-planning', 'df-what', 'pl-session', 'pl-event', 'pl-intra', 'pl-saturday'];
+    ? ['do-tdt', 'df-trainer', 'do-irve', 'do-erase', 'do-certif', 'do-loan', 'do-depart']
+    : ['df-qr', 'df-planning', 'df-what', 'df-prospects', 'bu-billing', 'do-loan', 'pl-session', 'pl-event'];
   return ids.map((id) => FAQ.find((f) => f.id === id)!.q);
 }

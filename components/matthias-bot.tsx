@@ -115,11 +115,13 @@ export function MatthiasBot({ role, firstName, raised = false }: { role: string;
     if (r.smallTalk) text = r.smallTalk;
     else if (r.entry) {
       const note = r.entry.bureau && FORMATEUR_ROLES.includes(role) ? '(C’est le bureau administratif qui s’en occupe, mais voici comment ça marche.)\n\n' : '';
-      text = note + r.entry.a;
+      // Pas tout à fait sûr : la réponse la plus proche, annoncée comme telle.
+      const guess = r.guess ? `Je pense que tu parles de **« ${r.entry.q} »** 👇 (sinon, reformule ou choisis une question plus bas)\n\n` : '';
+      text = guess + note + r.entry.a;
     } else {
       text = related.length
         ? 'Je ne suis pas sûr d’avoir bien compris 🤔 Tu parles de l’une de ces questions ? Sinon reformule avec d’autres mots, ou demande à **Martial**.'
-        : 'Je n’ai pas la réponse à ça 🤔 Essaie avec d’autres mots (ex. « QR code émargement », « placer une session », « grille IRVE »), choisis une question ci-dessous, ou demande à **Martial**.';
+        : 'Je n’ai pas la réponse à ça 🤔 Je connais la plateforme et Digiforma : planning, sessions, stagiaires, dossier et documents, prêts de matériel, facturation, comptes, et les questions techniques (sécurité, RGPD, hébergement, erreurs). Essaie avec d’autres mots (ex. « QR code émargement », « prêter des baudriers », « pourquoi à facturer »), choisis une question ci-dessous, ou demande à **Martial**.';
       if (!related.length) related = matthiasSuggestions(role).slice(0, 4);
     }
     window.setTimeout(() => {
