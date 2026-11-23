@@ -37,6 +37,8 @@ export async function updateSession(request: NextRequest) {
     // Protection des données (lien depuis les pages des QR codes, sans compte).
     path === '/confidentialite' ||
     path.startsWith('/depart/') ||
+    // Signature d'un prêt de matériel par le stagiaire (QR code du prêt).
+    path.startsWith('/pret/') ||
     path.startsWith('/salarie/') ||
     // Dépôt du titre d'habilitation par le stagiaire (QR code de la session).
     path.startsWith('/titre/') ||

@@ -2451,3 +2451,10 @@ dialog.place-modal{width:min(640px,calc(100vw - 24px))}
 .rgpd-table thead th{border-top:0;background:var(--cf-dark);color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 .rgpd-table tbody th{font-weight:700;width:38%}
 .rgpd-version{margin-top:22px;text-align:right}
+
+/* Prêt de matériel : choix tablette / QR code, QR code à scanner. */
+.sign-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sign-choice button{min-height:56px;font-size:14px;border-radius:14px}
+@media (max-width:520px){.sign-choice{grid-template-columns:1fr}}
+.loan-qr{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+.loan-qr img{width:260px;height:260px;max-width:100%;border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px}

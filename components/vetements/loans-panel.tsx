@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Shirt, X, PenLine, PackageCheck, Trash2, AlertTriangle } from 'lucide-react';
-import { lendClothes, lendFromTrainee, signLoan, returnClothes, deleteLoan } from '@/app/vetements/actions';
+import { useRouter } from 'next/navigation';
+import QRCode from 'qrcode';
+import { Shirt, X, PenLine, PackageCheck, Trash2, AlertTriangle, QrCode, Tablet, Loader2, CheckCircle2 } from 'lucide-react';
+import { lendClothes, lendFromTrainee, signLoan, returnClothes, deleteLoan, loanSignToken, loanSigned } from '@/app/vetements/actions';
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad';
 import { AuthPdfButton } from '@/components/autorisations/session-autorisations';
 import { LOAN_STATUS_LABEL, clothesText, loanStatus, loanText, missingOf, missingText, type ClothingLoan } from '@/lib/vetements';
@@ -61,7 +63,7 @@ export const loanPdf = (l: ClothingLoan, name: string) => ({
 });
 
 /** Signature du prêt par le stagiaire (sur la tablette du formateur / du bureau). */
-function SignStep({ address: initial, onSign, isPending, label }: { address: string | null; onSign: (s: { address: string; city: string; signature: string }) => void; isPending: boolean; label: string }) {
+export function SignStep({ address: initial, onSign, isPending, label }: { address: string | null; onSign: (s: { address: string; city: string; signature: string }) => void; isPending: boolean; label: string }) {
   const [address, setAddress] = useState(initial || '');
   const [city, setCity] = useState('Cuincy');
   const [read, setRead] = useState(false);
@@ -139,6 +141,76 @@ function ReturnStep({ loan, onDone, isPending }: { loan: ClothingLoan; onDone: (
   );
 }
 
+/**
+ * QR code du prêt : le stagiaire signe sur son téléphone. La tablette attend
+ * la signature (vérification toutes les 3 s) puis se met à jour.
+ */
+function QrSign({ loanId, onSigned }: { loanId: string; onSigned: () => void }) {
+  const router = useRouter();
+  const [qr, setQr] = useState<{ url: string; image: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [signed, setSigned] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const r = await loanSignToken(loanId);
+      if (!alive) return;
+      if (!r.ok) return setError(r.error);
+      const url = `${window.location.origin}/pret/${r.token}`;
+      setQr({ url, image: await QRCode.toDataURL(url, { width: 520, margin: 1, errorCorrectionLevel: 'M' }) });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [loanId]);
+  useEffect(() => {
+    if (!qr || signed) return;
+    const t = window.setInterval(async () => {
+      if (await loanSigned(loanId)) {
+        setSigned(true);
+        router.refresh();
+        window.setTimeout(onSigned, 1400);
+      }
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [qr, signed, loanId, onSigned, router]);
+  if (error) return <div role="alert" className="alert alert-error">{error}</div>;
+  if (signed)
+    return (
+      <div role="status" className="alert alert-success">
+        <CheckCircle2 size={16} aria-hidden style={{ verticalAlign: '-3px' }} /> Signé sur le téléphone du stagiaire.
+      </div>
+    );
+  if (!qr) return <p className="hint"><Loader2 size={14} className="spin" aria-hidden /> Préparation du QR code…</p>;
+  return (
+    <div className="loan-qr">
+      <img src={qr.image} alt="QR code de signature du prêt" width={260} height={260} />
+      <p className="hint">
+        Le stagiaire scanne ce QR code avec l’appareil photo de son téléphone, vérifie son adresse et signe.
+        Cette fenêtre se met à jour toute seule dès que c’est signé.
+      </p>
+      <p className="hint" style={{ fontSize: 12, wordBreak: 'break-all' }}>{qr.url}</p>
+      <div className="sign-actions">
+        <button type="button" onClick={onSigned}>Fermer (signer plus tard)</button>
+      </div>
+    </div>
+  );
+}
+
+/** Choix de la signature : sur cette tablette, ou QR code à scanner par le stagiaire. */
+function SignChoice({ onTablet, onQr, disabled }: { onTablet: () => void; onQr: () => void; disabled?: boolean }) {
+  return (
+    <div className="sign-choice">
+      <button type="button" className="primary" disabled={disabled} onClick={onTablet}>
+        <Tablet size={16} aria-hidden /> Remplir sur cette tablette
+      </button>
+      <button type="button" disabled={disabled} onClick={onQr}>
+        <QrCode size={16} aria-hidden /> Faire scanner un QR Code
+      </button>
+    </div>
+  );
+}
+
 /** Ligne d'un prêt : statut, manquants, actions (signer, retour, PDF). */
 function LoanItem({
   loan,
@@ -159,7 +231,7 @@ function LoanItem({
   run: (fn: () => Promise<Result>, after?: () => void) => void;
   isPending: boolean;
 }) {
-  const [mode, setMode] = useState<null | 'sign' | 'return'>(null);
+  const [mode, setMode] = useState<null | 'choose' | 'sign' | 'qr' | 'return'>(null);
   const st = loanStatus(loan);
   const miss = missingText(loan);
   return (
@@ -176,7 +248,7 @@ function LoanItem({
         </span>
       </span>
       <span className="row-actions">
-        {st === 'a_signer' && <button type="button" className="small primary" onClick={() => setMode('sign')}><PenLine size={14} aria-hidden /> Faire signer</button>}
+        {st === 'a_signer' && <button type="button" className="small primary" onClick={() => setMode('choose')}><PenLine size={14} aria-hidden /> Faire signer</button>}
         {(st === 'prete' || st === 'incomplet') && (
           <button type="button" className="small" onClick={() => setMode('return')}><PackageCheck size={14} aria-hidden /> {st === 'incomplet' ? 'Compléter le retour' : 'Retour'}</button>
         )}
@@ -187,9 +259,11 @@ function LoanItem({
           </button>
         )}
       </span>
-      <Modal open={mode === 'sign'} onClose={() => setMode(null)} title={`Prêt de matériel · ${name}`}>
+      <Modal open={mode === 'choose' || mode === 'sign' || mode === 'qr'} onClose={() => setMode(null)} title={`Prêt de matériel · ${name}`}>
         <p className="hint" style={{ marginTop: 0 }}>Prêtés : <strong>{loanText(loan)}</strong>.</p>
-        <SignStep address={loan.address || address} isPending={isPending} label="Signer le prêt" onSign={(s) => run(() => signLoan(loan.id, s), () => setMode(null))} />
+        {mode === 'choose' && <SignChoice onTablet={() => setMode('sign')} onQr={() => setMode('qr')} />}
+        {mode === 'sign' && <SignStep address={loan.address || address} isPending={isPending} label="Signer le prêt" onSign={(s) => run(() => signLoan(loan.id, s), () => setMode(null))} />}
+        {mode === 'qr' && <QrSign loanId={loan.id} onSigned={() => setMode(null)} />}
       </Modal>
       <Modal open={mode === 'return'} onClose={() => setMode(null)} title={`Retour du matériel · ${name}`}>
         <ReturnStep loan={loan} isPending={isPending} onDone={(r) => run(() => returnClothes(loan.id, r), () => setMode(null))} />
@@ -226,29 +300,37 @@ function LendModal({
   people,
   fixed,
   sessions,
-  error,
-  isPending,
-  onLend,
+  lend,
 }: {
   open: boolean;
   onClose: () => void;
   people: Person[];
   fixed?: Person;
   sessions?: { id: string; title: string }[];
-  error: string | null;
-  isPending: boolean;
-  onLend: (who: string, sessionId: string | null, qty: Qty, sign: Sign | null, done: () => void) => void;
+  lend: (who: string, sessionId: string | null, qty: Qty, sign: Sign | null) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
 }) {
+  const router = useRouter();
   const [who, setWho] = useState(fixed?.id || '');
   const [sessionId, setSessionId] = useState(sessions?.[0]?.id || '');
   const [vestes, setVestes] = useState(0);
   const [pantalons, setPantalons] = useState(0);
   const [baudriers, setBaudriers] = useState(0);
-  const [step, setStep] = useState<'choose' | 'sign'>('choose');
-  const reset = () => { setWho(fixed?.id || ''); setVestes(0); setPantalons(0); setBaudriers(0); setStep('choose'); onClose(); };
+  const [step, setStep] = useState<'choose' | 'sign' | 'qr'>('choose');
+  const [qrLoan, setQrLoan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, start] = useTransition();
+  const reset = () => { setWho(fixed?.id || ''); setVestes(0); setPantalons(0); setBaudriers(0); setStep('choose'); setQrLoan(null); setError(null); onClose(); };
   const person = fixed || people.find((t) => t.id === who);
   const total = vestes + pantalons + baudriers;
   const qty = { vestes, pantalons, baudriers };
+  const save = (sign: Sign | null, after: (id: string) => void) =>
+    start(async () => {
+      setError(null);
+      const r = await lend(person!.id, sessionId || null, qty, sign);
+      if (!r.ok) return setError(r.error);
+      router.refresh();
+      after(r.id);
+    });
   return (
     <Modal open={open} onClose={reset} title={fixed ? `Prêter du matériel · ${fixed.name}` : 'Prêter du matériel'}>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
@@ -277,27 +359,28 @@ function LendModal({
             <Stepper label="Pantalon(s) TST" value={pantalons} onChange={setPantalons} />
             <Stepper label="Baudrier(s)" value={baudriers} onChange={setBaudriers} />
           </div>
-          <div className="form-actions" style={{ marginTop: 14 }}>
-            <button type="button" className="primary" disabled={!person || total === 0} onClick={() => setStep('sign')}>
-              <PenLine size={15} aria-hidden /> Faire signer maintenant
-            </button>
-            <button
-              type="button"
-              disabled={!person || total === 0 || isPending}
-              onClick={() => onLend(person!.id, sessionId || null, qty, null, reset)}
-              title="Le stagiaire signera plus tard (bouton « Faire signer », ou QR code des autorisations de la session)"
-            >
-              Signer plus tard
-            </button>
-          </div>
+          <p className="sub-heading" style={{ margin: '14px 0 6px' }}>Signature du stagiaire</p>
+          <SignChoice
+            disabled={!person || total === 0 || isPending}
+            onTablet={() => setStep('sign')}
+            // Le prêt est enregistré « à signer », puis le QR code s'affiche.
+            onQr={() => save(null, (id) => { setQrLoan(id); setStep('qr'); })}
+          />
         </>
-      ) : (
+      ) : step === 'sign' ? (
         <>
           <p className="hint" style={{ marginTop: 0 }}>
             <strong>{person?.name}</strong> emprunte {clothesText(vestes, pantalons, baudriers)}.{' '}
             <button type="button" className="small ghost" onClick={() => setStep('choose')}>Modifier</button>
           </p>
-          <SignStep address={person?.address || null} isPending={isPending} label="Signer le prêt" onSign={(s) => onLend(person!.id, sessionId || null, qty, s, reset)} />
+          <SignStep address={person?.address || null} isPending={isPending} label="Signer le prêt" onSign={(s) => save(s, reset)} />
+        </>
+      ) : (
+        <>
+          <p className="hint" style={{ marginTop: 0 }}>
+            <strong>{person?.name}</strong> emprunte {clothesText(vestes, pantalons, baudriers)}. Le prêt est enregistré, il reste à le signer.
+          </p>
+          {qrLoan && <QrSign loanId={qrLoan} onSigned={reset} />}
         </>
       )}
     </Modal>
@@ -353,14 +436,7 @@ export function SessionLoans({
           ))}
         </ul>
       )}
-      <LendModal
-        open={lending}
-        onClose={() => setLending(false)}
-        people={trainees}
-        error={error}
-        isPending={isPending}
-        onLend={(who, _s, qty, sign, done) => run(async () => lendClothes(sessionId, who, qty, sign), done)}
-      />
+      <LendModal open={lending} onClose={() => setLending(false)} people={trainees} lend={(who, _s, qty, sign) => lendClothes(sessionId, who, qty, sign)} />
     </section>
   );
 }
@@ -426,16 +502,7 @@ export function TraineeLoans({
         </ul>
       )}
       {canLend && (
-        <LendModal
-          open={lending}
-          onClose={() => setLending(false)}
-          people={[me]}
-          fixed={me}
-          sessions={lendSessions}
-          error={error}
-          isPending={isPending}
-          onLend={(who, sessionId, qty, sign, done) => run(async () => lendFromTrainee(who, sessionId, qty, sign), done)}
-        />
+        <LendModal open={lending} onClose={() => setLending(false)} people={[me]} fixed={me} sessions={lendSessions} lend={(who, sessionId, qty, sign) => lendFromTrainee(who, sessionId, qty, sign)} />
       )}
     </section>
   );
