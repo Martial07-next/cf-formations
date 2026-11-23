@@ -2371,7 +2371,8 @@ table.data.sessions-list tr.is-past .row-title{color:var(--ink-2)}
 
 /* Matthias bot : assistant de la plateforme. */
 .mb-fab{position:fixed;right:16px;bottom:16px;z-index:65;display:inline-flex;align-items:center;gap:8px;min-height:0;height:46px;padding:0 16px 0 5px;border-radius:999px;border:0;background:#17241b;color:#fff;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer;box-shadow:0 12px 30px rgba(10,20,14,.3);transition:transform .15s}
-.mb-fab:hover{transform:translateY(-2px)}
+.mb-fab:hover,.mb-fab:active{background:#22382a;color:#fff;border-color:transparent;transform:translateY(-2px);box-shadow:0 16px 34px rgba(10,20,14,.36)}
+.mb-fab:hover .mb-avatar{background:#3ee08a}
 .mb-fab:focus-visible{outline:3px solid #08fa64;outline-offset:2px}
 .mb-fab.raised,.mb-panel.raised{bottom:66px}
 .mb-avatar{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#08fa64;color:#17241b;font-family:'CF Archivo Expanded',var(--font-title,inherit),sans-serif;font-weight:800;font-size:15px;flex-shrink:0}
