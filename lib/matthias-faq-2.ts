@@ -227,7 +227,7 @@ Le jour même, la carte affiche aussi « En cours », puis « Terminée ». Le s
     q: 'Formateur absent ou en congé : remplaçant',
     keys: ['absent', 'malade', 'formateur absent', 'remplacer formateur', 'remplacant', 'conge formateur', 'indisponible', 'beach club'],
     a: `Les congés validés dans **CF Congés** apparaissent sur le planning (formateur « absent » sur les jours concernés).
-Pour remplacer : fiche de la session > **Horaires par jour** > choisis un **remplaçant** pour les jours concernés. La carte indique « Remplacé certains jours par … », et ses documents peuvent être remplis par le remplaçant.`,
+Pour remplacer : fiche de la session > **Informations** > Formateur : choisis le remplaçant, puis dans **« Pour »** le jour concerné (**le 1er jour compris**, ex. « le lun. 23/11 uniquement ») > Enregistrer. « Toute la formation » change le formateur principal. La carte indique « Remplacé certains jours par … », et ses documents peuvent être remplis par le remplaçant.`,
   },
   {
     id: 'pl-capacity',

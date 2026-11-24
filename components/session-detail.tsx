@@ -513,7 +513,7 @@ export function SessionDetailView({
   function handleUpdate(formData: FormData) {
     setError(null);
     setNotice(null);
-    // Formateur changé pour un seul jour (pas le premier) : la session garde
+    // Formateur changé pour un seul jour (1er jour compris) : la session garde
     // son formateur, ce jour-là seulement est confié au formateur choisi.
     const day = String(formData.get('trainer_day') || '');
     const dayTrainer = String(formData.get('day_trainer_id') || '');

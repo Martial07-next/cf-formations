@@ -150,9 +150,9 @@ export function SessionForm({
   const roomRef = useRef<HTMLSelectElement>(null);
   // Jour concerné par le changement de formateur ('' = toute la formation).
   const [trainerDay, setTrainerDay] = useState(() => {
+    // Jour ouvert depuis le planning (y compris le 1er jour) : remplacement de ce jour-là proposé.
     const d = trainerDays?.initialDay;
-    const first = defaults.start_date || '';
-    return d && d !== first ? d : '';
+    return d && trainerDays && (trainerDays.dayTrainers[d] || d !== (defaults.start_date || '')) ? d : '';
   });
   const [dayTrainerId, setDayTrainerId] = useState('');
   const [roomId, setRoomId] = useState(defaults.room_id || '');
@@ -408,8 +408,9 @@ export function SessionForm({
                     setDayTrainerId('');
                   }}
                 >
-                  <option value="">toute la formation (1er jour : {dayLabel(sessionDays[0])})</option>
-                  {sessionDays.slice(1).map((d) => (
+                  <option value="">toute la formation (formateur principal)</option>
+                  {/* Chaque jour, le 1er compris : remplaçant d'un jour (formateur malade le premier jour…). */}
+                  {sessionDays.map((d) => (
                     <option key={d} value={d}>
                       le {dayLabel(d)} uniquement{trainerDays.dayTrainers[d] ? ' · remplaçant' : ''}
                     </option>
