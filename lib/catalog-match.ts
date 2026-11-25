@@ -21,10 +21,17 @@ const norm = (s: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
+/** Abréviations courantes des intitulés Digiforma → mot du catalogue. */
+const ABBR: Record<string, string> = {
+  acc: 'accessoire', accs: 'accessoire', accessoires: 'accessoire', hab: 'habilitation', habil: 'habilitation', elec: 'electrique', electr: 'electrique',
+  recy: 'recyclage', recycl: 'recyclage', init: 'initial', initiale: 'initial', initiales: 'initial', initiaux: 'initial', maint: 'maintenance',
+  eclair: 'eclairage', ep: 'ep', brt: 'branchement', branch: 'branchement', sout: 'souterrain', fond: 'fondamentaux',
+};
+
 function tokens(s: string): string[] {
   // Numéros seuls (« Module 3 ») ignorés ; pluriels ramenés au singulier (« aériens » = « aérien »).
   const stem = (w: string) => (w.length > 4 && /[a-z]s$/.test(w) ? w.slice(0, -1) : w);
-  const t = norm(s).split(' ').filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w)).map(stem);
+  const t = norm(s).split(' ').filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w)).map((w) => ABBR[w] || w).map(stem);
   // Sigles composés (« aer-res » → « aer », « res », « aerres »).
   const joined = norm(s.replace(/[-_/]/g, '')).split(' ').filter((w) => w.length >= 4 && /\d|^[a-z]{2,6}$/.test(w));
   return [...new Set([...t, ...joined])];
@@ -96,4 +103,39 @@ export function matchModule(name: string, parent: string, templates: { id: strin
   if (byParent.confidence === 'sure') return byName.templateId && byName.templateId !== byParent.templateId && byName.score > byParent.score ? { ...byName, confidence: 'doute' } : byParent;
   const best = byName.score >= byParent.score ? byName : byParent;
   return best.confidence === 'none' ? best : { ...best, confidence: 'doute' };
+}
+
+/**
+ * Formations du catalogue les plus proches d'un module Digiforma (nom du module
+ * et de sa session), de la plus proche à la moins proche : proposées au collaborateur.
+ */
+export function rankCatalog(
+  name: string,
+  parent: string,
+  templates: { id: string; title: string }[],
+  limit = 6
+): { id: string; title: string; score: number; level: 'tres' | 'proche' | 'possible' }[] {
+  if (!templates.length) return [];
+  const wt = weigher(templates);
+  const sources = [name, parent].filter((x, i, arr) => x && arr.indexOf(x) === i);
+  const ranked = templates.map((t) => {
+    const tt = tokens(t.title);
+    const nt = norm(t.title);
+    let best = 0;
+    for (const [i, src] of sources.entries()) {
+      const a = tokens(src);
+      if (!a.length) continue;
+      let sc = score(a, tt, wt);
+      const ns = norm(src);
+      if (ns.length >= 3 && (nt.includes(ns) || ns.includes(nt))) sc += 0.25;
+      // Le nom du module compte un peu plus que celui de la session.
+      best = Math.max(best, i === 0 ? sc : sc * 0.9);
+    }
+    return { id: t.id, title: t.title, score: Math.round(best * 100) / 100 };
+  });
+  return ranked
+    .filter((r) => r.score >= 0.18)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((r) => ({ ...r, level: r.score >= 0.62 ? ('tres' as const) : r.score >= 0.4 ? ('proche' as const) : ('possible' as const) }));
 }

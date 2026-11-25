@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { askConfirm } from '@/lib/confirm-dialog';
-import { TemplatePicker } from '@/components/template-picker';
+import { PlaceWizard } from '@/components/place-wizard';
 import type { CatalogMatch } from '@/lib/catalog-match';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -1256,15 +1256,11 @@ export function ToAssignSection({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Choix par module : formation du catalogue (par défaut celle reconnue) et parcours (par défaut celui détecté).
-  const [chosen, setChosen] = useState<Record<string, string>>({});
-  const [chosenProgram, setChosenProgram] = useState<Record<string, string>>({});
-  const [picking, setPicking] = useState<string | null>(null);
   const d = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
   const h = (iso: string) => iso.slice(11, 16).replace(':', 'h');
   const open = items.filter((i) => !i.covered);
   const done = items.filter((i) => i.covered);
-  const tplOf = (s: ToAssign) => chosen[s.id] ?? s.match?.templateId ?? '';
-  const progOf = (s: ToAssign) => chosenProgram[s.id] ?? s.program?.id ?? '';
+  const tplOf = (s: ToAssign) => s.match?.templateId ?? '';
 
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string; sessionId?: string }>, after?: (r: any) => void) => {
     setBusy(key);
@@ -1277,33 +1273,8 @@ export function ToAssignSection({
   };
   // « Placer » : fenêtre pour vérifier formation, parcours, salle et formateur avant de créer la session.
   const [placing, setPlacing] = useState<ToAssign | null>(null);
-  const [placeRoom, setPlaceRoom] = useState('');
-  const [placeTrainer, setPlaceTrainer] = useState('');
-  const [placeError, setPlaceError] = useState<string | null>(null);
-  const [placeWarning, setPlaceWarning] = useState<{ text: string; sessionId: string } | null>(null);
-  const placeRef = useRef<HTMLDialogElement>(null);
-  const openPlace = (s: ToAssign) => {
-    setPlacing(s);
-    setPlaceRoom(s.roomId || '');
-    setPlaceTrainer(s.trainerId || '');
-    setPlaceError(null);
-    setPlaceWarning(null);
-    placeRef.current?.showModal();
-  };
-  const confirmPlace = async () => {
-    if (!placing) return;
-    setBusy(placing.id);
-    setPlaceError(null);
-    const r = await (await import('@/app/digiforma/actions')).placeDigiformaModule(placing.id, tplOf(placing) || null, progOf(placing) || null, {
-      roomId: placeRoom || null,
-      trainerId: placeTrainer || null,
-    });
-    setBusy(null);
-    if (!r.ok) return setPlaceError(r.error);
-    if (r.warning) return setPlaceWarning({ text: r.warning, sessionId: r.sessionId });
-    placeRef.current?.close();
-    router.push(`/sessions/${r.sessionId}`);
-  };
+  // Assistant en 4 étapes : formation, session, documents, récapitulatif.
+  const openPlace = (s: ToAssign) => setPlacing(s);
   const place = (s: ToAssign) => openPlace(s);
   const dismiss = (key: string, on: boolean) => run(key, async () => (await import('@/app/digiforma/actions')).dismissDigiformaModule(key, on));
   const removeSession = async (s: ToAssign) => {
@@ -1334,8 +1305,9 @@ export function ToAssignSection({
               const tpl = catalog.find((t) => t.id === tplId) || null;
               // Parcours (GEIQ…) sans nom de module sur Digiforma : à signaler (pas une formation simple).
               const unnamed = isModule && (!s.parent || s.title === s.parent) && (Boolean(s.program) || /geiq|poec|parcours|alternance/i.test(s.title));
-              const title = tpl && tplId === s.match?.templateId ? tpl.title : tpl ? tpl.title : s.title;
-              const origin = isModule ? [s.title !== title ? s.title : null, s.parent && s.parent !== s.title ? s.parent : null].filter(Boolean).join(' · ') : '';
+              // Nom Digiforma d'origine ; la formation du catalogue se choisit dans l'assistant « Placer ».
+              const title = s.title;
+              const origin = isModule ? (s.parent && s.parent !== s.title ? s.parent : '') : '';
               const waiting = s.people.filter((p) => p.waiting).length;
               return (
                 <li key={s.kind + s.id} className={`ta-card${isModule ? '' : ' is-session'}`}>
@@ -1344,14 +1316,15 @@ export function ToAssignSection({
                       {s.geiq && <span className="ta-geiq" title="Module suivi par des alternants GEIQ">GEIQ</span>}
                       {title}
                     </strong>
-                    {isModule && (
-                      <span className={`to-assign-flag ${tpl ? (tplId === s.match?.templateId ? s.match?.confidence || 'none' : 'sure') : 'none'}`}>
-                        {tpl ? (tplId === s.match?.templateId ? (s.match?.confidence === 'sure' ? 'Reconnue' : 'À vérifier') : 'Choisie') : 'Sans formation'}
+                    {isModule && tpl && (
+                      <span className={`to-assign-flag ${s.match?.confidence || 'none'}`} title={`Formation du catalogue la plus proche : ${tpl.title}`}>
+                        {s.match?.confidence === 'sure' ? 'Reconnue' : 'À vérifier'}
                       </span>
                     )}
                   </div>
-                  {origin && <small className="ta-origin">Digiforma : {origin}</small>}
-                  {unnamed && <small className="ta-note">Module non nommé sur Digiforma : choisis la formation ci-dessous.</small>}
+                  {origin && <small className="ta-origin">Session Digiforma : {origin}</small>}
+                  {isModule && tpl && <small className="ta-origin">Formation proche : {tpl.title}</small>}
+                  {unnamed && <small className="ta-note">Module non nommé sur Digiforma : la formation se choisit en cliquant sur « Placer ».</small>}
                   {s.place && <small className="ta-place">Sur Digiforma : {s.place}</small>}
                   {s.modules && s.modules.length > 1 && (
                     <span className="ta-modules" aria-label="Modules de la session">
@@ -1377,38 +1350,6 @@ export function ToAssignSection({
                   {s.fake.length > 0 && <small className="to-assign-fake">{s.fake.length} ignoré{s.fake.length > 1 ? 's' : ''} : {s.fake.map((p) => p.name).join(', ')}</small>}
 
                   <div className="ta-foot">
-                    {isModule && (
-                      <div className="ta-choices">
-                        {picking === s.id ? (
-                          <div className="ta-picker">
-                            <TemplatePicker
-                              templates={catalog}
-                              value={tplId}
-                              onChange={(id) => {
-                                setChosen((c) => ({ ...c, [s.id]: id }));
-                                setPicking(null);
-                              }}
-                            />
-                            <button type="button" className="small ghost" onClick={() => setPicking(null)}>Fermer</button>
-                          </div>
-                        ) : (
-                          <button type="button" className="ta-choice" onClick={() => setPicking(s.id)} title="Rechercher une formation du catalogue">
-                            <span>Formation</span>
-                            <strong>{tpl ? tpl.title : 'Garder le nom Digiforma'}</strong>
-                            <em>Changer</em>
-                          </button>
-                        )}
-                        {programs.length > 0 && (
-                          <label className="ta-choice ta-program">
-                            <span>Parcours</span>
-                            <select value={progOf(s)} onChange={(e) => setChosenProgram((c) => ({ ...c, [s.id]: e.target.value }))}>
-                              <option value="">Aucun</option>
-                              {programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                            </select>
-                          </label>
-                        )}
-                      </div>
-                    )}
                     <div className="ta-actions">
                       {isModule ? (
                         <>
@@ -1448,86 +1389,17 @@ export function ToAssignSection({
           </ul>
         </details>
       )}
-      <dialog ref={placeRef} className="modal place-modal" aria-labelledby="place-title" onClose={() => setPlacing(null)}>
-        {placing && (() => {
-          const tpl = catalog.find((t) => t.id === tplOf(placing)) || null;
-          const d2 = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-          return (
-            <div className="place-body">
-              <div className="modal-head">
-                <div>
-                  <h2 id="place-title">Placer la session</h2>
-                  <small className="hint">Vérifie et complète : la salle et le formateur sont contrôlés avant la création.</small>
-                </div>
-                <button type="button" className="icon ghost" onClick={() => placeRef.current?.close()} aria-label="Fermer"><X size={18} /></button>
-              </div>
-              <div className="modal-body place-content">
-              <div className="place-summary">
-                <strong>{tpl?.title || placing.title}</strong>
-                <span className="place-when">
-                  {d2(placing.start_at)}
-                  {placing.start_at.slice(0, 10) !== placing.end_at.slice(0, 10) ? ` → ${d2(placing.end_at)}` : ''} · {h(placing.start_at)}–{h(placing.end_at)}
-                </span>
-                {placing.parent && placing.parent !== placing.title && <small className="hint">Digiforma : {placing.parent}</small>}
-                {!tpl && <small className="fin-warn-inline">Aucune formation du catalogue choisie : la session gardera le nom Digiforma (modifiable ensuite).</small>}
-              </div>
-              {placing.modules && placing.modules.length > 1 && (
-                <div className="place-modules">
-                  <span className="hint">Une seule session avec ses modules :</span>
-                  {placing.modules.map((mo, i) => (
-                    <span key={i} className="ta-module"><b>{mo.name}</b> {d(mo.start_at)} · {h(mo.start_at)}–{h(mo.end_at)} · {mo.trainees} stag.</span>
-                  ))}
-                </div>
-              )}
-              <div className="place-fields">
-                <label>
-                  Salle
-                  <select className="input" value={placeRoom} onChange={(e) => setPlaceRoom(e.target.value)}>
-                    <option value="">À affecter (choisir plus tard)</option>
-                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.id === placing.roomId ? ' (Digiforma)' : ''}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Formateur
-                  <select className="input" value={placeTrainer} onChange={(e) => setPlaceTrainer(e.target.value)}>
-                    <option value="">À choisir plus tard</option>
-                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.id === placing.trainerId ? ' (Digiforma)' : ''}</option>)}
-                  </select>
-                </label>
-                {programs.length > 0 && (
-                  <label>
-                    Parcours
-                    <select className="input" value={progOf(placing)} onChange={(e) => setChosenProgram((c) => ({ ...c, [placing.id]: e.target.value }))}>
-                      <option value="">Aucun</option>
-                      {programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                    </select>
-                  </label>
-                )}
-              </div>
-              <div className="place-people">
-                <span className="place-label">{placing.trainees} stagiaire{placing.trainees > 1 ? 's' : ''}</span>
-                <span className="place-chips">
-                  {placing.people.map((p) => <span key={p.key} className={`to-assign-person${p.waiting ? ' waiting' : ''}`}>{p.name}</span>)}
-                </span>
-              </div>
-              {placeError && <div role="alert" className="alert alert-error">{placeError}</div>}
-              {placeWarning && (
-                <div role="alert" className="alert alert-warning">
-                  {placeWarning.text}{' '}
-                  <button type="button" className="small" onClick={() => router.push(`/sessions/${placeWarning.sessionId}`)}>Ouvrir la session</button>
-                </div>
-              )}
-              </div>
-              <div className="modal-foot">
-                <button type="button" onClick={() => placeRef.current?.close()}>Annuler</button>
-                <button type="button" className="primary" disabled={busy === placing.id || Boolean(placeWarning)} onClick={confirmPlace}>
-                  {busy === placing.id ? 'Création…' : <>Placer la session <ChevronRight size={14} aria-hidden /></>}
-                </button>
-              </div>
-            </div>
-          );
-        })()}
-      </dialog>
+      {placing && (
+        <PlaceWizard
+          key={placing.id}
+          item={placing}
+          catalog={catalog}
+          rooms={rooms}
+          trainers={trainers}
+          programs={programs}
+          onClose={() => setPlacing(null)}
+        />
+      )}
     </section>
   );
 }

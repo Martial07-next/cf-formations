@@ -41,17 +41,14 @@ La plateforme **ne modifie jamais Digiforma** : elle le lit seulement.`,
   {
     id: 'df-planning',
     q: 'Comment les sessions Digiforma arrivent sur le planning ?',
-    keys: ['modules a placer', 'placer module', 'placer digiforma', 'sessions digiforma planning', 'arrive planning', 'digiforma planning', 'section digiforma', 'carte digiforma', 'retirer module', 'placer la session', 'popup placer'],
+    keys: ['modules a placer', 'placer module', 'placer digiforma', 'sessions digiforma planning', 'arrive planning', 'digiforma planning', 'section digiforma', 'carte digiforma', 'retirer module', 'placer la session', 'popup placer', 'assistant placer'],
     bureau: true,
-    a: `Tout passe par la section **« Modules Digiforma à placer »**, **sous le planning**, semaine par semaine.
-
-1. Chaque carte = un module, ou une session à plusieurs modules la même semaine (ex. IRVE P1/P2/P3 → **une seule session avec ses modules**).
-2. Vérifie la **formation** reconnue (« Reconnue » / « À vérifier », bouton **« Changer »**).
-3. Clique **« Placer »** : une fenêtre **« Placer la session »** s'ouvre avec la **salle**, le **formateur** et le **parcours** déjà choisis d'après Digiforma. Change si besoin, puis valide.
-4. Si le formateur ou la salle sont **déjà pris** à ces dates, un message te le dit avant de créer la session.
-5. **« Retirer »** cache une carte inutile (on peut la remettre).
-
-Ensuite tout se met à jour seul : stagiaires, modules, jours, places par entreprise.`,
+    a: `Section **« Modules Digiforma à placer »**, **sous le planning** : chaque carte garde le **nom Digiforma**. Clique **« Placer »** : un assistant en 4 étapes s'ouvre.
+1. **Formation** : les formations du catalogue qui ressemblent le plus au nom (Très proche / Proche / Possible), une recherche, ou **« Aucune : session personnalisée »**.
+2. **Session** : nom (Digiforma par défaut, ou celui du catalogue, ou un autre), salle, formateur, parcours.
+3. **Documents** : tour de table, fiches d'appréciation et périmètre, certificats d'habilitation / de réalisation, titre exigé, initial / recyclage, grilles IRVE / Maintenance, attestations P1… MA3, départ anticipé, autorisations. Ce qui est **détecté d'après les noms** est déjà coché, avec la raison.
+4. **Récapitulatif** → « Placer la session ».
+Les réglages s'appliquent **à cette session seulement** (le catalogue n'est pas modifié). Formateur ou salle déjà pris : le message s'affiche avant la création.`,
   },
   {
     id: 'do-papers',

@@ -18,8 +18,10 @@ export async function placeDigiformaModule(
   key: string,
   templateId: string | null = null,
   programId: string | null = null,
-  choice?: { roomId: string | null; trainerId: string | null }
-): Promise<Result<{ sessionId: string; warning?: string }>> {
+  choice?: { roomId: string | null; trainerId: string | null },
+  /** Assistant « Placer » : nom de la session et réglages (enregistrés pour cette session seulement). */
+  extra?: { title?: string | null; settings?: Record<string, unknown> | null }
+): Promise<Result<{ sessionId: string; warning?: string; settingsWarning?: string }>> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
   const { data: m, error } = await supabase.from('digiforma_modules').select('*').eq('key', key).maybeSingle();
@@ -40,8 +42,46 @@ export async function placeDigiformaModule(
   const r = await placeModuleRow(supabase, m, templateId, prog, undefined, choice);
   // Parcours choisi : retenu pour tous les modules de cette session Digiforma (semaines suivantes, stages).
   if (r.ok && prog) await supabase.from('digiforma_modules').update({ program_id: prog }).eq('df_session_id', (m as any).df_session_id);
-  if (r.ok) revalidatePath('/');
-  return r;
+  if (!r.ok) return r;
+  // Nom choisi dans l'assistant (par défaut celui de Digiforma).
+  const title = String(extra?.title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (title) await supabase.from('sessions').update({ title }).eq('id', r.sessionId);
+  // Réglages propres à la session : copie de la formation (ou formation vierge), jamais le catalogue.
+  let settingsWarning: string | undefined;
+  const settings = extra?.settings && typeof extra.settings === 'object' ? extra.settings : null;
+  if (settings && (Object.keys(settings).length || !templateId)) {
+    const { ensureSessionSettings } = await import('@/app/sessions/[id]/settings-actions');
+    const { settingsToColumns } = await import('@/lib/session-smart');
+    const own = await ensureSessionSettings(r.sessionId);
+    if (!own.ok) settingsWarning = own.error;
+    else if (Object.keys(settings).length) {
+      // Colonnes absentes (migration pas faite) : retirées une à une, le reste est enregistré.
+      let cols = settingsToColumns(settings as any);
+      for (let i = 0; i < 12 && Object.keys(cols).length; i++) {
+        const { error: ue } = await supabase.from('templates').update(cols).eq('id', own.template.id);
+        if (!ue) break;
+        const bad = Object.keys(cols).find((c) => ue.message.includes(c));
+        if (!bad) {
+          settingsWarning = `Réglages non enregistrés : ${ue.message}`;
+          break;
+        }
+        const { [bad]: _drop, ...rest } = cols;
+        cols = rest;
+      }
+    }
+  }
+  revalidatePath('/');
+  revalidatePath(`/sessions/${r.sessionId}`);
+  return { ...r, ...(settingsWarning ? { settingsWarning } : {}) };
+}
+
+/** Assistant « Placer » : réglages de la formation du catalogue choisie (valeurs de départ). */
+export async function templateDefaults(id: string): Promise<Result<{ template: any }>> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data } = await supabase.from('templates').select('*').eq('id', id).maybeSingle();
+  if (!data) return { ok: false, error: 'Formation introuvable.' };
+  return { ok: true, template: data };
 }
 
 /** Retirer un module de la liste « à placer » (introuvable, inutile) ou le remettre. */
