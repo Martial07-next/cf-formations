@@ -1,4 +1,4 @@
-import { formationSymbols } from '@/lib/habilitation';
+import { habEnabled } from '@/lib/habilitation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
 import { appreciationRequired } from '@/lib/appreciation';
@@ -85,7 +85,7 @@ export async function computeDossierTodo(
   // Attestations de réussite (migration 39) : formations avec un modèle choisi.
   const arOn = new Set(tpls.filter((t) => reussiteModels(t.attestation_reussite).length).map((t) => t.id as string));
   // Certificats d'habilitation (migration 51) : formations avec des symboles (réglage ou intitulé).
-  const habOn = new Set(tpls.filter((t) => formationSymbols(t.habilitation_symbols, t.title || '').length).map((t) => t.id as string));
+  const habOn = new Set(tpls.filter((t) => habEnabled(t.habilitation_symbols, t.title || '')).map((t) => t.id as string));
   // Certificats de réalisation (migration 72) : nature de l'action choisie par le formateur.
   const certOn = new Set(tpls.filter((t) => t.certificat_realisation).map((t) => t.id as string));
   for (const s of sessions) {

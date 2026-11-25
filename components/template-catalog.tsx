@@ -24,7 +24,7 @@ import { formatHours } from '@/lib/week';
 import { splitHours } from '@/lib/schedule';
 import { HabSymbolsField } from '@/components/hab-symbols-field';
 import { SmartConfig } from '@/components/smart-config';
-import { formationSymbols } from '@/lib/habilitation';
+import { habEnabled } from '@/lib/habilitation';
 import type { DossierDocument } from '@/lib/dossier';
 import { TemplateDossierButton } from '@/components/dossier/document-manager';
 import { askConfirm } from '@/lib/confirm-dialog';
@@ -568,8 +568,8 @@ export function TemplateCatalog({
                         <div className="tpl-flags">
                           {t.tour_de_table !== false && <span className="tpl-flag">Tour de table</span>}
                           {t.titre_habilitation && <span className="tpl-flag">Titre d’habilitation</span>}
-                          {formationSymbols(t.habilitation_symbols, t.title).length > 0 && (
-                            <span className="tpl-flag" title={`Certificat d’habilitation : ${formationSymbols(t.habilitation_symbols, t.title).join(' ')}`}>Certificat {formationSymbols(t.habilitation_symbols, t.title).join(' ')}</span>
+                          {habEnabled(t.habilitation_symbols, t.title) && (
+                            <span className="tpl-flag" title="Certificat d’habilitation : symboles choisis par le formateur">Certificat d’habilitation</span>
                           )}
                           {t.fiche_appreciation && <span className="tpl-flag">Fiche d’appréciation</span>}
                           {t.certificat_realisation && <span className="tpl-flag">Certificat de réalisation</span>}

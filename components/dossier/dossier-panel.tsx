@@ -41,7 +41,7 @@ import { saveCertificats } from '@/app/dossier/actions';
 import { ReussiteEditor, reussiteInputs, type ReussiteSession } from '@/components/dossier/reussite-editor';
 import { TitleFiles, TitleQrButton, downloadAllTitles } from '@/components/dossier/titles';
 import { HabilitationEditor, type HabSession } from '@/components/dossier/habilitation-editor';
-import { habDone, type HabData } from '@/lib/habilitation';
+import { habDone, habEntryDone, type HabData } from '@/lib/habilitation';
 import { titleOk, type TitleFile } from '@/lib/titres';
 import { reussiteCount, reussiteDone, type ReussiteData } from '@/lib/reussite';
 import { setSessionAppreciation } from '@/app/dossier/actions';
@@ -278,10 +278,11 @@ export function DossierPanel({
   const [habOpen, setHabOpen] = useState(false);
   const [habData, setHabData] = useState<HabData | null>(habilitation?.data || null);
   useEffect(() => setHabData(habilitation?.data || null), [habilitation]);
-  const habOn = Boolean(habilitation?.session.symbols.length);
+  const habOn = Boolean(habilitation);
   const habSession: HabSession | null = habOn && habilitation ? { ...habilitation.session, sessionId, trainees } : null;
-  const habCount = trainees.filter((t) => habData?.trainees?.[t.id]?.avis).length;
-  const habIsDone = habOn && habDone(habData, trainees.map((t) => t.id));
+  const habSugg = habData?.symbols?.length ? habData.symbols : habilitation?.session.symbols || [];
+  const habCount = trainees.filter((t) => habEntryDone(habData?.trainees?.[t.id], habSugg)).length;
+  const habIsDone = habOn && habDone(habData, trainees.map((t) => t.id), habilitation?.session.symbols || []);
 
   // Grilles d'évaluation pratique (IRVE, Maintenance IRVE), remplies par le formateur.
   const gridsKey = JSON.stringify(evalGrids?.grids || {});
@@ -461,10 +462,10 @@ export function DossierPanel({
         if (ar.length) parts.push(await buildReussitePdf(ar));
       }
       if (habSession) {
-        const list = trainees.filter((t) => habData?.trainees?.[t.id]?.avis && hasTitle(t.id));
+        const list = trainees.filter((t) => habEntryDone(habData?.trainees?.[t.id], habSugg) && hasTitle(t.id));
         if (list.length) {
           const { buildHabilitationPdf } = await import('@/lib/pdf-habilitation');
-          parts.push(await buildHabilitationPdf({ ...habSession, trainees: list.map((t) => ({ id: t.id, name: habSession.certNames?.[t.id] || t.name })), entries: habData?.trainees || {} }));
+          parts.push(await buildHabilitationPdf({ ...habSession, symbols: habSugg, trainees: list.map((t) => ({ id: t.id, name: habSession.certNames?.[t.id] || t.name })), entries: habData?.trainees || {} }));
         }
       }
       for (const d of documents) {
@@ -493,7 +494,7 @@ export function DossierPanel({
             ? [{ title: 'Attestations de fin de formation et appréciations des compétences', detail: `${attReady.length}/${trainees.length} attestations générées`, done: faiDone && !titleMissing.length }]
             : []),
           ...(habSession
-            ? [{ title: 'Certificats d’habilitation électrique', detail: `${habCount}/${trainees.length} avis donnés`, done: habIsDone }]
+            ? [{ title: 'Certificats d’habilitation électrique', detail: `${habCount}/${trainees.length} remplis`, done: habIsDone }]
             : []),
           ...(certificats
             ? [{ title: 'Certificats de réalisation', detail: `${certReady.length}/${trainees.length} remplis`, done: certDone(certData, trainees.map((t) => t.id)) }]
@@ -828,9 +829,9 @@ export function DossierPanel({
           <div className="doc-item">
             <Award size={16} aria-hidden />
             <span className="doc-item-main">
-              <strong>Certificats d’habilitation · {habSession.symbols.join(' ')}</strong>
+              <strong>Certificats d’habilitation{(habData?.symbols?.length ? habData.symbols : habSession.symbols).length ? ` · ${(habData?.symbols?.length ? habData.symbols : habSession.symbols).join(' ')}` : ''}</strong>
               <small className="hint">
-                Un certificat par stagiaire : le formateur donne son avis et choisit les symboles attribués · {habCount}/{trainees.length} avis donnés
+                Un certificat par stagiaire : le formateur donne son avis et choisit les symboles attribués · {habCount}/{trainees.length} remplis
                 {titleMissing.length > 0 && <><br /><span className="fin-warn-inline">Titre d’habilitation manquant : {titleMissing.length} certificat{titleMissing.length > 1 ? 's' : ''} bloqué{titleMissing.length > 1 ? 's' : ''}</span></>}
               </small>
             </span>

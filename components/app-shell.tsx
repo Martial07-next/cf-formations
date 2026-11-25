@@ -1,5 +1,6 @@
 'use client';
 
+import { LiveRefresh } from '@/components/live-refresh';
 import { Suspense, useEffect } from 'react';
 import { DevLayer } from '@/components/dev/dev-layer';
 import { usePathname, useRouter } from 'next/navigation';
@@ -32,6 +33,8 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <Sidebar profile={profile} />
       <div className="app-main">{children}</div>
       <NavProgress />
+      {/* Actualisation automatique (changements faits par moi ou un collègue). */}
+      <LiveRefresh />
       {/* Mot de passe temporaire : à remplacer avant d'utiliser la plateforme. */}
       {profile.must_change_password && <FirstPasswordGate name={profile.full_name} />}
       {/* Matthias bot : l'assistant de la plateforme, pour toute l'équipe. */}

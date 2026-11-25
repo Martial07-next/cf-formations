@@ -2045,7 +2045,7 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .hab-chip.on{background:#17241b;border-color:#17241b;color:#08fa64}
 .hab-chip:disabled{cursor:default}
 .hab-list{display:flex;flex-direction:column;gap:8px}
-.hab-row{display:grid;grid-template-columns:minmax(160px,1fr) auto minmax(220px,2fr) auto;gap:10px 14px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.hab-row{display:grid;grid-template-columns:minmax(150px,1.1fr) auto minmax(200px,2fr) auto;gap:8px 14px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .hab-row.favorable{border-left:4px solid var(--ok-dot)}
 .hab-row.defavorable{border-left:4px solid var(--cf-red)}
 .hab-who{display:flex;flex-direction:column}
@@ -2053,8 +2053,29 @@ dialog.modal.wiz-modal{width:min(880px,calc(100vw - 24px))}
 .hab-avis button{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:9px;border:1px solid var(--line-strong);background:#fff;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .hab-avis button.on.ok{background:var(--ok-bg);border-color:var(--ok-dot);color:var(--ok-ink)}
 .hab-avis button.on.ko{background:#fdeceb;border-color:var(--cf-red);color:var(--cf-red-ink)}
-.hab-line{grid-column:1 / -2;color:var(--muted);font-size:12px}
-@media (max-width:760px){.hab-row{grid-template-columns:1fr}.hab-line{grid-column:auto}}
+.hab-line{grid-column:1 / -1;color:var(--muted);font-size:12px}
+@media (max-width:760px){.hab-row{grid-template-columns:1fr}.hab-line,.hab-row-picker{grid-column:auto}}
+/* Certificats d'habilitation : symboles de la session, sélecteur par catégorie. */
+.hab-session{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px;background:var(--surface-2)}
+.hab-session-head{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+.hab-session-title{display:flex;flex-direction:column;flex:1;min-width:200px}
+.hab-step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:var(--cf-mint);color:var(--cf-mint-ink);font-size:12px;font-weight:800;flex-shrink:0}
+.hab-step-line{display:flex;align-items:center;gap:8px;margin:4px 0 8px;font-weight:600;font-size:13.5px}
+.hab-chosen{display:inline-flex;flex-wrap:wrap;gap:4px}
+.hab-tag{display:inline-block;padding:2px 8px;border-radius:6px;background:#17241b;color:#08fa64;font-size:12px;font-weight:800}
+.hab-none{font-size:12.5px;color:var(--muted)}
+.hab-none.warn{color:var(--cf-red-ink);font-weight:700;display:inline-flex;align-items:center;gap:4px}
+.hab-syms{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.hab-edit{min-height:28px;padding:3px 9px}
+.hab-ok{color:var(--ok-dot);vertical-align:-2px}
+.hab-actions{justify-content:flex-end}
+.hab-row-picker{grid-column:1 / -1;border-top:1px dashed var(--line-strong);padding-top:8px;display:flex;flex-direction:column;gap:8px}
+.hab-picker{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.hab-group{display:grid;grid-template-columns:190px 1fr;gap:8px;align-items:start}
+.hab-group-label{font-size:12px;font-weight:700;color:var(--muted);padding-top:4px}
+@media (max-width:640px){.hab-group{grid-template-columns:1fr;gap:4px}}
+.hab-chip.sugg:not(.on){border-color:var(--cf-mint-strong);box-shadow:inset 0 0 0 1px var(--cf-mint-soft)}
+.hab-chip.sugg::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--cf-mint-strong);margin-left:2px}
 .hab-obj{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-weight:600;font-size:13px}.hab-obj textarea{font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;resize:vertical}
 
 /* ---- Page Sessions : périodes, dossier incomplet ---- */

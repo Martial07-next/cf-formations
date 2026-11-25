@@ -22,7 +22,7 @@ function readTemplate(formData: FormData) {
     ...(formData.has('titre_present') ? { titre_habilitation: formData.get('titre_habilitation') === 'on' } : {}),
     // Certificat d'habilitation (migration 51) : symboles possibles ; vide = pas de certificat.
     ...(formData.has('hab_present')
-      ? { habilitation_symbols: formData.get('hab_on') === 'on' ? formData.getAll('hab_symbols').map(String).filter(Boolean).join(',') : '' }
+      ? { habilitation_symbols: formData.get('hab_on') === 'on' ? formData.getAll('hab_symbols').map(String).filter(Boolean).join(',') || '*' : '' }
       : {}),
     // Objectifs propres au certificat (migration 52) ; vide = objectifs de fin de formation.
     ...(formData.has('objectifs_habilitation') ? { objectifs_habilitation: get('objectifs_habilitation') || null } : {}),

@@ -535,8 +535,8 @@ export async function writeSessionModules(supabase: SupabaseClient, sessionId: s
   const blocks = [...byName.values()].flatMap(byAttendance);
   if (blocks.length < 2) return 0; // un seul module : la session entière suffit
 
-  const { data: cur } = await supabase.from('session_modules').select('id, name').eq('session_id', sessionId);
-  const curRows = ((cur as any[]) || []) as { id: string; name: string }[];
+  const { data: cur } = await supabase.from('session_modules').select('id, name, duration_hours, start_day, end_day').eq('session_id', sessionId);
+  const curRows = ((cur as any[]) || []) as { id: string; name: string; duration_hours: number | null; start_day: string; end_day: string }[];
   const curNames = curRows.map((m) => String(m.name));
   // Modules déjà ceux de Digiforma : seulement les modules suivis par chaque stagiaire, remis à jour.
   const same = curNames.length === blocks.length && blocks.every((b) => curNames.includes(b.name));
@@ -545,7 +545,13 @@ export async function writeSessionModules(supabase: SupabaseClient, sessionId: s
   if (same) {
     idOf = new Map(blocks.map((b, i) => [i, curRows.find((r) => r.name === b.name)!.id]));
     // Durées (jour par jour, demi-journées comprises) remises à jour aussi.
-    for (const [i, b] of blocks.entries()) await supabase.from('session_modules').update({ duration_hours: hoursOf(moduleMinutes(b.start_at, b.end_at, b.days)), start_day: b.start_at.slice(0, 10), end_day: b.end_at.slice(0, 10) }).eq('id', idOf.get(i)!);
+    // (seulement si quelque chose a changé : pas d'écriture inutile à chaque synchronisation).
+    for (const [i, b] of blocks.entries()) {
+      const row = curRows.find((r) => r.id === idOf.get(i))!;
+      const next = { duration_hours: hoursOf(moduleMinutes(b.start_at, b.end_at, b.days)), start_day: b.start_at.slice(0, 10), end_day: b.end_at.slice(0, 10) };
+      const same2 = Number(row.duration_hours ?? -1) === Number(next.duration_hours ?? -1) && String(row.start_day).slice(0, 10) === next.start_day && String(row.end_day).slice(0, 10) === next.end_day;
+      if (!same2) await supabase.from('session_modules').update(next).eq('id', row.id);
+    }
   } else {
     // Modules déjà venus de Digiforma (mêmes noms, ou découpés par l'émargement) : remplacés aussi.
     const fromDf = (n: string) => [...byName.keys()].some((k) => n === k.slice(0, 80) || n.startsWith(`${k} · `));

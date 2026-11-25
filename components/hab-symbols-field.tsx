@@ -1,52 +1,35 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { HAB_SYMBOLS, parseSymbols } from '@/lib/habilitation';
+import { useState } from 'react';
+import { habEnabled, parseSymbols } from '@/lib/habilitation';
 
 /**
- * Réglage d'une formation : certificat d'habilitation électrique et symboles
- * possibles. Par défaut, ceux détectés dans l'intitulé de la formation.
- * Champs envoyés : hab_present, hab_on, hab_symbols[].
+ * Réglage d'une formation : certificat d'habilitation électrique délivré ou non.
+ * Les symboles ne se règlent plus ici : le formateur les choisit pour chaque
+ * stagiaire (ceux de l'intitulé lui sont proposés).
+ * Champs envoyés : hab_present, hab_on, hab_symbols[] (ancien réglage conservé).
  */
 export function HabSymbolsField({ title, saved, objectifs }: { title: string; saved: string | null | undefined; objectifs?: string | null }) {
-  const detected = useMemo(() => parseSymbols(title).symbols, [title]);
-  const initial = saved != null ? saved.split(',').map((s) => s.trim()).filter(Boolean) : detected;
-  const [on, setOn] = useState(initial.length > 0);
-  const [chosen, setChosen] = useState<string[]>(initial);
-  const [touched, setTouched] = useState(saved != null);
-  // Tant que rien n'est choisi à la main, on suit l'intitulé saisi.
-  useEffect(() => {
-    if (touched) return;
-    setChosen(detected);
-    setOn(detected.length > 0);
-  }, [detected, touched]);
-  const all = [...new Set([...HAB_SYMBOLS, ...detected, ...chosen])];
-  const toggle = (s: string) => {
-    setTouched(true);
-    setChosen((c) => (c.includes(s) ? c.filter((x) => x !== s) : [...c, s]));
-  };
+  const [on, setOn] = useState(habEnabled(saved, title));
+  // Ancienne liste de symboles : gardée comme proposition pour le formateur.
+  const legacy = saved && saved !== '*' ? saved.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const detected = parseSymbols(title).symbols;
   return (
     <fieldset className="ar-models hab-symbols">
       <input type="hidden" name="hab_present" value="1" />
-      <legend>Certificat d’habilitation électrique (symboles choisis par le formateur pour chaque stagiaire)</legend>
+      <legend>Certificat d’habilitation électrique</legend>
       <label className="check-line">
-        <input type="checkbox" name="hab_on" checked={on} onChange={(e) => { setOn(e.target.checked); setTouched(true); }} />
-        Délivrer un certificat d’habilitation à la fin de la formation
+        <input type="checkbox" name="hab_on" checked={on} onChange={(e) => setOn(e.target.checked)} />
+        Délivrer un certificat d’habilitation à la fin de la formation (le formateur choisit les symboles de chaque stagiaire)
       </label>
+      {legacy.map((s) => <input key={s} type="hidden" name="hab_symbols" value={s} />)}
       {on && (
         <>
-          <p className="hint" style={{ margin: '4px 0 6px' }}>
-            Symboles possibles pour cette formation{detected.length ? ` (détectés dans l’intitulé : ${detected.join(' ')})` : ''}. Le formateur coche ensuite ceux qu’il attribue à chaque stagiaire.
-          </p>
-          <div className="hab-chips" role="group" aria-label="Symboles possibles">
-            {all.map((s) => (
-              <button key={s} type="button" className={`hab-chip${chosen.includes(s) ? ' on' : ''}`} aria-pressed={chosen.includes(s)} onClick={() => toggle(s)}>
-                {s}
-              </button>
-            ))}
-          </div>
-          {/* Valeurs envoyées (champs cachés : aucun défilement de la fenêtre au clic). */}
-          {chosen.map((s) => <input key={s} type="hidden" name="hab_symbols" value={s} />)}
+          {(legacy.length > 0 || detected.length > 0) && (
+            <p className="hint" style={{ margin: '4px 0 0' }}>
+              Symboles proposés au formateur : <strong>{(legacy.length ? legacy : detected).join(' ')}</strong> (d’après {legacy.length ? 'l’ancien réglage' : 'l’intitulé'}).
+            </p>
+          )}
           <label className="hab-obj">
             <span>Objectifs du certificat</span>
             <textarea

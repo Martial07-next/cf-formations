@@ -25,7 +25,7 @@ import { perimetreOf } from '@/lib/perimetres';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours, dayModuleName } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
-import { formationSymbols } from '@/lib/habilitation';
+import { habEnabled, habSuggested } from '@/lib/habilitation';
 import { GRIDS, gridRequired } from '@/lib/irve-grid';
 import { REUSSITE_SIGNATAIRE, reussiteModels, reussiteModules } from '@/lib/reussite';
 import { SESSION_STATUS_LABEL } from '@/lib/status';
@@ -232,8 +232,9 @@ export default async function SessionDetailPage({
   const arModels = reussiteModels((tplOpt as any)?.attestation_reussite);
   const arRow = arModels.length ? formOf('reussite') : null;
   // Certificats d'habilitation (migration 51) : symboles de la formation (réglage, sinon intitulé).
-  const habSymbols = (tplOpt as any) ? formationSymbols((tplOpt as any).habilitation_symbols, (tplOpt as any).title || session.title) : [];
-  const habRow = habSymbols.length ? formOf('habilitation') : null;
+  const habOnSession = (tplOpt as any) ? habEnabled((tplOpt as any).habilitation_symbols, (tplOpt as any).title || session.title) : false;
+  const habSymbols = habOnSession ? habSuggested((tplOpt as any).habilitation_symbols, (tplOpt as any).title || session.title) : [];
+  const habRow = habOnSession ? formOf('habilitation') : null;
   // Grilles d'évaluation pratique (IRVE : migration 63, Maintenance IRVE : 64) :
   // réglage de la session, sinon de la formation, sinon d'après l'intitulé.
   const gridTitle = (tplOpt as any)?.title || session.title;
@@ -559,7 +560,7 @@ export default async function SessionDetailPage({
                   : null
               }
               habilitation={
-                habSymbols.length
+                habOnSession
                   ? {
                       session: {
                         title: (tplOpt as any)?.title || session.title,

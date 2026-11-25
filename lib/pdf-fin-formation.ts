@@ -7,6 +7,7 @@ import { COMPANY, type Legal } from '@/lib/pdf-brand';
 import { CREAM, INK, RED, gradientText, keep, wrapText } from '@/lib/pdf-appreciation';
 import type { AppreciationEntry } from '@/lib/appreciation';
 import { formatDays } from '@/lib/schedule';
+import { symbolsOf } from '@/lib/habilitation';
 import { certificateTitle } from '@/lib/habilitation';
 
 /**
@@ -508,7 +509,7 @@ function habBody(page: PDFPage | null, ctx: Ctx, input: HabilitationPdfInput, na
   const { f } = ctx;
   const B = 12.5 * k;
   const step = 17.27 * k;
-  const chosen = e.symbols ? e.symbols.filter((s) => input.symbols.includes(s)) : input.symbols;
+  const chosen = symbolsOf(e, input.symbols);
   let y = 576.2;
   text(page, `M./Mme → ${name}`, 23.1, y, 13.88, f.bold);
   y = labelValue(page, { text: 'a réalisé la formation → ', font: f.semibold }, { text: certificateTitle(input.title, chosen), font: f.regular }, 12.88, y - 18, 18);

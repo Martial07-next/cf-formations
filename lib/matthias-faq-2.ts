@@ -8,6 +8,19 @@ import type { FaqEntry } from '@/lib/matthias-faq';
 
 export const FAQ_UPDATES: FaqEntry[] = [
   {
+    id: 'do-hab',
+    q: 'Certificats d’habilitation et attestations de réussite',
+    keys: ['certificat', 'habilitation', 'symbole', 'symboles', 'b1v', 'h0b0', 'br', 'attestation reussite', 'reussite', 'certificat habilitation', 'choisir symboles'],
+    a: `**Certificats d'habilitation** (dossier > « Remplir ») :
+1. **Symboles de la session** : ceux de l'intitulé sont proposés ; « Modifier » pour ajuster, puis **« Appliquer à tous »**.
+2. Pour chaque stagiaire : **Favorable / Défavorable** (favorable = il reçoit les symboles de la session).
+3. S'il n'obtient pas tout : bouton **« Symboles »** sous son nom → coche / décoche par catégorie (non électricien, exécutant BT, chargé BT, HT, lignes) ; « Comme la session » pour revenir.
+« Tous favorables » remplit tout d'un clic. Un certificat est prêt avec un avis (et au moins un symbole si favorable). Bloqué si le titre précédent manque (recyclage).
+Dans les paramètres de la formation, il n'y a plus qu'une case **« Délivrer un certificat d'habilitation »**.
+
+**Attestations de réussite** (ex. IRVE P1, P2, P3) : une par stagiaire et par module suivi, avis et **signature** du formateur.`,
+  },
+  {
     id: 'df-what',
     q: 'Qu’est-ce que la plateforme prend en compte depuis Digiforma ?',
     keys: ['prend en compte', 'vient digiforma', 'quoi digiforma', 'repris', 'reprend', 'importe', 'import', 'recupere', 'synchro', 'synchronisation', 'qu est ce qui vient', 'depuis digiforma', 'lien digiforma planning', 'automatique digiforma', 'synchronise quoi'],
