@@ -493,7 +493,7 @@ Le nom de la salle / du formateur doit correspondre à Digiforma pour être repr
     keys: ['avis', 'avis clients', 'avis google', 'plus que pro', 'plusquepro', 'votre avis compte', 'qr code avis', 'laisser un avis', 'notation', 'etoiles', 'presentation avis', 'avis a chaud', 'avis a froid'],
     a: `Dans le dossier de **chaque session**, au-dessus du tour de table : **« Avis clients · Votre avis compte ! »**.
 - **« Présenter aux stagiaires »** : présentation animée en plein écran à montrer **au début de la session** (flèches du clavier, balayage sur tablette) : pourquoi c'est important, comment faire, les derniers avis Plus que pro et Google, puis les deux QR codes.
-- **Plus que pro = le plus important** : avis **certifié** sur la formation et son contenu (contenu pédagogique, matériel, formateur, organisation), laissé **2 semaines après** (à froid).
+- **Plus que pro = le plus important** : le stagiaire scanne le QR code et **remplit le petit formulaire tout de suite** ; **2 semaines après**, il reçoit **un e-mail de Plus que pro** pour donner son avis **certifié** sur la formation et son contenu (à froid).
 - **Google = en plus** : avis plus général sur CF Réseaux, à la fin de la formation (à chaud).
 - Boutons **Google / Plus que pro** : les affiches QR à imprimer ou afficher ; **Attestation** : le PDF Plus que pro.
 Les avis Plus que pro sont repris de cf-reseaux.fr quand c'est possible ; les avis Google se mettent à jour dans **Administration › Paramètres › Avis clients** (bouton « Voir la présentation » pour vérifier).`,

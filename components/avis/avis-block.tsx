@@ -19,7 +19,7 @@ export function AvisBlock({ avis }: { avis: AvisData }) {
         <span className="doc-item-main">
           <strong>Avis clients · « Votre avis compte ! »</strong>
           <small className="hint">
-            À présenter au début de chaque session : <b>Plus que pro</b> en priorité (avis certifié sur la formation et son contenu, 2 semaines après), et <b>Google</b> (avis général, à chaud)
+            À présenter au début de chaque session : <b>Plus que pro</b> en priorité (QR code à remplir tout de suite, puis e-mail 2 semaines après pour l’avis certifié sur la formation et son contenu), et <b>Google</b> (avis général, à la fin de la formation)
             {avis.pqp.note != null ? ` · ${String(avis.pqp.note).replace('.', ',')}/5 sur ${avis.pqp.count ?? '…'} avis Plus que pro` : ''}.
           </small>
         </span>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BadgeCheck, Camera, ChevronLeft, Crown, ChevronRight, Clock3, Expand, HeartHandshake, MessageSquareQuote, Search, ShieldCheck, Sparkles, Star, TrendingUp, X, Zap } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, Crown, Mail, ChevronRight, Clock3, Expand, HeartHandshake, MessageSquareQuote, Search, ShieldCheck, Sparkles, Star, TrendingUp, X, Zap } from 'lucide-react';
 import type { AvisData, Review } from '@/lib/avis';
 
 /** Étoiles (pleines / vides), animées une à une. */
@@ -153,8 +153,9 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
                 <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important</span>
                 <img src="/avis/qr-plusquepro.jpg" alt="" className="ap-step-qr" />
                 <div>
-                  <strong>Plus que pro · dans 2 semaines</strong>
-                  <p>Votre avis <b>certifié</b> sur <b>la formation et son contenu</b> : notez le contenu pédagogique, le matériel, le formateur, l’organisation et les objectifs, <b>2 semaines après</b>, avec le recul du terrain.</p>
+                  <strong>Plus que pro · maintenant, puis dans 2 semaines</strong>
+                  <p><b>1. Maintenant</b> : scannez le QR code et remplissez le petit formulaire, <b>tout de suite</b>.</p>
+                  <p><b>2. Dans 2 semaines</b> : vous recevez <b>un e-mail de Plus que pro</b> pour donner votre avis <b>certifié</b> sur <b>la formation et son contenu</b> (contenu pédagogique, matériel, formateur, organisation, objectifs), avec le recul du terrain.</p>
                   <p className="ap-cert"><BadgeCheck size={16} aria-hidden /> Avis contrôlés : déposés par de vrais stagiaires, ni modifiables ni supprimables.</p>
                 </div>
               </li>
@@ -167,7 +168,7 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
                 </div>
               </li>
             </ol>
-            <p className="ap-tip" style={{ animationDelay: '0.8s' }}><Camera size={20} aria-hidden /> Astuce : prenez le QR code <b>Plus que pro en photo dès maintenant</b>, vous l’aurez sous la main dans 2 semaines.</p>
+            <p className="ap-tip" style={{ animationDelay: '0.8s' }}><Mail size={20} aria-hidden /> <span>Dans 2 semaines, <b>surveillez vos e-mails</b> (et vos courriers indésirables) : le message de Plus que pro arrive, 2 minutes suffisent pour répondre.</span></p>
           </section>
         )}
 
@@ -206,11 +207,11 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
             <h2 className="ap-h2">À vous de <span className="ap-hl">jouer</span>&nbsp;!</h2>
             <div className="ap-qrs">
               <figure className="ap-main" style={{ animationDelay: '0.1s' }}>
-                <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important · dans 2 semaines</span>
+                <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important · à remplir maintenant</span>
                 <img src="/avis/qr-plusquepro.jpg" alt="QR code avis Plus que pro" />
               </figure>
               <figure style={{ animationDelay: '0.3s' }}>
-                <span className="ap-step-badge google"><Zap size={16} aria-hidden /> En plus · aujourd’hui</span>
+                <span className="ap-step-badge google"><Zap size={16} aria-hidden /> En plus · à la fin de la formation</span>
                 <img src="/avis/qr-google.jpg" alt="QR code avis Google" />
               </figure>
             </div>
