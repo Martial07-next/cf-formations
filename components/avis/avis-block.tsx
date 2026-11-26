@@ -19,20 +19,20 @@ export function AvisBlock({ avis }: { avis: AvisData }) {
         <span className="doc-item-main">
           <strong>Avis clients · « Votre avis compte ! »</strong>
           <small className="hint">
-            À présenter au début de chaque session : QR code <b>Google</b> (avis à chaud) et <b>Plus que pro</b> (avis à froid, 2 semaines après)
+            À présenter au début de chaque session : <b>Plus que pro</b> en priorité (avis certifié sur la formation et son contenu, 2 semaines après), et <b>Google</b> (avis général, à chaud)
             {avis.pqp.note != null ? ` · ${String(avis.pqp.note).replace('.', ',')}/5 sur ${avis.pqp.count ?? '…'} avis Plus que pro` : ''}.
           </small>
         </span>
         <span className="avis-thumbs" aria-hidden>
-          <img src="/avis/qr-google.jpg" alt="" />
           <img src="/avis/qr-plusquepro.jpg" alt="" />
+          <img src="/avis/qr-google.jpg" alt="" />
         </span>
         <span className="row-actions">
           <button type="button" className="small primary" onClick={() => setOpen(true)}>
             <MonitorPlay size={14} aria-hidden /> Présenter aux stagiaires
           </button>
-          <a className="btn small" href="/avis/qr-google.jpg" target="_blank" rel="noreferrer" title="Affiche QR code Google (à imprimer ou afficher)"><QrCode size={13} aria-hidden /> Google</a>
           <a className="btn small" href="/avis/qr-plusquepro.jpg" target="_blank" rel="noreferrer" title="Affiche QR code Plus que pro (à imprimer ou afficher)"><QrCode size={13} aria-hidden /> Plus que pro</a>
+          <a className="btn small" href="/avis/qr-google.jpg" target="_blank" rel="noreferrer" title="Affiche QR code Google (à imprimer ou afficher)"><QrCode size={13} aria-hidden /> Google</a>
           <a className="btn small ghost" href="/avis/attestation-plusquepro.pdf" target="_blank" rel="noreferrer" title="Attestation Plus que pro (note et derniers avis)"><FileText size={13} aria-hidden /> Attestation</a>
         </span>
       </div>

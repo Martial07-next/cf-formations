@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, ChevronLeft, ChevronRight, Clock3, Expand, HeartHandshake, MessageSquareQuote, Search, ShieldCheck, Sparkles, Star, TrendingUp, X, Zap } from 'lucide-react';
+import { BadgeCheck, Camera, ChevronLeft, Crown, ChevronRight, Clock3, Expand, HeartHandshake, MessageSquareQuote, Search, ShieldCheck, Sparkles, Star, TrendingUp, X, Zap } from 'lucide-react';
 import type { AvisData, Review } from '@/lib/avis';
 
 /** Étoiles (pleines / vides), animées une à une. */
@@ -138,7 +138,7 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
             {avis.pqp.note != null && (
               <div className="ap-stats">
                 <span><b><Count to={avis.pqp.note} decimals={1} /><i>/5</i></b><small>note moyenne</small></span>
-                {avis.pqp.count != null && <span><b><Count to={avis.pqp.count} /></b><small>avis vérifiés</small></span>}
+                {avis.pqp.count != null && <span><b><Count to={avis.pqp.count} /></b><small>avis certifiés Plus que pro</small></span>}
                 {avis.pqp.recommandation != null && <span><b><Count to={avis.pqp.recommandation} suffix=" %" /></b><small>recommandent CF Réseaux</small></span>}
               </div>
             )}
@@ -149,24 +149,25 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
           <section className="ap-slide">
             <h2 className="ap-h2">Comment ça <span className="ap-hl">marche</span>&nbsp;?</h2>
             <ol className="ap-steps">
-              <li style={{ animationDelay: '0.15s' }}>
-                <span className="ap-step-badge google"><Zap size={18} aria-hidden /> À chaud</span>
-                <img src="/avis/qr-google.jpg" alt="" className="ap-step-qr" />
+              <li className="ap-main" style={{ animationDelay: '0.15s' }}>
+                <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important</span>
+                <img src="/avis/qr-plusquepro.jpg" alt="" className="ap-step-qr" />
                 <div>
-                  <strong>Aujourd’hui · Google</strong>
-                  <p>Scannez le QR code <b>Google</b> et laissez votre avis <b>à la fin de la formation</b> : l’accueil, l’ambiance, votre formateur, l’organisation.</p>
+                  <strong>Plus que pro · dans 2 semaines</strong>
+                  <p>Votre avis <b>certifié</b> sur <b>la formation et son contenu</b> : notez le contenu pédagogique, le matériel, le formateur, l’organisation et les objectifs, <b>2 semaines après</b>, avec le recul du terrain.</p>
+                  <p className="ap-cert"><BadgeCheck size={16} aria-hidden /> Avis contrôlés : déposés par de vrais stagiaires, ni modifiables ni supprimables.</p>
                 </div>
               </li>
               <li style={{ animationDelay: '0.45s' }}>
-                <span className="ap-step-badge pqp"><Clock3 size={18} aria-hidden /> À froid</span>
-                <img src="/avis/qr-plusquepro.jpg" alt="" className="ap-step-qr" />
+                <span className="ap-step-badge google"><Zap size={16} aria-hidden /> En plus · à chaud</span>
+                <img src="/avis/qr-google.jpg" alt="" className="ap-step-qr" />
                 <div>
-                  <strong>Dans 2 semaines · Plus que pro</strong>
-                  <p>Avec le QR code <b>Plus que pro</b>, donnez votre avis <b>2 semaines après</b> : ce que la formation vous apporte vraiment sur le terrain.</p>
+                  <strong>Google · aujourd’hui</strong>
+                  <p>Un avis plus <b>général sur CF Réseaux</b>, à la fin de la formation : l’accueil, l’ambiance, les locaux. Il aide les entreprises à nous trouver.</p>
                 </div>
               </li>
             </ol>
-            <p className="ap-tip" style={{ animationDelay: '0.8s' }}><Camera size={20} aria-hidden /> Astuce : prenez les deux QR codes <b>en photo dès maintenant</b>, vous les aurez sous la main le moment venu.</p>
+            <p className="ap-tip" style={{ animationDelay: '0.8s' }}><Camera size={20} aria-hidden /> Astuce : prenez le QR code <b>Plus que pro en photo dès maintenant</b>, vous l’aurez sous la main dans 2 semaines.</p>
           </section>
         )}
 
@@ -174,7 +175,7 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
           <section className="ap-slide">
             <h2 className="ap-h2"><MessageSquareQuote size={30} aria-hidden /> Ils sont passés <span className="ap-hl">avant vous</span></h2>
             <p className="ap-source">
-              Derniers avis vérifiés Plus que pro
+              Derniers avis certifiés Plus que pro, sur nos formations
               {avis.pqp.note != null && <b> · {String(avis.pqp.note).replace('.', ',')}/5{avis.pqp.count ? ` sur ${avis.pqp.count} avis` : ''}</b>}
             </p>
             <div className="ap-reviews">
@@ -204,13 +205,13 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
           <section className="ap-slide ap-center">
             <h2 className="ap-h2">À vous de <span className="ap-hl">jouer</span>&nbsp;!</h2>
             <div className="ap-qrs">
-              <figure style={{ animationDelay: '0.1s' }}>
-                <span className="ap-step-badge google"><Zap size={16} aria-hidden /> À chaud · aujourd’hui</span>
-                <img src="/avis/qr-google.jpg" alt="QR code avis Google" />
+              <figure className="ap-main" style={{ animationDelay: '0.1s' }}>
+                <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important · dans 2 semaines</span>
+                <img src="/avis/qr-plusquepro.jpg" alt="QR code avis Plus que pro" />
               </figure>
               <figure style={{ animationDelay: '0.3s' }}>
-                <span className="ap-step-badge pqp"><Clock3 size={16} aria-hidden /> À froid · dans 2 semaines</span>
-                <img src="/avis/qr-plusquepro.jpg" alt="QR code avis Plus que pro" />
+                <span className="ap-step-badge google"><Zap size={16} aria-hidden /> En plus · aujourd’hui</span>
+                <img src="/avis/qr-google.jpg" alt="QR code avis Google" />
               </figure>
             </div>
             <p className="ap-thanks">Merci, et bonne formation ! <Stars size={22} /></p>

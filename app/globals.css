@@ -2632,3 +2632,9 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .avis-row-head{display:flex;gap:8px;align-items:center}
 .ap-nowrap{white-space:nowrap}
 .ap-stats b i{font-style:normal;font-size:20px;color:rgba(255,255,255,.75);margin-left:2px}
+.ap-steps li.ap-main{border:2px solid #ff7a1a;background:rgba(255,122,26,.12);box-shadow:0 0 0 6px rgba(255,122,26,.08)}
+.ap-cert{display:flex;align-items:center;gap:6px;margin-top:8px !important;font-size:14px !important;color:#ffd2b0 !important;font-weight:700}
+.ap-qrs figure.ap-main img{outline:5px solid #ff7a1a;outline-offset:6px}
+.ap-qrs figure.ap-main{transform-origin:center}
+.ap-qrs figure:not(.ap-main) img{height:min(48vh,460px);opacity:.92}
+.ap-qrs{align-items:center}
