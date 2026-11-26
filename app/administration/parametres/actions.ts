@@ -90,3 +90,18 @@ export async function testDigiformaConnection(): Promise<DigiformaTestResult> {
     return { ok: false, error: e.message };
   }
 }
+
+/** Avis clients présentés aux stagiaires (migration 77) : notes et 5 derniers avis Google / Plus que pro. */
+export async function saveAvis(avis: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { requireAdmin } = await import('@/lib/auth');
+  if (!(await requireAdmin())) return { ok: false, error: 'Action réservée à l’administrateur.' };
+  const json = JSON.stringify(avis ?? null);
+  if (json.length > 60_000) return { ok: false, error: 'Avis trop longs.' };
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const { error } = await supabase.from('app_settings').update({ avis: JSON.parse(json) }).eq('id', true);
+  if (error) return { ok: false, error: /avis|schema cache/i.test(error.message) ? 'Exécute d’abord la migration 77 (supabase/migration_phase77.sql) dans Supabase.' : error.message };
+  const { revalidatePath } = await import('next/cache');
+  revalidatePath('/administration/parametres');
+  return { ok: true };
+}

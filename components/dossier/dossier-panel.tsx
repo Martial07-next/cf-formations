@@ -38,6 +38,7 @@ import { EMARGEMENT_ENABLED } from '@/lib/features';
 import { AppreciationEditor } from '@/components/dossier/appreciation-editor';
 import { CERT_NATURES, certDone, isCertNature, type CertData, type CertNature } from '@/lib/certificat';
 import { saveCertificats } from '@/app/dossier/actions';
+import { AvisBlock } from '@/components/avis/avis-block';
 import { ReussiteEditor, reussiteInputs, type ReussiteSession } from '@/components/dossier/reussite-editor';
 import { TitleFiles, TitleQrButton, downloadAllTitles } from '@/components/dossier/titles';
 import { HabilitationEditor, type HabSession } from '@/components/dossier/habilitation-editor';
@@ -92,6 +93,7 @@ export function DossierPanel({
   me = null,
   habilitation = null,
   certificats = null,
+  avis = null,
   evalGrids = null,
 }: {
   sessionId: string;
@@ -127,6 +129,8 @@ export function DossierPanel({
   titleRequired?: boolean;
   /** Certificats d'habilitation électrique (migration 51) : symboles de la formation. */
   habilitation?: { session: Omit<HabSession, 'sessionId' | 'trainees'>; data: HabData | null } | null;
+  /** Avis clients (QR codes Google / Plus que pro et présentation aux stagiaires). */
+  avis?: import('@/lib/avis').AvisData | null;
   /** Certificats de réalisation (migration 72), bureau : null si non demandés. */
   certificats?: (Omit<import('@/lib/pdf-fin-formation').CertificatInput, 'trainees' | 'legal' | 'natures'> & { data: CertData | null; canDownload: boolean }) | null;
   /** Grilles d'évaluation pratique (IRVE : migration 63, Maintenance : 64) ; absente si sa migration manque. */
@@ -687,6 +691,8 @@ export function DossierPanel({
       <h3 className="sub-heading">
         Documents <span className="hint">({progress.documents.done}/{progress.documents.needed} obligatoires terminés)</span>
       </h3>
+      {/* Avis clients : QR codes et présentation, dans chaque session (au-dessus du tour de table). */}
+      {avis && <AvisBlock avis={avis} />}
       {tdt && (
         <div className="doc-list" style={{ marginBottom: documents.length ? 6 : 10 }}>
           <div className="doc-item">

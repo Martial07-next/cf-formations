@@ -2546,3 +2546,89 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .sc-titles{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;margin-top:2px;padding:1px 7px;border-radius:6px;background:#fff1d6;color:#8a4b00;border:1px solid #f3c77a;font-size:10.5px;font-weight:800;line-height:1.5}
 .chip-titles{color:#8a4b00}
 .density-tight .sc-titles{font-size:9.5px;padding:0 5px}
+
+/* Présentation « Votre avis compte ! » (avis Google / Plus que pro, plein écran). */
+.ap{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;background:#0f1a13;color:#fff;font-family:inherit;overflow:hidden}
+.ap-bg{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.ap-bg span{position:absolute;border-radius:50%;filter:blur(60px);opacity:.35;animation:apFloat 14s ease-in-out infinite}
+.ap-bg span:nth-child(1){width:46vw;height:46vw;left:-12vw;top:-14vw;background:#08fa64}
+.ap-bg span:nth-child(2){width:34vw;height:34vw;right:-8vw;bottom:-10vw;background:#c8f316;animation-delay:-5s}
+.ap-bg span:nth-child(3){width:22vw;height:22vw;right:28vw;top:12vh;background:#3ee08a;opacity:.18;animation-delay:-9s}
+@keyframes apFloat{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(3vw,2vh) scale(1.08)}}
+.ap-top{position:relative;display:flex;align-items:center;justify-content:space-between;padding:18px 26px}
+.ap-logo{height:30px;width:auto}
+.ap-tools{display:flex;gap:8px}
+.ap-btn{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+.ap-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4);color:#fff}
+.ap-btn:disabled{opacity:.3;cursor:default}
+.ap-next{background:#08fa64;border-color:#08fa64;color:#0f1a13}
+.ap-next:hover{background:#3ee08a;border-color:#3ee08a;color:#0f1a13}
+.ap-stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:0 5vw;min-height:0}
+.ap-slide{width:min(1180px,100%);display:flex;flex-direction:column;gap:22px;animation:apIn .55s cubic-bezier(.2,.8,.2,1) both;max-height:100%;overflow:auto;padding:6px 2px}
+.ap-center{align-items:center;text-align:center}
+@keyframes apIn{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
+.ap-kicker{display:inline-flex;align-items:center;gap:8px;margin:0;color:#c8f316;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:15px}
+.ap-title{margin:0;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;font-size:clamp(40px,7vw,96px);line-height:1;letter-spacing:-.01em}
+.ap-h2{margin:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:'CF Archivo Expanded',sans-serif;font-weight:700;font-size:clamp(26px,3.6vw,48px);line-height:1.1}
+.ap-center .ap-h2{justify-content:center}
+.ap-hl{background:linear-gradient(90deg,#fff200,#08fa64);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ap-sub{margin:0;font-size:clamp(17px,1.8vw,24px);color:rgba(255,255,255,.82);max-width:760px}
+.ap-stars{display:inline-flex;gap:6px}
+.ap-stars svg{color:rgba(255,255,255,.2);fill:currentColor}
+.ap-stars svg.on{color:#08fa64}
+.ap-stars.pop svg{animation:apPop .5s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes apPop{from{opacity:0;transform:scale(0) rotate(-40deg)}to{opacity:1;transform:none}}
+.ap-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.ap-card{display:flex;flex-direction:column;gap:8px;padding:20px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);animation:apIn .55s both}
+.ap-card strong{font-size:19px}
+.ap-card small{font-size:15px;line-height:1.45;color:rgba(255,255,255,.75)}
+.ap-card-icon{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:14px;background:#08fa64;color:#0f1a13}
+.ap-stats{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.ap-stats span{display:flex;flex-direction:column;align-items:center;min-width:170px;padding:12px 20px;border-radius:16px;background:rgba(8,250,100,.1);border:1px solid rgba(8,250,100,.35);font-size:20px;font-weight:700}
+.ap-stats b{font-family:'CF Archivo Expanded',sans-serif;font-size:42px;color:#08fa64;line-height:1.1}
+.ap-stats small{font-size:13px;color:rgba(255,255,255,.7);font-weight:600}
+.ap-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.ap-steps li{position:relative;display:flex;gap:16px;align-items:center;padding:22px 20px 20px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);animation:apIn .6s both}
+.ap-steps strong{display:block;font-size:22px;margin-bottom:6px}
+.ap-steps p{margin:0;font-size:16.5px;line-height:1.5;color:rgba(255,255,255,.82)}
+.ap-step-qr{width:120px;height:auto;border-radius:12px;flex-shrink:0;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.ap-step-badge{position:absolute;top:-13px;left:18px;display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:999px;font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.ap-step-badge.google{background:#fff;color:#0f1a13}
+.ap-step-badge.pqp{background:#ff7a1a;color:#fff}
+.ap-tip{display:flex;align-items:center;gap:10px;margin:0;padding:14px 18px;border-radius:14px;background:rgba(200,243,22,.12);border:1px dashed rgba(200,243,22,.6);font-size:17px;animation:apIn .6s both}
+.ap-source{margin:-8px 0 0;color:rgba(255,255,255,.75);font-size:16px}
+.ap-source b{color:#08fa64}
+.ap-reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.ap-review{margin:0;display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:18px;background:#fff;color:#17241b;box-shadow:0 14px 34px rgba(0,0,0,.3);animation:apIn .6s both}
+.ap-review blockquote{margin:0;font-size:17px;line-height:1.45;font-weight:600}
+.ap-review figcaption{font-size:13px;color:#4a5a50}
+.ap-review figcaption strong{color:#17241b}
+.ap-review .ap-stars svg{color:#d9e3dc}
+.ap-review .ap-stars svg.on{color:#22c46f}
+.ap-review.pqp{border-top:5px solid #ff7a1a}
+.ap-review.google{border-top:5px solid #4285f4}
+.ap-qrs{display:flex;gap:4vw;justify-content:center;flex-wrap:wrap}
+.ap-qrs figure{position:relative;margin:0;animation:apIn .6s both}
+.ap-qrs img{height:min(58vh,560px);width:auto;border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.ap-qrs .ap-step-badge{left:50%;transform:translateX(-50%);white-space:nowrap;z-index:1}
+.ap-thanks{display:flex;align-items:center;gap:12px;margin:0;font-size:22px;font-weight:700}
+.ap-nav{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 26px 20px}
+.ap-dots{display:flex;gap:8px}
+.ap-dots button{width:10px;height:10px;min-height:0;padding:0;border-radius:999px;border:0;background:rgba(255,255,255,.3);cursor:pointer;transition:width .25s}
+.ap-dots button.on{width:30px;background:#08fa64}
+@media (max-width:900px){.ap-cards{grid-template-columns:1fr 1fr}.ap-steps{grid-template-columns:1fr}.ap-steps li{flex-direction:column;align-items:flex-start}}
+@media (max-width:560px){.ap-cards{grid-template-columns:1fr}.ap-qrs img{height:auto;width:80vw}.ap-top,.ap-nav{padding:12px 14px}}
+@media (prefers-reduced-motion:reduce){.ap *{animation:none !important}}
+.avis-block .doc-item{flex-wrap:wrap}
+.avis-thumbs{display:inline-flex;gap:4px}
+.avis-thumbs img{height:46px;width:auto;border-radius:5px;border:1px solid var(--line)}
+@media (max-width:640px){.avis-thumbs{display:none}}
+.avis-src{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:12px 0 0;display:flex;flex-direction:column;gap:10px}
+.avis-src legend{font-weight:800;padding:0 6px}
+.avis-src-head{display:flex;gap:12px;flex-wrap:wrap}
+.avis-src-head label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.avis-src .input{min-height:34px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;width:100%}
+.avis-row{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--surface-2)}
+.avis-row-head{display:flex;gap:8px;align-items:center}
+.ap-nowrap{white-space:nowrap}
+.ap-stats b i{font-style:normal;font-size:20px;color:rgba(255,255,255,.75);margin-left:2px}

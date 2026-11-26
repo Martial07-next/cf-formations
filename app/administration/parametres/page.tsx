@@ -1,6 +1,8 @@
 import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 import { AdminTabs } from '@/components/admin-tabs';
 import { SettingsForm } from '@/components/settings-form';
+import { AvisSettings } from '@/components/avis/avis-settings';
+import { mergeAvis } from '@/lib/avis';
 
 export default async function ParametresPage() {
   const supabase = await createClient();
@@ -39,6 +41,7 @@ export default async function ParametresPage() {
             }
           }
         />
+        <AvisSettings initial={mergeAvis((settings as any)?.avis)} />
       </section>
     </main>
   );

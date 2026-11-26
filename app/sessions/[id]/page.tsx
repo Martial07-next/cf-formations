@@ -22,6 +22,7 @@ import { SessionDetailView } from '@/components/session-detail';
 import { compareRooms, trainingPlace, buildingAddress, streetAddress } from '@/lib/buildings';
 import { appreciationRequired, codificationOf } from '@/lib/appreciation';
 import { perimetreOf } from '@/lib/perimetres';
+import { loadAvis } from '@/lib/avis-server';
 import { formatSessionPeriod, sessionHours, formatHours, weekdaysBetween, dayHours, dayModuleName } from '@/lib/week';
 import { countDays } from '@/lib/schedule';
 import { isClosedHoliday } from '@/lib/holidays';
@@ -155,6 +156,8 @@ export default async function SessionDetailPage({
   };
 
   // Lectures indépendantes lancées toutes ensemble (au lieu de l'une après l'autre).
+  // Avis clients (QR codes et présentation « Votre avis compte ! ») : lus pendant le reste.
+  const avisP = loadAvis(supabase).catch(() => null);
   // Catalogue (changement de formation) et lien Digiforma : lus pendant le reste.
   const catalogP = editable
     ? start(supabase.from('templates').select('id, title, category, duration_hours').order('title')).then(({ data }) => withoutSessionOnly(supabase, (data as any[]) || []))
@@ -648,6 +651,7 @@ export default async function SessionDetailPage({
                         : null,
                     }
               }
+              avis={await avisP}
               certificats={
                 // Certificats de réalisation (migration 72) : rempli par le formateur, téléchargé par le bureau.
                 (tplOpt as any)?.certificat_realisation
