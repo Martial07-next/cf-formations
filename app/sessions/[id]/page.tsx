@@ -292,6 +292,8 @@ export default async function SessionDetailPage({
   const dayTrainers = dayTrainerMap[id] || {};
   const { data: periodAbsences } = await early.absences;
   const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
+  // Documents (attestations, grilles, fiches) : seul le formateur principal y figure, jamais un remplaçant
+  // ni un certificateur externe venu un jour. Les remplaçants restent affichés sur la fiche.
   const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
   let { data: dfRow, error: dfError } = await early.digiforma;
   if (dfError) ({ data: dfRow, error: dfError } = await supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle());
@@ -309,6 +311,29 @@ export default async function SessionDetailPage({
   // Une série d'attestations par modèle (P1, P2, P3… toujours séparées) : le
   // module de la session du même nom donne les dates, la durée et les stagiaires.
   const allDays = dayHours(session.start_at, session.end_at, (dayRows as any) || []);
+  // Certificats de réalisation : action suivie, durée et dates propres à chaque stagiaire
+  // quand il ne suit qu'une partie des modules (modules cochés sur Digiforma / sur la fiche).
+  const certPerTrainee: Record<string, { action: string; hours: number; days: number; startDate: string; endDate: string }> = {};
+  {
+    const mods = ((modules as any[]) || []) as { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[];
+    for (const t of validatedTrainees) {
+      const ids = traineeModules[t.id];
+      if (!ids?.length || !mods.length) continue;
+      const mine = mods.filter((m) => ids.includes(m.id)).sort((a, b) => String(a.start_day).localeCompare(String(b.start_day)));
+      if (!mine.length || mine.length === mods.length) continue;
+      const days = allDays.filter((d) => mine.some((m) => d.day >= String(m.start_day).slice(0, 10) && d.day <= String(m.end_day).slice(0, 10)));
+      // Module découpé par l'émargement (« INITIAL · Lun. 16/11 → … ») : son nom d'origine.
+      const names = [...new Set(mine.map((m) => String(m.name).split(' · ')[0].trim()))];
+      const fromModules = mine.reduce((n, m) => n + (Number(m.duration_hours) || 0), 0);
+      certPerTrainee[t.id] = {
+        action: names.join(' + '),
+        hours: fromModules || Math.round((days.reduce((n, d) => n + d.minutes, 0) / 60) * 100) / 100,
+        days: countDays(days.map((d) => d.minutes)),
+        startDate: String(mine[0].start_day).slice(0, 10),
+        endDate: mine.map((m) => String(m.end_day).slice(0, 10)).sort().reverse()[0],
+      };
+    }
+  }
   const durationText = (h: number, d: number) => `${formatHours(h)} (${String(d).replace('.', ',')} jour${d > 1 ? 's' : ''})`;
   const arSeries = arModels.map((model) => {
     const mods = reussiteModules(model, ((modules as any[]) || []) as { id: string; name: string; start_day: string; end_day: string; duration_hours: number | null }[]);
@@ -558,7 +583,7 @@ export default async function SessionDetailPage({
                         session.start_at.slice(0, 10) === session.end_at.slice(0, 10)
                           ? `Le ${session.start_at.slice(0, 10).split('-').reverse().join('/')}`
                           : `Du ${session.start_at.slice(0, 10).split('-').reverse().join('/')} au ${session.end_at.slice(0, 10).split('-').reverse().join('/')}`,
-                      trainer: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || '',
+                      trainer: (trainer?.full_name || '') || '',
                     }
                   : null
               }
@@ -609,7 +634,7 @@ export default async function SessionDetailPage({
                             : streetAddress(room)
                               ? `Centre CF RÉSEAUX - ${streetAddress(room)}`
                               : null,
-                        trainerName: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                        trainerName: (trainer?.full_name || '') || null,
                       },
                       data: ((arRow as any)?.data as any) || null,
                     }
@@ -627,7 +652,7 @@ export default async function SessionDetailPage({
                       startDate: session.start_at.slice(0, 10),
                       endDate: session.end_at.slice(0, 10),
                       lieu: room?.is_holding ? null : buildingAddress(room),
-                      trainerNames: [trainer?.full_name, ...replacementNames].filter(Boolean).join(', ') || null,
+                      trainerNames: (trainer?.full_name || '') || null,
                       // Attestation / appréciation des compétences : bureau et administrateur uniquement.
                       finFormation: editable
                         ? {
@@ -664,6 +689,7 @@ export default async function SessionDetailPage({
                       days: countDays(dayHours(session.start_at, session.end_at, (dayRows as any) || []).map((d) => d.minutes)),
                       hours,
                       hoursRecyclage: (tplOpt as any)?.duration_hours_recyclage ?? null,
+                      perTrainee: certPerTrainee,
                       representant: REUSSITE_SIGNATAIRE,
                       agrement: ((settings as any)?.agrement as string) || 'CTST-2026-27/1/P',
                       cachet: ((settings as any)?.cachet_image as string) || null,

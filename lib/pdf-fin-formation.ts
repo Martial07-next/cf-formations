@@ -727,6 +727,8 @@ export type CertificatInput = {
   legal?: Legal | null;
   /** Nature de l'action choisie par le formateur, par stagiaire. */
   natures?: Record<string, string | null | undefined>;
+  /** Stagiaire qui ne suit qu'une partie des modules : son action, sa durée et ses dates. */
+  perTrainee?: Record<string, { action: string; hours: number; days: number; startDate: string; endDate: string }>;
 };
 
 export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8Array> {
@@ -758,7 +760,8 @@ export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8
     text(page, `M./Mme → ${t.name}`, 23.1, y, 13.88, f.bold);
     const company = t.company && !/^particulier$/i.test(t.company.trim()) ? t.company : null;
     y = labelValue(page, { text: company ? 'Salarié(e) de l’entreprise → ' : 'Statut → ', font: f.semibold }, { text: company ? company.toUpperCase() : 'Particulier', font: f.regular }, 12.88, y - step - 1, 18);
-    y = labelValue(page, { text: 'a suivi l’action → ', font: f.semibold }, { text: codificationFor(input.actionTitle, t.cursus), font: f.regular }, 12.88, y - step - 1, 18);
+    const own = input.perTrainee?.[t.id] || null;
+    y = labelValue(page, { text: 'a suivi l’action → ', font: f.semibold }, { text: codificationFor(own?.action || input.actionTitle, t.cursus), font: f.regular }, 12.88, y - step - 1, 18);
 
     // Nature de l'action
     y -= 34;
@@ -781,12 +784,13 @@ export async function buildCertificatsPdf(input: CertificatInput): Promise<Uint8
     y -= 34;
     heading(page, ctx, 'DÉROULEMENT DE L’ACTION', y);
     y -= 22;
-    const recH = t.cursus === 'recyclage' && input.hoursRecyclage ? Number(input.hoursRecyclage) : null;
+    // Modules suivis par le stagiaire (si une partie seulement) : leurs dates et leur durée.
+    const recH = !own && t.cursus === 'recyclage' && input.hoursRecyclage ? Number(input.hoursRecyclage) : null;
     const recDays = recH ? Math.max(0.5, Math.round((recH / 7) * 2) / 2) : null;
-    const period = longPeriod(input.startDate, input.endDate);
+    const period = longPeriod(own?.startDate || input.startDate, own?.endDate || input.endDate);
     text(page, `qui s’est déroulée → ${period.charAt(0).toLowerCase()}${period.slice(1)}`, 23.1, y, B, f.bold);
     y -= step;
-    text(page, `pour une durée de → ${hoursText(recH ?? input.hours)} (${formatDays(recDays ?? input.days)}) ²`, 23.1, y, B, f.bold);
+    text(page, `pour une durée de → ${hoursText(own?.hours ?? recH ?? input.hours)} (${formatDays(own?.days ?? recDays ?? input.days)}) ²`, 23.1, y, B, f.bold);
 
     // Conservation des pièces (mention du modèle officiel)
     y -= 28;

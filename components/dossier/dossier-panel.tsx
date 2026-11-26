@@ -1003,6 +1003,11 @@ export function DossierPanel({
                 <span>
                   <strong>{t.name}</strong>
                   {t.company && <small className="hint">{t.company}</small>}
+                  {certificats.perTrainee?.[t.id] && (
+                    <small className="hint" title="Le stagiaire ne suit qu’une partie des modules : action, dates et durée du certificat adaptées">
+                      Action suivie : {certificats.perTrainee[t.id].action} · {certificats.perTrainee[t.id].hours} h
+                    </small>
+                  )}
                 </span>
                 <span className="row-actions">
                   <select

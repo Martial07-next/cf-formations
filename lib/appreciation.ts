@@ -30,5 +30,8 @@ export type Cursus = 'initial' | 'recyclage';
 /** Codification de la fiche précédée de INITIALE / RECYCLAGE (formations disponibles en recyclage). */
 export function codificationFor(codification: string, cursus?: Cursus | null): string {
   if (!cursus) return codification;
+  // Déjà écrit dans l'intitulé (ex. module Digiforma « RECYCLAGE ACC BT CIS ») : pas en double.
+  const plain = codification.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/\b(recyclage|initiale?)\b/.test(plain)) return codification;
   return `${cursus === 'recyclage' ? 'RECYCLAGE' : 'INITIALE'} ${codification}`;
 }
