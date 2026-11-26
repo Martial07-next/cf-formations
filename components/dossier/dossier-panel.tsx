@@ -19,6 +19,8 @@ import {
   X,
   Award,
   IdCard,
+  Eye,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   ensureSignToken,
@@ -209,7 +211,9 @@ export function DossierPanel({
   async function setNature(ids: string[], nature: CertNature | null) {
     const next: CertData = { trainees: { ...(certData.trainees || {}) } };
     for (const id of ids) {
-      if (nature) next.trainees![id] = { nature };
+      const cur = next.trainees![id] || {};
+      if (nature) next.trainees![id] = { ...cur, nature };
+      else if (cur.fix) next.trainees![id] = { fix: cur.fix };
       else delete next.trainees![id];
     }
     const prev = certData;
@@ -219,6 +223,80 @@ export function DossierPanel({
       setCertData(prev);
       setError(r.error);
     } else router.refresh();
+  }
+  // Valeurs du certificat de chaque stagiaire : calculées (modules suivis), puis corrigées par le formateur.
+  const certBase = (id: string) =>
+    certificats?.perTrainee?.[id] || (certificats ? { action: certificats.actionTitle, startDate: certificats.startDate, endDate: certificats.endDate, hours: certificats.hours, days: certificats.days } : null);
+  const certValues = (id: string) => {
+    const base = certBase(id);
+    const fix = certData.trainees?.[id]?.fix;
+    if (!base || !fix) return base;
+    return {
+      action: fix.action || base.action,
+      startDate: fix.startDate || base.startDate,
+      endDate: fix.endDate || base.endDate,
+      hours: fix.hours ?? base.hours,
+      days: fix.hours != null ? Math.max(0.5, Math.round((fix.hours / 7) * 2) / 2) : base.days,
+    };
+  };
+  const certPer = () => Object.fromEntries(trainees.filter((t) => certificats?.perTrainee?.[t.id] || certData.trainees?.[t.id]?.fix).map((t) => [t.id, certValues(t.id)!]));
+  // « Erreur constatée » : formulaire de correction ouvert pour un stagiaire.
+  const [certFixing, setCertFixing] = useState<string | null>(null);
+  const [fixDraft, setFixDraft] = useState<{ action: string; startDate: string; endDate: string; hours: string; note: string }>({ action: '', startDate: '', endDate: '', hours: '', note: '' });
+  function openFix(id: string) {
+    const v = certValues(id);
+    setFixDraft({ action: v?.action || '', startDate: v?.startDate || '', endDate: v?.endDate || '', hours: v ? String(v.hours) : '', note: certData.trainees?.[id]?.fix?.note || '' });
+    setCertFixing(id);
+  }
+  async function saveFix(id: string, clear = false) {
+    const next: CertData = { trainees: { ...(certData.trainees || {}) } };
+    const cur = next.trainees![id] || {};
+    if (clear) {
+      const { fix: _f, ...rest } = cur;
+      if (rest.nature) next.trainees![id] = rest;
+      else delete next.trainees![id];
+    } else {
+      next.trainees![id] = {
+        ...cur,
+        fix: {
+          action: fixDraft.action.trim(),
+          startDate: fixDraft.startDate,
+          endDate: fixDraft.endDate,
+          hours: Number(String(fixDraft.hours).replace(',', '.')),
+          note: fixDraft.note.trim(),
+          by: me?.name || undefined,
+          at: new Date().toISOString().slice(0, 10),
+        },
+      };
+    }
+    const prev = certData;
+    setCertData(next);
+    setCertFixing(null);
+    const r = await saveCertificats(sessionId, next, certDone(next, trainees.map((t) => t.id)));
+    if (!r.ok) {
+      setCertData(prev);
+      setError(r.error);
+    } else router.refresh();
+  }
+  /** Aperçu du certificat d'un stagiaire (formateur et bureau), dans un nouvel onglet. */
+  async function previewCertificat(id: string) {
+    if (!certificats) return;
+    setError(null);
+    setBusy(`certv-${id}`);
+    const win = window.open('', '_blank');
+    try {
+      const m = await import('@/lib/pdf-fin-formation');
+      const list = trainees.filter((t) => t.id === id);
+      const bytes = await m.buildCertificatsPdf({ ...certificats, trainees: list, legal, natures: { [id]: natureOf(id) }, perTrainee: certPer() });
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+      if (win) win.location.href = url;
+      else window.open(url, '_blank');
+    } catch (e: any) {
+      win?.close();
+      setError(e?.message || 'Aperçu impossible.');
+    } finally {
+      setBusy(null);
+    }
   }
   async function downloadCertificats(only?: string) {
     if (!certificats) return;
@@ -230,7 +308,7 @@ export function DossierPanel({
       const list = only ? certReady.filter((t) => t.id === only) : certReady;
       if (!list.length) throw new Error('Le formateur n’a pas encore choisi la nature de l’action.');
       const natures = Object.fromEntries(list.map((t) => [t.id, natureOf(t.id)]));
-      const bytes = await m.buildCertificatsPdf({ ...certificats, trainees: list, legal, natures });
+      const bytes = await m.buildCertificatsPdf({ ...certificats, trainees: list, legal, natures, perTrainee: certPer() });
       downloadPdf(bytes, `Certificat${only ? '' : 's'} de réalisation${only ? ` - ${list[0]?.name}` : ''} - ${title}.pdf`);
     } catch (e: any) {
       setError(e?.message || 'Certificats impossibles à générer.');
@@ -459,7 +537,7 @@ export function DossierPanel({
       }
       if (certificats && certReady.length) {
         const m = await import('@/lib/pdf-fin-formation');
-        parts.push(await m.buildCertificatsPdf({ ...certificats, trainees: certReady, legal, natures: Object.fromEntries(certReady.map((t) => [t.id, natureOf(t.id)])) }));
+        parts.push(await m.buildCertificatsPdf({ ...certificats, trainees: certReady, legal, natures: Object.fromEntries(certReady.map((t) => [t.id, natureOf(t.id)])), perTrainee: certPer() }));
       }
       if (arSession && arTotal) {
         const { buildReussitePdf } = await import('@/lib/pdf-reussite');
@@ -998,14 +1076,23 @@ export function DossierPanel({
             </div>
           )}
           <div className="fin-list">
-            {trainees.map((t) => (
-              <div key={t.id} className="fin-row">
+            {trainees.map((t) => {
+              const v = certValues(t.id);
+              const fix = certData.trainees?.[t.id]?.fix;
+              const fr = (iso?: string) => (iso ? iso.split('-').reverse().join('/') : '');
+              return (
+              <div key={t.id} className={`fin-row cert-row${certFixing === t.id ? ' open' : ''}`}>
                 <span>
                   <strong>{t.name}</strong>
                   {t.company && <small className="hint">{t.company}</small>}
-                  {certificats.perTrainee?.[t.id] && (
-                    <small className="hint" title="Le stagiaire ne suit qu’une partie des modules : action, dates et durée du certificat adaptées">
-                      Action suivie : {certificats.perTrainee[t.id].action} · {certificats.perTrainee[t.id].hours} h
+                  {v && (certificats.perTrainee?.[t.id] || fix) && (
+                    <small className="hint" title="Action, dates et durée imprimées sur le certificat">
+                      Action suivie : {v.action} · {fr(v.startDate)}{v.endDate !== v.startDate ? ` → ${fr(v.endDate)}` : ''} · {String(v.hours).replace('.', ',')} h
+                    </small>
+                  )}
+                  {fix && (
+                    <small className="cert-fixed" title={fix.note || undefined}>
+                      Corrigé{fix.by ? ` par ${fix.by}` : ''}{fix.at ? ` le ${fr(fix.at)}` : ''}{fix.note ? ` · « ${fix.note} »` : ''}
                     </small>
                   )}
                 </span>
@@ -1022,14 +1109,59 @@ export function DossierPanel({
                       <option key={n.key} value={n.key}>{n.label.charAt(0).toUpperCase() + n.label.slice(1)}</option>
                     ))}
                   </select>
+                  <button className="small ghost" disabled={!!busy} onClick={() => previewCertificat(t.id)} title="Voir le certificat tel qu’il sera imprimé">
+                    {busy === `certv-${t.id}` ? <Loader2 size={13} className="spin" aria-hidden /> : <Eye size={13} aria-hidden />} Voir
+                  </button>
+                  {canFill && (
+                    <button className="small ghost cert-err" onClick={() => (certFixing === t.id ? setCertFixing(null) : openFix(t.id))} title="Une information du certificat est fausse : la corriger">
+                      <AlertTriangle size={13} aria-hidden /> Erreur constatée
+                    </button>
+                  )}
                   {certificats.canDownload && (
                     <button className="small" disabled={!natureOf(t.id) || !!busy} onClick={() => downloadCertificats(t.id)}>
                       {busy === `cert-${t.id}` ? <Loader2 size={13} className="spin" aria-hidden /> : <Download size={13} aria-hidden />} Certificat
                     </button>
                   )}
                 </span>
+                {certFixing === t.id && (
+                  <div className="cert-fix">
+                    <p className="hint" style={{ margin: 0 }}>Corrige ce qui est faux : la correction est imprimée sur le certificat de {t.name} et visible par le bureau.</p>
+                    <label className="cert-fix-wide">
+                      Action suivie
+                      <input className="input" value={fixDraft.action} onChange={(e) => setFixDraft((d) => ({ ...d, action: e.target.value }))} maxLength={200} />
+                    </label>
+                    <label>
+                      Du
+                      <input className="input" type="date" value={fixDraft.startDate} onChange={(e) => setFixDraft((d) => ({ ...d, startDate: e.target.value }))} />
+                    </label>
+                    <label>
+                      Au
+                      <input className="input" type="date" value={fixDraft.endDate} min={fixDraft.startDate || undefined} onChange={(e) => setFixDraft((d) => ({ ...d, endDate: e.target.value }))} />
+                    </label>
+                    <label>
+                      Durée (heures)
+                      <input className="input" type="number" step="0.5" min={0.5} value={fixDraft.hours} onChange={(e) => setFixDraft((d) => ({ ...d, hours: e.target.value }))} />
+                    </label>
+                    <label className="cert-fix-wide">
+                      Erreur constatée (facultatif)
+                      <input className="input" value={fixDraft.note} placeholder="Ex. le stagiaire n’a suivi que le recyclage" onChange={(e) => setFixDraft((d) => ({ ...d, note: e.target.value }))} maxLength={300} />
+                    </label>
+                    <div className="row-actions cert-fix-wide">
+                      <button
+                        className="small primary"
+                        disabled={!fixDraft.action.trim() || !fixDraft.startDate || !fixDraft.endDate || fixDraft.endDate < fixDraft.startDate || !(Number(String(fixDraft.hours).replace(',', '.')) > 0)}
+                        onClick={() => saveFix(t.id)}
+                      >
+                        Enregistrer la correction
+                      </button>
+                      <button className="small ghost" onClick={() => setCertFixing(null)}>Annuler</button>
+                      {fix && <button className="small ghost" onClick={() => saveFix(t.id, true)}>Revenir au calcul automatique</button>}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
           {certificats.canDownload && (
             <>

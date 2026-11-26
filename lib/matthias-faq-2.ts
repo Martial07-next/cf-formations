@@ -284,10 +284,12 @@ Le schéma du comité s'ajoute en **3e page** de l'appréciation des compétence
   {
     id: 'do-certif',
     q: 'Les certificats de réalisation',
-    keys: ['certificat de realisation', 'certificats de realisation', 'realisation', 'nature de l action', 'action de formation', 'bilan de competences', 'vae', 'apprentissage', 'certificat realisation'],
+    keys: ['certificat de realisation', 'certificats de realisation', 'realisation', 'nature de l action', 'action de formation', 'bilan de competences', 'vae', 'apprentissage', 'certificat realisation', 'erreur certificat', 'erreur constatee', 'corriger certificat', 'modifier action suivie'],
     a: `Si la case **« Certificats de réalisation »** est cochée (formation ou paramètres de la session), un cadre apparaît dans le dossier :
 - le **formateur choisit la nature de l'action** pour chaque stagiaire (action de formation, bilan de compétences, VAE, apprentissage) ; « Tous : action de formation » en un clic ;
 - le reste est rempli seul : stagiaire, entreprise (ou Particulier), action, dates, durée ;
+- **« Voir »** : le formateur (et le bureau) voit le certificat tel qu'il sera imprimé ;
+- **« Erreur constatée »** (formateur) : corrige l'**action suivie**, les **dates** et la **durée** d'un stagiaire (avec la raison) ; la correction est imprimée et signalée « Corrigé par … » ; « Revenir au calcul automatique » l'annule ;
 - le **bureau** télécharge les certificats (un ou tous), signés « Aurélie LANCELLE » avec le cachet.
 Ils comptent dans l'avancement du dossier.`,
   },

@@ -2648,3 +2648,15 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .ap-zoom-hint{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.75);font-size:14px;font-weight:600}
 @keyframes apZoomIn{from{opacity:0}to{opacity:1}}
 @keyframes apZoomImg{from{transform:scale(.85)}to{transform:none}}
+
+/* Certificats de réalisation : « Erreur constatée » (correction par le formateur). */
+.cert-row{flex-wrap:wrap}
+.cert-row.open{background:var(--surface-2);border-radius:10px}
+.cert-err{color:#8a4b00}
+.cert-fixed{display:inline-block;margin-top:2px;padding:1px 7px;border-radius:6px;background:#fff1d6;color:#8a4b00;font-size:11.5px;font-weight:700}
+.cert-fix{flex-basis:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;padding:10px 4px 4px;border-top:1px dashed var(--line-strong);margin-top:6px}
+.cert-fix label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.cert-fix .input{min-height:34px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-weight:500;color:var(--ink)}
+.cert-fix-wide{grid-column:1 / -1}
+.cert-fix > p{grid-column:1 / -1}
+@media (max-width:640px){.cert-fix{grid-template-columns:1fr}}

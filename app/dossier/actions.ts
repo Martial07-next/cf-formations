@@ -539,11 +539,14 @@ export async function getSessionForm(sessionId: string, kind: FormKind): Promise
 export async function saveCertificats(sessionId: string, data: unknown, completed: boolean): Promise<Result> {
   const r = await fillRights(sessionId);
   if (!r) return FORBIDDEN;
-  const { isCertNature } = await import('@/lib/certificat');
-  // Seules les natures connues sont gardées.
-  const trainees: Record<string, { nature: string }> = {};
+  const { isCertNature, cleanFix } = await import('@/lib/certificat');
+  // Seules les natures connues et les corrections valides (« Erreur constatée ») sont gardées.
+  const trainees: Record<string, { nature?: string; fix?: object }> = {};
   for (const [id, v] of Object.entries(((data as any)?.trainees as Record<string, any>) || {}).slice(0, 500)) {
-    if (/^[0-9a-f-]{36}$/i.test(id) && isCertNature(v?.nature)) trainees[id] = { nature: v.nature };
+    if (!/^[0-9a-f-]{36}$/i.test(id)) continue;
+    const fix = cleanFix(v?.fix);
+    const nature = isCertNature(v?.nature) ? v.nature : undefined;
+    if (nature || fix) trainees[id] = { ...(nature ? { nature } : {}), ...(fix ? { fix } : {}) };
   }
   const { data: before } = await r.supabase.from('session_forms').select('completed').eq('session_id', sessionId).eq('kind', 'certificat').maybeSingle();
   const now = new Date().toISOString();
