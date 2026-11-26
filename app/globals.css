@@ -2541,3 +2541,8 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .pw-doc{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:var(--cf-mint-soft);color:var(--cf-mint-ink);font-size:12px;font-weight:700}
 @media (max-width:640px){.pw-steps{padding:8px 12px 0}.pw-recap dl{grid-template-columns:1fr}.pw-toggle-extra,.pw-pad{padding-left:12px}}
 .pw-names input[type=radio]{accent-color:var(--cf-mint-strong);width:16px;height:16px;flex-shrink:0}
+
+/* Titres d'habilitation demandés (recyclage) : alerte sur la carte du planning. */
+.sc-titles{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;margin-top:2px;padding:1px 7px;border-radius:6px;background:#fff1d6;color:#8a4b00;border:1px solid #f3c77a;font-size:10.5px;font-weight:800;line-height:1.5}
+.chip-titles{color:#8a4b00}
+.density-tight .sc-titles{font-size:9.5px;padding:0 5px}

@@ -190,7 +190,8 @@ export function DossierPanel({
   const [titles, setTitles] = useState<TitleFile[]>(titleFiles || []);
   useEffect(() => setTitles(titleFiles || []), [titleFiles]);
   const titleOn = titleRequired && Boolean(tdt) && titleFiles !== null && !tdt?.data?.noTitle;
-  const hasTitle = (id: string) => !titleOn || titleOk(id, tdt, titles);
+  // Stagiaire en initiale : pas de titre précédent à fournir (seuls les recyclages le doivent).
+  const hasTitle = (id: string) => !titleOn || trainees.find((t) => t.id === id)?.cursus === 'initial' || titleOk(id, tdt, titles);
   const titleMissing = trainees.filter((t) => !hasTitle(t.id));
   // Stagiaires dont la fiche d'appréciation a un avis : documents de fin de formation prêts.
   const finReady = trainees.filter((t) => faiData?.trainees?.[t.id]?.avis);

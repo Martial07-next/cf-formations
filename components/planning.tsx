@@ -96,6 +96,7 @@ function SessionCard({
   replacement = null,
   reserved = 0,
   pendingSeats = 0,
+  missingTitles = 0,
   poec = null,
   by = null,
   mine = false,
@@ -120,6 +121,8 @@ function SessionCard({
   reserved?: number;
   /** Places d'entreprise en attente : ajoutées aux stagiaires en attente. */
   pendingSeats?: number;
+  /** Titres d'habilitation demandés (recyclage) pas encore fournis. */
+  missingTitles?: number;
   /** Parcours POEC auquel appartient la session. */
   poec?: string | null;
   /** Créée par (compte de l'équipe). */
@@ -168,6 +171,11 @@ function SessionCard({
       {absence && (
         <span className="sc-absence"><CalendarOff size={11} aria-hidden /> Formateur {absenceText(absence)}</span>
       )}
+      {missingTitles > 0 && (
+        <span className="sc-titles" title="Recyclage : titre d’habilitation actuel demandé (tour de table, fichier ou QR code). Sans titre, l’attestation reste bloquée.">
+          <AlertTriangle size={11} aria-hidden /> {missingTitles} titre{missingTitles > 1 ? 's' : ''} d’habilitation demandé{missingTitles > 1 ? 's' : ''}
+        </span>
+      )}
       {replacement && (
         <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
       )}
@@ -208,6 +216,7 @@ export function Planning({
   dayTrainers = {},
   reservedSeats = {},
   reservedPending = {},
+  missingTitles = {},
   poecTitles = {},
   createdBy = {},
   alerts = null,
@@ -249,6 +258,8 @@ export function Planning({
   reservedSeats?: Record<string, number>;
   /** Places d'entreprise en attente (hors capacité), par session. */
   reservedPending?: Record<string, number>;
+  /** Titres d'habilitation manquants par session (recyclage). */
+  missingTitles?: Record<string, number>;
   poecTitles?: Record<string, string>;
   createdBy?: Record<string, string>;
   /** Bandeau de relances (équipe). */
@@ -593,6 +604,7 @@ export function Planning({
         dossier={dossierBadge[s.id] || null}
         reserved={reservedSeats[s.id] || 0}
         pendingSeats={reservedPending[s.id] || 0}
+        missingTitles={missingTitles[s.id] || 0}
         poec={poecTitles[s.id] || null}
         by={createdBy[s.id] || null}
         replacement={dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
@@ -935,6 +947,7 @@ export function Planning({
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
                             {waitingCount(s) + (reservedPending[s.id] || 0) > 0 && <b className="chip-waiting" title="Stagiaires et places d’entreprise en attente"> · {waitingCount(s) + (reservedPending[s.id] || 0)} en attente</b>}
+                            {(missingTitles[s.id] || 0) > 0 && <b className="chip-titles" title="Titres d’habilitation demandés (recyclage) pas encore fournis"> · ⚠ {missingTitles[s.id]} titre{missingTitles[s.id] > 1 ? 's' : ''}</b>}
                           </span>
                           {createdBy[s.id] && <span className="chip-by">Créée par {createdBy[s.id]}</span>}
                         </Link>

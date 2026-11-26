@@ -23,6 +23,7 @@ import { isCompanyPeriod, isOffPeriod } from '@/lib/digiforma-sync';
 import { groupKeyOf, groupable, loadPlaceRefs, matchRoom, matchTrainer } from '@/lib/digiforma-place';
 import { MySessions, type MySession } from '@/components/my-sessions';
 import { computeDossierTodo } from '@/lib/dossier-todo';
+import { loadMissingTitles } from '@/lib/titles-missing';
 import { mondayOf, addDays, isoDate, firstOfMonth, monthWeekGrid, weekdaysBetween } from '@/lib/week';
 
 // Les imports de gros fichiers (plusieurs milliers de lignes) passent par les actions de cette page.
@@ -399,6 +400,7 @@ export default async function Page({
       })()
     : Promise.resolve(null);
   const { data: sessions } = await period.sessions;
+  const missingTitlesP = loadMissingTitles(supabase, (sessions as any[]) || []).catch(() => ({} as Record<string, number>));
   const sessionIdsEarly = ((sessions as any[]) || []).map((s) => s.id as string);
   // Données des sessions affichées, en parallèle elles aussi.
   const per = {
@@ -566,6 +568,8 @@ export default async function Page({
 
   // Remplaçants certains jours (migration 19).
   const dayTrainers = await per.dayTrainers;
+  // Titres d'habilitation manquants (recyclage) : petite alerte sur la carte.
+  const missingTitles = await missingTitlesP;
   // Places réservées par entreprise encore sans nom (migration 20).
   const reservations = await per.reservations;
   const reservedSeats: Record<string, number> = {};
@@ -621,6 +625,7 @@ export default async function Page({
         dayTrainers={dayTrainers}
         reservedSeats={reservedSeats}
         reservedPending={reservedPending}
+        missingTitles={missingTitles}
         poecTitles={poecTitles}
         createdBy={createdBy}
         renderedAt={Date.now()}
