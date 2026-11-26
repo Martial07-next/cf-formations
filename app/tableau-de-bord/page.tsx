@@ -106,7 +106,11 @@ export default async function DashboardPage() {
     // Remplaçants du jour : qui anime réellement chaque session aujourd'hui.
     ids.length ? supabase.from('session_day_trainers').select('session_id, trainer_id').in('session_id', ids).eq('day', today) : Promise.resolve({ data: [] as any[] }),
   ]);
-  const trainerToday = (s: any) => ((todayRepl as any[]) || []).find((r) => r.session_id === s.id)?.trainer_id || s.trainer_id;
+  // Ligne sans formateur = certificateur externe : personne de l'équipe n'anime ce jour-là.
+  const trainerToday = (s: any) => {
+    const r = ((todayRepl as any[]) || []).find((x) => x.session_id === s.id);
+    return r ? r.trainer_id : s.trainer_id;
+  };
   const daysOf = (id: string) => ((dayRows as any[]) || []).filter((d) => d.session_id === id);
   const timeToday = (s: any) => effectiveDayTime(today, s.start_at, s.end_at, daysOf(s.id));
 

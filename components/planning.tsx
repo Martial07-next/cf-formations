@@ -19,7 +19,7 @@ import { eventOnDay, type PlanningEvent } from '@/lib/events';
 import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
 import { UsefulLinksButton, type TemplateLinks } from '@/components/useful-links';
 import type { UsefulLink } from '@/lib/links';
-import { trainersOf, trainerOn, type DayTrainerMap } from '@/lib/day-trainers';
+import { trainersOf, trainerOn, externalOn, type DayTrainerMap } from '@/lib/day-trainers';
 import { holidayOn, isClosedHoliday } from '@/lib/holidays';
 import {
   addDays,
@@ -94,6 +94,7 @@ function SessionCard({
   info,
   dossier = null,
   replacement = null,
+  external = null,
   reserved = 0,
   pendingSeats = 0,
   missingTitles = 0,
@@ -117,6 +118,8 @@ function SessionCard({
   dossier?: DossierBadge | null;
   /** Remplaçant ce jour-là (le formateur principal ne vient pas). */
   replacement?: { full_name: string; color: string | null } | null;
+  /** Certificateur externe ce jour-là (le formateur est libre). */
+  external?: string | null;
   /** Places réservées par entreprise, sans nom. */
   reserved?: number;
   /** Places d'entreprise en attente : ajoutées aux stagiaires en attente. */
@@ -130,7 +133,7 @@ function SessionCard({
 }) {
   const isStart = s.start_at.slice(0, 10) === dIso;
   const principal = one(s.trainers)?.full_name;
-  const trainer = replacement ? replacement.full_name : principal;
+  const trainer = external ? `Certificateur externe : ${external}` : replacement ? replacement.full_name : principal;
   // Avec des modules : stagiaires réellement présents ce jour-là.
   const count = (info ? info.present : validatedCount(s)) + reserved;
   const { start, end } = effectiveDayTime(dIso, s.start_at, s.end_at, overrides);
@@ -139,7 +142,7 @@ function SessionCard({
       href={s.start_at.slice(0, 10) !== s.end_at.slice(0, 10) ? `/sessions/${s.id}?jour=${dIso}` : `/sessions/${s.id}`}
       className={`session-card ${s.status}${isStart ? '' : ' continuation'}${mine ? ' mine' : ''}${phase === 'terminee' ? ' ended' : ''}${phase === 'en-cours' ? ' live-now' : ''}`}
       style={{ ['--c' as any]: replacement ? replacement.color || DEFAULT_TRAINER_COLOR : colorOf(s), ['--i' as any]: Math.min(index, 18) }}
-      title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
+      title={`${s.title} (${SESSION_STATUS_LABEL[s.status]})${external ? ` · certificateur externe (${external}) : ${principal || 'le formateur'} est libre` : replacement ? ` · ${replacement.full_name} remplace ${principal || ''}` : ''}`}
     >
       <span className="sc-top">
         <StatusPill status={s.status} phase={phase} />
@@ -178,6 +181,9 @@ function SessionCard({
       )}
       {replacement && (
         <span className="sc-replaced">Remplace {principal || 'le formateur'}</span>
+      )}
+      {external && (
+        <span className="sc-replaced">{principal || 'Le formateur'} libre ce jour</span>
       )}
       {by && <span className="sc-by">Session créée par {by}</span>}
       {dossier && (
@@ -607,7 +613,8 @@ export function Planning({
         missingTitles={missingTitles[s.id] || 0}
         poec={poecTitles[s.id] || null}
         by={createdBy[s.id] || null}
-        replacement={dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
+        external={externalOn(dayTrainers, s, dIso)}
+        replacement={dayTrainers[s.id]?.[dIso]?.trainer_id ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
       />
     );
   }
@@ -921,8 +928,9 @@ export function Planning({
                     </span>
                     {daySessions.map((s) => {
                       const room = one(s.rooms)?.name || '-';
-                      const repl = dayTrainers[s.id]?.[dIso] ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) : null;
-                      const trainer = repl ? `${repl.full_name} (remplaçant)` : one(s.trainers)?.full_name;
+                      const repl = dayTrainers[s.id]?.[dIso]?.trainer_id ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) : null;
+                      const ext = externalOn(dayTrainers, s, dIso);
+                      const trainer = ext ? `Certificateur externe : ${ext}` : repl ? `${repl.full_name} (remplaçant)` : one(s.trainers)?.full_name;
                       const count = validatedCount(s) + (reservedSeats[s.id] || 0);
                       return (
                         <Link

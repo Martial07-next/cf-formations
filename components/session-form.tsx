@@ -121,7 +121,7 @@ export function SessionForm({
    * Formation sur plusieurs jours : le formateur peut être changé pour un
    * seul jour (autre que le premier) ; le premier jour = toute la formation.
    */
-  trainerDays?: { principalId: string | null; dayTrainers: Record<string, string>; initialDay?: string | null };
+  trainerDays?: { principalId: string | null; dayTrainers: Record<string, string>; dayExternal?: Record<string, string>; initialDay?: string | null };
   /** Session modifiée : formateurs habilités pour sa formation. */
   qualifiedTrainerIds?: string[];
   showTemplate?: boolean;
@@ -152,9 +152,12 @@ export function SessionForm({
   const [trainerDay, setTrainerDay] = useState(() => {
     // Jour ouvert depuis le planning (y compris le 1er jour) : remplacement de ce jour-là proposé.
     const d = trainerDays?.initialDay;
-    return d && trainerDays && (trainerDays.dayTrainers[d] || d !== (defaults.start_date || '')) ? d : '';
+    return d && trainerDays && (trainerDays.dayTrainers[d] || trainerDays.dayExternal?.[d] || d !== (defaults.start_date || '')) ? d : '';
   });
   const [dayTrainerId, setDayTrainerId] = useState('');
+  // Certificateur externe ce jour-là : le formateur est libre, seul le nom s'affiche au planning.
+  const [externalName, setExternalName] = useState<string | null>(null);
+  const dayExternalName = trainerDay ? trainerDays?.dayExternal?.[trainerDay] || '' : '';
   const [roomId, setRoomId] = useState(defaults.room_id || '');
 
   const template = templates.find((t) => t.id === templateId) || null;
@@ -386,10 +389,11 @@ export function SessionForm({
             <select
               required={external}
               name={trainerDay ? 'day_trainer_id' : 'trainer_id'}
-              value={trainerDay ? dayTrainerId || trainerDays?.dayTrainers[trainerDay] || trainerId : trainerId}
+              value={trainerDay ? dayTrainerId || (dayExternalName ? '__ext__' : trainerDays?.dayTrainers[trainerDay] || trainerId) : trainerId}
               onChange={(e) => (trainerDay ? setDayTrainerId(e.target.value) : setTrainerId(e.target.value))}
             >
               <option value="">{trainerDay ? 'Formateur principal' : 'Non attribué'}</option>
+              {trainerDay && <option value="__ext__">Certificateur externe (le formateur est libre)</option>}
               {activeTrainers.filter((t) => !t.is_external).map(trainerOption)}
               {activeTrainers.some((t) => t.is_external) && (
                 <optgroup label="Formateurs externes">
@@ -406,19 +410,30 @@ export function SessionForm({
                   onChange={(e) => {
                     setTrainerDay(e.target.value);
                     setDayTrainerId('');
+                    setExternalName(null);
                   }}
                 >
                   <option value="">toute la formation (formateur principal)</option>
                   {/* Chaque jour, le 1er compris : remplaçant d'un jour (formateur malade le premier jour…). */}
                   {sessionDays.map((d) => (
                     <option key={d} value={d}>
-                      le {dayLabel(d)} uniquement{trainerDays.dayTrainers[d] ? ' · remplaçant' : ''}
+                      le {dayLabel(d)} uniquement{trainerDays.dayExternal?.[d] ? ' · certificateur externe' : trainerDays.dayTrainers[d] ? ' · remplaçant' : ''}
                     </option>
                   ))}
                 </select>
               </span>
             )}
-            {trainerDay && <span className="hint">Seul le {dayLabel(trainerDay)} change ; les autres jours gardent leur formateur.</span>}
+            {trainerDay && (dayTrainerId || (dayExternalName ? '__ext__' : '')) === '__ext__' && (
+              <input
+                name="external_name"
+                required
+                placeholder="Nom du certificateur (ex. organisme ou personne)"
+                aria-label="Nom du certificateur externe"
+                value={externalName ?? dayExternalName}
+                onChange={(e) => setExternalName(e.target.value)}
+              />
+            )}
+            {trainerDay && <span className="hint">Seul le {dayLabel(trainerDay)} change ; les autres jours gardent leur formateur.{(dayTrainerId || (dayExternalName ? '__ext__' : '')) === '__ext__' ? ' Le formateur est libre ce jour-là ; le certificateur n’apparaît sur aucun document.' : ''}</span>}
             {qualified && (
               <span className="hint">{activeTrainers.length} formateur{activeTrainers.length > 1 ? 's' : ''} habilité{activeTrainers.length > 1 ? 's' : ''} pour cette formation</span>
             )}

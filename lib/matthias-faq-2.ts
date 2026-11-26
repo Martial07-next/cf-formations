@@ -108,6 +108,17 @@ Les suppressions (session, stagiaire, document, purge) sont **définitives** et 
 ];
 
 export const FAQ_PLUS: FaqEntry[] = [
+  {
+    id: 'certificateur-externe',
+    q: 'Certificateur externe : le formateur est libre ce jour-là',
+    keys: ['certificateur externe', 'certificateur', 'evaluateur externe', 'organisme certificateur', 'jury externe', 'formateur libre', 'evaluation externe', 'examen externe'],
+    bureau: true,
+    a: `Quand un **certificateur externe** vient évaluer les stagiaires, le formateur est libre :
+- fiche de la session > **Informations** > Formateur, choisis **« Pour : le … uniquement »** (le jour de l'évaluation) ;
+- dans la liste, prends **« Certificateur externe (le formateur est libre) »** et indique son nom > Enregistrer.
+Le planning affiche **« Certificateur externe : Nom »** ce jour-là et le formateur peut être placé sur une autre session (aucun conflit).
+Le certificateur **n'apparaît sur aucun document** : attestations, grilles, certificats gardent le **formateur principal**. Pour annuler, remets « Formateur principal » sur ce jour.`,
+  },
   // ---------------------------------------------------------------- Digiforma avancé
   {
     id: 'df-prospects',

@@ -564,6 +564,37 @@ export async function setDayTrainers(sessionId: string, days: string[], trainerI
   return { ok: true };
 }
 
+/**
+ * Certificateur externe sur certains jours : un organisme/une personne extérieure
+ * évalue les stagiaires, le formateur est libre ces jours-là (aucun conflit).
+ * N'apparaît sur aucun document : seul le formateur principal y figure.
+ */
+export async function setDayExternal(sessionId: string, days: string[], name: string): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const label = String(name || '').trim().slice(0, 120);
+  if (!label) return { ok: false, error: 'Indique le nom du certificateur externe.' };
+  const supabase = await createClient();
+  const { data: s } = await supabase.from('sessions').select('id, start_at, end_at').eq('id', sessionId).maybeSingle();
+  if (!s) return { ok: false, error: 'Session introuvable.' };
+  const { weekdaysBetween } = await import('@/lib/week');
+  const sessionDays = weekdaysBetween(s.start_at, s.end_at);
+  const list = [...new Set(days)].filter((d) => sessionDays.includes(d)).sort();
+  if (!list.length) return { ok: false, error: 'Choisis au moins un jour de la session.' };
+  const { error } = await supabase.from('session_day_trainers').upsert(
+    list.map((day) => ({ session_id: sessionId, day, trainer_id: null, external_name: label, note: null })),
+    { onConflict: 'session_id,day' }
+  );
+  if (error) {
+    const m = /external_name|null value|not-null|schema cache|does not exist/i.test(error.message)
+      ? 'Exécute d’abord la migration 78 (supabase/migration_phase78.sql) dans Supabase.'
+      : error.message;
+    return { ok: false, error: m };
+  }
+  revalidatePath(`/sessions/${sessionId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
 const reservationError = (msg: string) =>
   /session_reservations|schema cache|does not exist/i.test(msg) ? 'Exécute d’abord la migration 20 (supabase/migration_phase20.sql) dans Supabase.' : msg;
 

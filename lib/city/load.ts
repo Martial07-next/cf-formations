@@ -154,7 +154,8 @@ export async function loadCityState(supabase: any, date: string, profile: Profil
     const t = effectiveDayTime(date, s.start_at, s.end_at, (((daysRes.data as any[]) || []) as any[]).filter((d) => d.session_id === s.id));
     const trainees = ((s.session_trainees as any[]) || []) as any[];
     const external = room?.status === 'exterieur' ? room.name : null;
-    const trainer = repl.get(s.id) || s.trainer_id;
+    // Ligne sans formateur = certificateur externe : le formateur est libre.
+    const trainer = repl.has(s.id) ? repl.get(s.id) : s.trainer_id;
     // Sans émargement ce jour, on ne sait pas : null plutôt que 0 (sauf si la session a des signatures).
     const known = signRows !== null && signedIds.has(s.id);
     return {

@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
     const joursSession = ((dayRows as any[]) || []).filter((d) => d.session_id === s.id);
     for (const day of weekdaysBetween(s.start_at, s.end_at)) {
       if (day < du || day > au) continue;
-      const trainerId = ((replacements as any[]) || []).find((r) => r.session_id === s.id && r.day === day)?.trainer_id || s.trainer_id;
+      const r = ((replacements as any[]) || []).find((x) => x.session_id === s.id && x.day === day);
+      const trainerId = r ? r.trainer_id : s.trainer_id; // null = certificateur externe
       if (!trainerId) continue;
       const t = effectiveDayTime(day, s.start_at, s.end_at, joursSession);
       rows.push({ date: day, trainerId, sessionId: s.id, formation: s.title, debut: t.start, fin: t.end, salle: (room?.name as string) || null });

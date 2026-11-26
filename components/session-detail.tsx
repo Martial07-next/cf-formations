@@ -10,6 +10,7 @@ import {
   updateSessionDetails,
   addTraineeToSession,
   setDayTrainers,
+  setDayExternal,
   removeTraineeFromSession,
   setTraineeStatus,
   setSessionDayTime,
@@ -76,6 +77,7 @@ type SessionDetail = {
 export function SessionDetailView({
   qualifiedTrainerIds = [],
   dayTrainerIds = {},
+  dayExternal = {},
   focusDay = null,
   isAdmin,
   isNew = false,
@@ -113,6 +115,8 @@ export function SessionDetailView({
   qualifiedTrainerIds?: string[];
   /** Remplaçants par jour : jour → formateur. */
   dayTrainerIds?: Record<string, string>;
+  /** Jours confiés à un certificateur externe : jour → nom (le formateur est libre). */
+  dayExternal?: Record<string, string>;
   /** Jour ouvert depuis le planning (changement de formateur ce jour-là). */
   focusDay?: string | null;
   /** La session a commencé : liste des stagiaires figée. */
@@ -521,7 +525,13 @@ export function SessionDetailView({
     startTransition(async () => {
       const result = await updateSessionDetails(session.id, formData);
       if (!result.ok) return setError(result.error);
-      if (day) {
+      if (day && dayTrainer === '__ext__') {
+        const name = String(formData.get('external_name') || '').trim();
+        const r = await setDayExternal(session.id, [day], name);
+        if (!r.ok) return setError(r.error);
+        const label = new Date(day + 'T00:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+        setNotice(`Session mise à jour · le ${label}, certificateur externe (${name}) : le formateur est libre.`);
+      } else if (day) {
         const back = !dayTrainer || dayTrainer === newPrincipal;
         const r = await setDayTrainers(session.id, [day], back ? null : dayTrainer);
         if (!r.ok) return setError(r.error);
@@ -529,7 +539,7 @@ export function SessionDetailView({
         setNotice(back ? `Session mise à jour · le ${label} revient au formateur principal.` : `Session mise à jour · formateur changé pour le ${label} uniquement.`);
       } else {
         // Premier jour / toute la formation : nouveau formateur sur tous les jours.
-        const replaced = Object.keys(dayTrainerIds);
+        const replaced = [...Object.keys(dayTrainerIds), ...Object.keys(dayExternal)];
         if ((newPrincipal || null) !== (session.trainer_id || null) && replaced.length) {
           const r = await setDayTrainers(session.id, replaced, null);
           if (!r.ok) return setError(r.error);
@@ -697,7 +707,7 @@ export function SessionDetailView({
           rooms={rooms}
           trainers={trainers}
           templates={[]}
-          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
+          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, dayExternal, initialDay: focusDay }}
           qualifiedTrainerIds={qualifiedTrainerIds}
           defaults={{
             title: session.title,
@@ -779,7 +789,7 @@ export function SessionDetailView({
           rooms={rooms}
           trainers={trainers}
           templates={[]}
-          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, initialDay: focusDay }}
+          trainerDays={{ principalId: session.trainer_id, dayTrainers: dayTrainerIds, dayExternal, initialDay: focusDay }}
           qualifiedTrainerIds={qualifiedTrainerIds}
           defaults={{
             title: session.title,

@@ -291,10 +291,10 @@ export default async function SessionDetailPage({
   const reservations = (await early.reservations)[id] || [];
   const dayTrainers = dayTrainerMap[id] || {};
   const { data: periodAbsences } = await early.absences;
-  const trainerName = (tid: string) => ((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined;
+  const trainerName = (tid: string | null) => (tid ? (((trainers as any[]) || []).find((t) => t.id === tid)?.full_name as string | undefined) : undefined);
   // Documents (attestations, grilles, fiches) : seul le formateur principal y figure, jamais un remplaçant
   // ni un certificateur externe venu un jour. Les remplaçants restent affichés sur la fiche.
-  const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => trainerName(d.trainer_id)).filter(Boolean) as string[])];
+  const replacementNames = [...new Set(Object.values(dayTrainers).map((d) => (d.trainer_id ? trainerName(d.trainer_id) : d.external_name ? `${d.external_name} (certificateur externe)` : null)).filter(Boolean) as string[])];
   let { data: dfRow, error: dfError } = await early.digiforma;
   if (dfError) ({ data: dfRow, error: dfError } = await supabase.from('sessions').select('digiforma_docs_url').eq('id', id).maybeSingle());
   const { data: dfDoneRow } = await early.digiformaDone;
@@ -696,7 +696,7 @@ export default async function SessionDetailPage({
                     }
                   : null
               }
-              dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || '']))}
+              dayTrainerNames={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, trainerName(x.trainer_id) || x.external_name || '']))}
               place={room?.is_holding ? null : trainingPlace(room)}
               legal={legal}
               billingDone={billing ? billing.done : null}
@@ -816,7 +816,8 @@ export default async function SessionDetailPage({
 
         <SessionDetailView
           qualifiedTrainerIds={qualifiedTrainerIds}
-          dayTrainerIds={Object.fromEntries(Object.entries(dayTrainers).map(([d, x]) => [d, x.trainer_id]))}
+          dayTrainerIds={Object.fromEntries(Object.entries(dayTrainers).filter(([, x]) => x.trainer_id).map(([d, x]) => [d, x.trainer_id as string]))}
+          dayExternal={Object.fromEntries(Object.entries(dayTrainers).filter(([, x]) => !x.trainer_id).map(([d, x]) => [d, x.external_name || 'Certificateur externe']))}
           focusDay={focusDay}
           reservations={reservations}
           isNew={isNew && editable}
