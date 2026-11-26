@@ -2638,3 +2638,13 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .ap-qrs figure.ap-main{transform-origin:center}
 .ap-qrs figure:not(.ap-main) img{height:min(48vh,460px);opacity:.92}
 .ap-qrs{align-items:center}
+.ap-zoomable{display:block;padding:0;margin:0;border:0;background:none;min-height:0;cursor:zoom-in;border-radius:18px}
+.ap-zoomable:hover{background:none}
+.ap-zoomable:hover img{transform:scale(1.02)}
+.ap-zoomable img{transition:transform .2s}
+.ap-zoom{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:0;border-radius:0;padding:2vh 2vw;min-height:0;background:rgba(6,12,8,.92);cursor:zoom-out;animation:apZoomIn .3s ease both}
+.ap-zoom:hover{background:rgba(6,12,8,.92)}
+.ap-zoom img{max-height:calc(100vh - 80px);max-width:96vw;width:auto;height:auto;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.6);animation:apZoomImg .35s cubic-bezier(.2,.8,.2,1) both}
+.ap-zoom-hint{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.75);font-size:14px;font-weight:600}
+@keyframes apZoomIn{from{opacity:0}to{opacity:1}}
+@keyframes apZoomImg{from{transform:scale(.85)}to{transform:none}}

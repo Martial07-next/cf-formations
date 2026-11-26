@@ -57,6 +57,10 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
   const hasGoogle = avis.google.reviews.length > 0 || avis.google.note != null;
   const slides = ['intro', 'pourquoi', 'comment', 'pqp', ...(hasGoogle ? ['google'] : []), 'qr'] as const;
   const [i, setI] = useState(0);
+  // Affiche agrandie (dernière diapositive) : un clic l'ouvre en grand, un clic / Échap la referme.
+  const [zoom, setZoom] = useState<string | null>(null);
+  const zoomRef = useRef<string | null>(null);
+  zoomRef.current = zoom;
   // Affichée seulement dans le navigateur (portail sur la page).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -64,6 +68,10 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
   const go = useCallback((d: number) => setI((x) => Math.max(0, Math.min(slides.length - 1, x + d))), [slides.length]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (zoomRef.current) {
+        if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setZoom(null); }
+        return;
+      }
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
       else if (e.key === 'Escape') onClose();
@@ -208,11 +216,15 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
             <div className="ap-qrs">
               <figure className="ap-main" style={{ animationDelay: '0.1s' }}>
                 <span className="ap-step-badge pqp"><Crown size={16} aria-hidden /> Le plus important · à remplir maintenant</span>
-                <img src="/avis/qr-plusquepro.jpg" alt="QR code avis Plus que pro" />
+                <button type="button" className="ap-zoomable" onClick={() => setZoom('/avis/qr-plusquepro.jpg')} aria-label="Agrandir l’affiche Plus que pro" title="Agrandir">
+                  <img src="/avis/qr-plusquepro.jpg" alt="QR code avis Plus que pro" />
+                </button>
               </figure>
               <figure style={{ animationDelay: '0.3s' }}>
                 <span className="ap-step-badge google"><Zap size={16} aria-hidden /> En plus · à la fin de la formation</span>
-                <img src="/avis/qr-google.jpg" alt="QR code avis Google" />
+                <button type="button" className="ap-zoomable" onClick={() => setZoom('/avis/qr-google.jpg')} aria-label="Agrandir l’affiche Google" title="Agrandir">
+                  <img src="/avis/qr-google.jpg" alt="QR code avis Google" />
+                </button>
               </figure>
             </div>
             <p className="ap-thanks">Merci, et bonne formation ! <Stars size={22} /></p>
@@ -220,6 +232,12 @@ export function AvisPresentation({ avis, onClose }: { avis: AvisData; onClose: (
         )}
       </main>
 
+      {zoom && (
+        <button type="button" className="ap-zoom" onClick={() => setZoom(null)} aria-label="Réduire l’affiche">
+          <img src={zoom} alt="Affiche QR code agrandie" />
+          <span className="ap-zoom-hint"><X size={16} aria-hidden /> Toucher pour réduire</span>
+        </button>
+      )}
       <footer className="ap-nav">
         <button type="button" className="ap-btn" onClick={() => go(-1)} disabled={i === 0} aria-label="Précédent"><ChevronLeft size={22} /></button>
         <span className="ap-dots">
