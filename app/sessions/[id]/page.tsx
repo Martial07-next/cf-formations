@@ -1,3 +1,6 @@
+import { Suspense } from 'react';
+import { ClosurePanel } from '@/components/closure-panel';
+import { BackLink } from '@/components/back-link';
 import { SessionStatus } from '@/components/session-status';
 import { withoutSessionOnly } from '@/lib/template-edit';
 import { PapersCarousel } from '@/components/papers-carousel';
@@ -34,7 +37,7 @@ import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import Link from 'next/link';
 import { JumpButton } from '@/components/jump-button';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, CalendarOff, Pencil, UserPlus } from 'lucide-react';
+import { CalendarOff, Pencil, UserPlus } from 'lucide-react';
 import { DossierPanel } from '@/components/dossier/dossier-panel';
 import { loadDayTrainers } from '@/lib/day-trainers';
 import { loadReservations } from '@/lib/reservations';
@@ -71,7 +74,7 @@ export default async function SessionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ nouvelle?: string; jour?: string }>;
+  searchParams: Promise<{ nouvelle?: string; jour?: string; cloture?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -711,7 +714,7 @@ export default async function SessionDetailPage({
       <section className="content">
         <header>
           <div>
-            <Link href="/sessions" className="back-link"><ArrowLeft size={14} aria-hidden /> Retour aux sessions</Link>
+            <BackLink fallback="/" />
             <p className="eyebrow">Fiche session</p>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               {session.title}
@@ -757,7 +760,14 @@ export default async function SessionDetailPage({
           </div>
         </header>
 
-        {started && (
+        {/* Session terminée : écran de clôture pour l'équipe (dossier, prêts, facturation). */}
+        {ended && editable && (
+          <Suspense fallback={null}>
+            <ClosurePanel sessionId={session.id} open={sp.cloture === '1'} canBill={Boolean((profile as any)?.can_invoice) || profile?.role === 'admin'} />
+          </Suspense>
+        )}
+
+        {started && !(ended && editable) && (
           <div role="status" className={`session-live ${ended ? 'ended' : 'live'}`}>
             <strong>{ended ? 'Session terminée' : todayIndex >= 0 ? `Session en cours · jour ${todayIndex + 1} sur ${sessionDays.length}` : 'Session en cours'}</strong>
             <span>

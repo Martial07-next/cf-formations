@@ -195,6 +195,16 @@ export function DossierPanel({
   // Titres d'habilitation (migration 46) : sans titre, pas d'attestation remise.
   const [titles, setTitles] = useState<TitleFile[]>(titleFiles || []);
   useEffect(() => setTitles(titleFiles || []), [titleFiles]);
+  // « Télécharger le dossier complet » depuis l'écran de clôture.
+  const exportRef = useRef<(full: boolean) => Promise<void>>(async () => {});
+  useEffect(() => {
+    const go = async () => {
+      await exportRef.current(true);
+      window.dispatchEvent(new CustomEvent('cf:export-dossier-done'));
+    };
+    window.addEventListener('cf:export-dossier', go);
+    return () => window.removeEventListener('cf:export-dossier', go);
+  }, []);
   const titleOn = titleRequired && Boolean(tdt) && titleFiles !== null && !tdt?.data?.noTitle;
   // Stagiaire en initiale : pas de titre précédent à fournir (seuls les recyclages le doivent).
   const hasTitle = (id: string) => !titleOn || trainees.find((t) => t.id === id)?.cursus === 'initial' || titleOk(id, tdt, titles);
@@ -497,6 +507,7 @@ export function DossierPanel({
     act(() => (traineeId ? staffTraineeSign(sessionId, traineeId, slot.day, slot.half, sig) : trainerSign(sessionId, slot.day, slot.half, sig)));
   }
 
+  exportRef.current = exportPdf;
   async function exportPdf(full: boolean) {
     setError(null);
     setBusy(full ? 'full' : 'emargement');

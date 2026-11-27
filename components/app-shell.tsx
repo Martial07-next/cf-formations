@@ -6,6 +6,7 @@ import { DevLayer } from '@/components/dev/dev-layer';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { NavProgress } from '@/components/nav-progress';
+import { NavTracker } from '@/components/nav-tracker';
 import { FirstPasswordGate } from '@/components/first-password';
 import { MatthiasBot } from '@/components/matthias-bot';
 import { setWorkedHolidays } from '@/lib/holidays';
@@ -33,6 +34,9 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       <Sidebar profile={profile} />
       <div className="app-main">{children}</div>
       <NavProgress />
+      <Suspense fallback={null}>
+        <NavTracker />
+      </Suspense>
       {/* Actualisation automatique (changements faits par moi ou un collègue). */}
       <LiveRefresh />
       {/* Mot de passe temporaire : à remplacer avant d'utiliser la plateforme. */}

@@ -1,7 +1,6 @@
+import { BackLink } from '@/components/back-link';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { TraineeInfoForm } from '@/components/trainee-info-form';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
@@ -96,7 +95,7 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
       <section className="content">
         <header>
           <div>
-            <Link href="/stagiaires" className="back-link"><ArrowLeft size={14} aria-hidden /> Stagiaires</Link>
+            <BackLink fallback="/stagiaires" label="Stagiaires" />
             <p className="eyebrow">Fiche stagiaire</p>
             <h1>{trainee.full_name}</h1>
             <p>

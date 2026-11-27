@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileSignature,
+  ListTodo,
   Lightbulb,
   PenLine,
   Plus,
@@ -309,6 +310,7 @@ export default async function DashboardPage() {
             <Link href="/" className={`btn${staff ? '' : ' primary'} dash-open-planning`}><CalendarDays size={15} aria-hidden /> Ouvrir le planning</Link>
             {staff && (
               <>
+                <Link href="/a-faire" className="btn"><ListTodo size={15} aria-hidden /> À faire</Link>
                 <Link href="/?creer=1" className="btn primary"><Plus size={15} aria-hidden /> Nouvelle session</Link>
                 <Link href="/poec?nouveau=1" className="btn"><Route size={15} aria-hidden /> Parcours POEC</Link>
                 <Link href="/poec?nouveau=1&type=personnalise" className="btn"><PenLine size={15} aria-hidden /> Parcours personnalisé</Link>

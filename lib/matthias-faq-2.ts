@@ -109,6 +109,16 @@ Les suppressions (session, stagiaire, document, purge) sont **définitives** et 
 
 export const FAQ_PLUS: FaqEntry[] = [
   {
+    id: 'a-faire',
+    q: 'Page « À faire » et clôture des sessions',
+    keys: ['a faire', 'liste a faire', 'todo', 'quoi faire', 'taches', 'cloturer', 'cloture', 'clore session', 'boucler session', 'session terminee', 'relancer formateur', 'dossier complet pdf', 'telecharger dossier complet'],
+    bureau: true,
+    a: `Menu **À faire** : tout ce qui attend le bureau, du plus urgent au moins urgent (pastille avec le nombre dans le menu).
+- **Avant la formation** : lien Digiforma manquant (colle le lien ou « Pas de lien » directement dans la ligne), sessions à préparer.
+- **Après la formation** : chaque session terminée pas encore bouclée, avec ce qui manque (formateur, bureau, prêts, facturation), **« Relancer »** (mail prêt à envoyer) et **« Clôturer »**.
+**Clôturer** ouvre l'écran de clôture en haut de la fiche : les 4 points à régler avec leur bouton, et **« Télécharger le dossier complet »** (un seul PDF). Quand tout est fait : **« Session clôturée »** et la ligne disparaît d'À faire.`,
+  },
+  {
     id: 'tracabilite',
     q: 'Traçabilité : droits à l’image, vêtements et baudriers prêtés',
     keys: ['tracabilite', 'tracabilite droit a l image', 'tracabilite vetements', 'registre', 'registre des prets', 'qui a prete', 'vetements pas rendus', 'baudriers pas rendus', 'pret en retard', 'droit a l image registre', 'retirer accord', 'retrait droit image', 'journal', 'preuve signature', 'historique autorisations', 'export prets'],

@@ -18,6 +18,7 @@ import {
   Menu,
   Route,
   ClipboardList,
+  ListTodo,
   ShieldCheck,
   IdCard,
   Receipt,
@@ -48,6 +49,7 @@ function groupsFor(profile: Profile): NavGroup[] {
       label: null,
       links: [
         { href: '/tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard },
+        ...(staff ? [{ href: '/a-faire', label: 'À faire', icon: ListTodo }] : []),
         { href: '/', label: 'Planning', icon: CalendarDays },
         { href: '/sessions', label: 'Sessions', icon: ListChecks },
         ...(profile?.trainer_id ? [{ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History }] : []),
@@ -103,7 +105,8 @@ function initials(name: string) {
 }
 
 /** Pastille rouge d'un lien (demandes d'accès, remarques dev). */
-function badgeOf(href: string, profile: Profile): number {
+function badgeOf(href: string, profile: Profile, todo = 0): number {
+  if (href === '/a-faire') return todo;
   if (href === '/ameliorations') return profile?.dev_open || 0;
   if (href === '/administration') return profile?.pending_requests || 0;
   return 0;
@@ -111,7 +114,44 @@ function badgeOf(href: string, profile: Profile): number {
 
 const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+/** Compteur « À faire » : lu au chargement puis toutes les 5 minutes (gardé 2 minutes dans l'onglet). */
+function useTodoCount(enabled: boolean) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const load = async (force = false) => {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem('cf_todo') || 'null');
+        if (!force && cached && Date.now() - cached.at < 120000) return setN(cached.count);
+        const r = await fetch('/api/a-faire', { cache: 'no-store' });
+        const j = await r.json();
+        if (!alive) return;
+        sessionStorage.setItem('cf_todo', JSON.stringify({ at: Date.now(), count: j.count || 0 }));
+        setN(j.count || 0);
+      } catch {}
+    };
+    load();
+    const t = setInterval(() => load(true), 300000);
+    const fromPage = () => {
+      try {
+        const c = Number(localStorage.getItem('cf_todo_count') || 0);
+        sessionStorage.setItem('cf_todo', JSON.stringify({ at: Date.now(), count: c }));
+        setN(c);
+      } catch {}
+    };
+    window.addEventListener('cf:todo-count', fromPage);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      window.removeEventListener('cf:todo-count', fromPage);
+    };
+  }, [enabled]);
+  return n;
+}
+
 function NavContent({ active, profile, searchId }: { active: string; profile: Profile; searchId: string }) {
+  const todo = useTodoCount(canManage(profile?.role as Role));
   const groups = groupsFor(profile);
   const total = groups.reduce((n, g) => n + g.links.length, 0);
   // Groupes repliés, mémorisés sur cet ordinateur ; celui de la page ouverte reste déplié.
@@ -169,7 +209,7 @@ function NavContent({ active, profile, searchId }: { active: string; profile: Pr
       {shown.map((group) => {
         const hasActive = group.links.some((l) => l.href === active);
         const isClosed = !q && group.label !== null && closed.has(group.id) && !hasActive;
-        const hidden = group.links.reduce((n, l) => n + badgeOf(l.href, profile), 0);
+        const hidden = group.links.reduce((n, l) => n + badgeOf(l.href, profile, todo), 0);
         return (
           <div className={`nav-group${isClosed ? ' closed' : ''}`} key={group.id}>
             {group.label && (
@@ -184,7 +224,7 @@ function NavContent({ active, profile, searchId }: { active: string; profile: Pr
                 {group.links.map((l) => {
                   const Icon = l.icon;
                   const isActive = l.href === active;
-                  const n = badgeOf(l.href, profile);
+                  const n = badgeOf(l.href, profile, todo);
                   return (
                     <Link key={l.href} href={l.href} className={isActive ? 'active' : ''} aria-current={isActive ? 'page' : undefined} onClick={() => setQuery('')}>
                       <Icon size={17} aria-hidden />

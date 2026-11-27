@@ -1,7 +1,7 @@
+import { BackLink } from '@/components/back-link';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { TrainingHistory, type HistoryEntry } from '@/components/training-history';
 import { loadDayOverrides, hoursFor, one, hoursByMonth, sessionsWithReplacements } from '@/lib/history';
@@ -91,7 +91,7 @@ export default async function TrainerDetailPage({
       <section className="content">
         <header>
           <div>
-            <Link href="/formateurs" className="back-link"><ArrowLeft size={14} aria-hidden /> Formateurs</Link>
+            <BackLink fallback="/formateurs" label="Formateurs" />
             <p className="eyebrow">Fiche formateur</p>
             <h1 className="trainer-tag" style={{ fontSize: 26 }}>
               <span className="swatch" style={{ background: color, width: 18, height: 18, borderRadius: 6 }} aria-hidden />

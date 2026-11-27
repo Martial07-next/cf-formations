@@ -1,6 +1,7 @@
+import { BackLink } from '@/components/back-link';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, CalendarRange, CheckCircle2 } from 'lucide-react';
+import { CalendarRange, CheckCircle2 } from 'lucide-react';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadProgramData } from '@/lib/poec-data';
 import { conventionStatus, frShort, isCustomProgram } from '@/lib/poec';
@@ -78,7 +79,7 @@ export default async function PoecProgramPage({
       <section className="content">
         <header>
           <div>
-            <Link href="/poec" className="back-link"><ArrowLeft size={14} aria-hidden /> Parcours</Link>
+            <BackLink fallback="/poec" label="Parcours" />
             <p className="eyebrow">{custom ? 'Parcours personnalisé' : 'Parcours POEC'}{program.reference ? ` · ${program.reference}` : ''}</p>
             <h1>{program.title}</h1>
             <p style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
