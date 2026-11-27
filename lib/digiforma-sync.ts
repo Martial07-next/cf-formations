@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { applyDigiformaDays, applyDigiformaPlace, attachToGroup, loadPlaceRefs, placeModuleRow, writeSessionModules } from '@/lib/digiforma-place';
 import { withoutSessionOnly } from '@/lib/template-edit';
 import { People, isPlaceholder } from '@/lib/digiforma-people';
+import { parisNowKey } from '@/lib/paris-time';
 
 export type SyncResult =
   | { ok: true; created: number; traineesLinked: number; skipped: number; past: number; log: string; remaining: number; changed: number }
@@ -488,6 +489,10 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     if (keep.length) purge = purge.not('key', 'in', `(${keep.map((k) => `"${k.replace(/"/g, '')}"`).join(',')})`);
     await purge;
   }
+  // Sessions supprimées ou annulées sur Digiforma : retirées du planning, même déjà placées,
+  // tant qu'elles n'ont pas commencé (une session commencée garde ses émargements et documents).
+  const removed = await removeGoneSessions(supabase, listed.sessions, today);
+
   // Première version de la synchronisation : sessions Digiforma entières (parfois sur des mois) posées dans
   // « À affecter ». Jamais placées (toujours sans salle) : retirées, les modules les remplacent.
   const { data: legacy } = await supabase.from('sessions').select('id').in('room_id', [...holdIds]).like('notes', 'Importée automatiquement de Digiforma%');
@@ -524,6 +529,8 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     (asModule ? ` (${asModule} sous-session(s) de parcours GEIQ / POEC prises comme modules)` : '') +
     `. ${linked} module(s) déjà sur le planning, reliés, et ${covered} couvert(s) par un parcours déjà posé cette semaine (non reproposés). ` +
     (stages ? `${stages} semaine(s) de stage en entreprise, ${stagePeriods} période(s) de stage ajoutée(s) aux parcours. ` : '') +
+    (removed.deleted.length ? `${removed.deleted.length} session(s) retirée(s) du planning car supprimée(s) ou annulée(s) sur Digiforma : ${removed.deleted.slice(0, 10).join(', ')}. ` : '') +
+    (removed.kept.length ? `Supprimée(s) / annulée(s) sur Digiforma mais déjà commencée(s), gardée(s) sur le planning (à vérifier) : ${removed.kept.slice(0, 10).join(', ')}. ` : '') +
     (legacyIds.length ? `${legacyIds.length} ancienne(s) session(s) entière(s) « À affecter » retirée(s). ` : '') +
     `${programsLinked} parcours Digiforma relié(s) à un parcours de la plateforme, dont ${programsCreated} créé(s) automatiquement ; ${autoPlaced} module(s) de parcours créé(s) automatiquement (salle à choisir). ` +
     (hasProgRef ? '' : 'Migration 61 à exécuter pour créer les parcours automatiquement. ') +
@@ -552,8 +559,72 @@ export async function runDigiformaSync(supabase: SupabaseClient, budgetMs = 40_0
     past,
     log,
     remaining,
-    changed: offDaysSet + newModules + linked + autoPlaced + addedLater + reservationsSet + modulesNamed + roomsSet + trainersSet + programsCreated + stagePeriods + geiqCleaned + legacyIds.length,
+    changed: removed.deleted.length + offDaysSet + newModules + linked + autoPlaced + addedLater + reservationsSet + modulesNamed + roomsSet + trainersSet + programsCreated + stagePeriods + geiqCleaned + legacyIds.length,
   };
+}
+
+/** Statut Digiforma d'une session annulée / perdue. */
+function isCancelledStatus(v: string | null) {
+  const t = (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /annul|cancel|abandon|lost|perdu|supprim|deleted/.test(t);
+}
+
+/**
+ * Sessions du planning reliées à une session Digiforma qui n'existe plus (ou
+ * annulée) : supprimées si elles n'ont pas commencé, sinon gardées et signalées.
+ * Rien n'est fait si la liste Digiforma paraît incomplète (moins de 5 sessions).
+ */
+export async function removeGoneSessions(
+  supabase: SupabaseClient,
+  listed: { id: string; status: string | null }[],
+  today: string
+): Promise<{ deleted: string[]; kept: string[] }> {
+  const out = { deleted: [] as string[], kept: [] as string[] };
+  if (listed.length < 5) return out;
+  const alive = new Map(listed.map((x) => [x.id, x.status]));
+  const gone = (id: string) => Boolean(id) && (!alive.has(id) || isCancelledStatus(alive.get(id) ?? null));
+  const [{ data: placedRows }, { data: refRows }] = await Promise.all([
+    supabase.from('digiforma_modules').select('df_session_id, placed_session_id').not('placed_session_id', 'is', null),
+    supabase.from('sessions').select('id, digiforma_ref').not('digiforma_ref', 'is', null).gte('end_at', `${today}T00:00:00`),
+  ]);
+  const candidates = new Set<string>();
+  // Une session qui regroupe plusieurs sessions Digiforma reste si l'une d'elles existe encore.
+  const stillLinked = new Set<string>();
+  for (const r of (placedRows as any[]) || []) {
+    if (gone(String(r.df_session_id))) candidates.add(r.placed_session_id);
+    else stillLinked.add(r.placed_session_id);
+  }
+  // Référence saisie à la main : prise seulement si elle a la forme d'un identifiant Digiforma
+  // (jamais un lien, un nom ou une faute de frappe, qui effaceraient une session à tort).
+  const numericIds = listed.every((x) => /^\d+$/.test(x.id));
+  const knownDf = new Set(((placedRows as any[]) || []).map((r) => String(r.df_session_id)));
+  const looksLikeId = (v: string) => knownDf.has(v) || (numericIds ? /^\d{2,}$/.test(v) : false);
+  for (const r of (refRows as any[]) || []) {
+    const base = String(r.digiforma_ref).split(':')[0].trim();
+    if (!looksLikeId(base)) continue;
+    if (gone(base)) candidates.add(r.id);
+    else stillLinked.add(r.id);
+  }
+  const ids = [...candidates].filter((id) => !stillLinked.has(id));
+  if (!ids.length) return out;
+  const nowKey = parisNowKey();
+  const rows: any[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data } = await supabase.from('sessions').select('id, title, start_at, end_at').in('id', ids.slice(i, i + 150));
+    rows.push(...((data as any[]) || []));
+  }
+  const label = (r: any) => `« ${r.title} » du ${String(r.start_at).slice(0, 10).split('-').reverse().join('/')}`;
+  const toDelete = rows.filter((r) => String(r.start_at).slice(0, 16) > nowKey);
+  // Terminée depuis longtemps ou commencée : on n'efface pas l'historique.
+  out.kept = rows.filter((r) => String(r.start_at).slice(0, 16) <= nowKey && String(r.end_at).slice(0, 10) >= today).map(label);
+  for (let i = 0; i < toDelete.length; i += 150) {
+    const part = toDelete.slice(i, i + 150);
+    const partIds = part.map((r) => r.id);
+    await supabase.from('digiforma_modules').delete().in('placed_session_id', partIds);
+    const { error } = await supabase.from('sessions').delete().in('id', partIds);
+    if (!error) out.deleted.push(...part.map(label));
+  }
+  return out;
 }
 
 /** Ajoute à une session du planning les stagiaires Digiforma qui n'y sont pas encore (jamais de retrait). */

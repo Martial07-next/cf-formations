@@ -163,6 +163,14 @@ Le certificateur **n'apparaît sur aucun document** : attestations, grilles, cer
   },
   // ---------------------------------------------------------------- Digiforma avancé
   {
+    id: 'df-removed',
+    q: 'Session supprimée ou annulée sur Digiforma',
+    keys: ['session supprimee digiforma', 'session annulee digiforma', 'retiree digiforma', 'supprimer sur digiforma', 'session disparue', 'annulee sur digiforma'],
+    bureau: true,
+    a: `Quand une session est **supprimée ou annulée sur Digiforma**, la synchronisation la **retire du planning**, même si elle était déjà placée dans une salle, tant qu'elle **n'a pas commencé**.
+Une session **déjà commencée** est gardée (émargements, documents) et signalée dans le compte-rendu de synchronisation (Administration › Intégrations) pour que tu vérifies.`,
+  },
+  {
     id: 'df-prospects',
     q: 'Les prospects en attente et les entreprises de Digiforma',
     keys: ['prospect', 'prospects', 'prospects en attente', 'entreprise en attente', 'client en attente', 'indecis', 'undecided', 'devis', 'pas encore confirme', 'places entreprise digiforma'],
