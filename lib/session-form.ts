@@ -110,6 +110,24 @@ export async function findSessionConflict(
         return `Conflit : la salle est déjà réservée pour « ${s.title} » ${when(o)}. Ce jour-là, la salle est libre : ${windowsText(freeWindows(busy))}. Choisis ces heures (ou un horaire propre à ce jour).`;
       }
     }
+    // Évènement dans cette salle (son « Lieu » est la salle) : la salle est prise à ses horaires.
+    const { data: evRows } = await supabase
+      .from('planning_events')
+      .select('id, title, location, start_date, end_date, start_time, end_time')
+      .lte('start_date', input.end_at.slice(0, 10))
+      .gte('end_date', input.start_at.slice(0, 10));
+    if ((evRows as any[])?.length) {
+      const { data: roomRows } = await supabase.from('rooms').select('id, name, is_holding, status');
+      const { eventRoomId, eventSlot } = await import('@/lib/events');
+      for (const e of (evRows as any[]).filter((x) => eventRoomId(x.location, (roomRows as any[]) || []) === input.room_id)) {
+        const slot = eventSlot(e);
+        const hit = mine.find((x) => x.day >= e.start_date && x.day <= e.end_date && x.start < slot.end && x.end > slot.start);
+        if (hit) {
+          const hours = e.start_time ? `${slot.start.replace(':', 'h')}–${slot.end.replace(':', 'h')}` : 'toute la journée';
+          return `Conflit : la salle est occupée par l’évènement « ${e.title} » le ${hit.day.split('-').reverse().join('/')} (${hours}). Choisis d’autres heures ou une autre salle.`;
+        }
+      }
+    }
   }
   if (input.trainer_id) {
     // Jours où ce formateur anime vraiment cette session (hors jours confiés à un remplaçant).

@@ -16,8 +16,8 @@ import { SessionWizard } from '@/components/session-wizard';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
 import { DEFAULT_TRAINER_COLOR } from '@/lib/colors';
 import { absenceFor, absenceText, type Absence } from '@/lib/absences';
-import { eventOnDay, type PlanningEvent } from '@/lib/events';
-import { DayChips, DayDetails, EventForm } from '@/components/planning-events';
+import { EVENT_KIND, eventOnDay, eventRoomId, eventSlot, eventTimeLabel, type PlanningEvent } from '@/lib/events';
+import { DayChips, DayDetails, EventForm, EventIcon } from '@/components/planning-events';
 import { UsefulLinksButton, type TemplateLinks } from '@/components/useful-links';
 import type { UsefulLink } from '@/lib/links';
 import { trainersOf, trainerOn, externalOn, type DayTrainerMap } from '@/lib/day-trainers';
@@ -330,6 +330,11 @@ export function Planning({
     { mode: 'day'; day: string } | { mode: 'form'; event: PlanningEvent | null; day?: string } | null
   >(null);
   const eventsOn = (day: string) => events.filter((e) => eventOnDay(e, day));
+  // Évènement dans une salle CF Réseaux (son « Lieu ») : il occupe la salle à ses horaires, affiché dans sa case.
+  const eventRoom = useMemo(() => new Map(events.filter((e) => e.kind !== 'stage').map((e) => [e.id, eventRoomId(e.location, rooms as any)] as const)), [events, rooms]);
+  const roomEventsOn = (day: string, roomId: string) => events.filter((e) => eventRoom.get(e.id) === roomId && eventOnDay(e, day));
+  // À côté du jour : seulement les évènements sans salle CF Réseaux.
+  const sideEventsOn = (day: string) => eventsOn(day).filter((e) => !eventRoom.get(e.id));
   const absentOn = (day: string) => absences.filter((a) => a.start_date <= day && a.end_date >= day);
   function openDay(day: string) {
     setEventPanel({ mode: 'day', day });
@@ -645,12 +650,44 @@ export function Planning({
   function cellSessions(dIso: string, roomId: string) {
     return shown.filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso));
   }
+  // Sessions et évènements de la case, dans l'ordre des horaires.
+  function cellItems(dIso: string, roomId: string) {
+    return [
+      ...cellSessions(dIso, roomId).map((s) => ({ kind: 'session' as const, s, at: effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []).start })),
+      ...roomEventsOn(dIso, roomId).map((e) => ({ kind: 'event' as const, e, at: eventSlot(e).start })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+  }
+  /** Évènement qui occupe une salle : carte dans la case, à ses horaires. */
+  function roomEventCard(e: PlanningEvent, dIso: string) {
+    const k = EVENT_KIND[e.kind];
+    return (
+      <button
+        key={`ev-${e.id}`}
+        type="button"
+        className="room-event"
+        style={{ ['--k' as any]: k?.color }}
+        onClick={() => openDay(dIso)}
+        title={`${k?.label || 'Évènement'} : ${e.title} · salle occupée ${eventTimeLabel(e).toLowerCase()}`}
+      >
+        <span className="room-event-top">
+          <EventIcon kind={e.kind} /> {k?.label || 'Évènement'}
+        </span>
+        <span className="room-event-title">{e.title}</span>
+        <small>
+          <Clock size={11} aria-hidden /> {e.start_time ? eventTimeLabel(e) : 'Toute la journée'}
+        </small>
+      </button>
+    );
+  }
   // Salle occupée ce jour-là : on peut placer une session avant ou après ;
   // le « + » propose l'heure de fin de la dernière session du jour.
   function freeFrom(dIso: string, roomId: string): string | null {
-    const ends = sessions
-      .filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso))
-      .map((s) => effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []).end);
+    const ends = [
+      ...sessions
+        .filter((s) => s.room_id === roomId && dayIsInRange(dIso, s.start_at, s.end_at) && !isOffDay(dayOverrides[s.id], dIso))
+        .map((s) => effectiveDayTime(dIso, s.start_at, s.end_at, dayOverrides[s.id] || []).end),
+      ...roomEventsOn(dIso, roomId).map((e) => eventSlot(e).end),
+    ];
     if (!ends.length) return null;
     return ends.sort()[ends.length - 1];
   }
@@ -835,11 +872,11 @@ export function Planning({
                       {view === 'day' ? weekdayName(d.iso) : d.full}
                       <small>{view === 'day' ? `${d.iso.split('-').reverse().join('/')}${isToday ? ' · aujourd’hui' : ''}` : d.dateLabel}</small>
                       <HolidayTag day={d.iso} />
-                      <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
+                      <DayChips events={sideEventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                     </div>
                     {gridRooms.map((r) => (
                       <div className={`plan-cell${isToday ? ' today' : ''}${r.is_holding ? ' holding' : ''}${isExternal(r) ? ' external' : ''}${isClosedHoliday(d.iso) ? ' holiday' : ''}`} key={r.id}>
-                        {cellSessions(d.iso, r.id).map((s) => card(s, d.iso))}
+                        {cellItems(d.iso, r.id).map((it) => (it.kind === 'event' ? roomEventCard(it.e, d.iso) : card(it.s, d.iso)))}
                         {canEdit && !r.is_holding && !isExternal(r) && !isClosedHoliday(d.iso) && (() => {
                           const after = freeFrom(d.iso, r.id);
                           return (
@@ -876,6 +913,7 @@ export function Planning({
               const items = gridRooms
                 .flatMap((r) => cellSessions(d.iso, r.id).map((s) => ({ s, r })))
                 .sort((a, b) => Number(isMine(b.s, d.iso)) - Number(isMine(a.s, d.iso)));
+              const roomEvents = gridRooms.flatMap((r) => roomEventsOn(d.iso, r.id).map((e) => ({ e, r })));
               // Semaine en cours : les jours passés sont repliés (on arrive sur aujourd'hui).
               if (view === 'week' && d.iso < todayIso) {
                 return (
@@ -901,8 +939,14 @@ export function Planning({
                       {isToday && <span className="agenda-today">Aujourd’hui</span>}
                       <HolidayTag day={d.iso} />
                     </span>
-                    <DayChips events={eventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
+                    <DayChips events={sideEventsOn(d.iso)} absentCount={absentOn(d.iso).length} onOpen={() => openDay(d.iso)} />
                   </header>
+                  {roomEvents.map(({ e, r }) => (
+                    <div key={e.id} className="agenda-item">
+                      <span className="agenda-room">{r.name}</span>
+                      {roomEventCard(e, d.iso)}
+                    </div>
+                  ))}
                   {items.length ? (
                     items.map(({ s, r }) => (
                       <div key={s.id} className="agenda-item">
@@ -910,7 +954,7 @@ export function Planning({
                         {card(s, d.iso)}
                       </div>
                     ))
-                  ) : (
+                  ) : roomEvents.length ? null : (
                     <p className="agenda-empty">Aucune session</p>
                   )}
                   {canEdit && (

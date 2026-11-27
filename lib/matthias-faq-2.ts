@@ -175,6 +175,16 @@ Le certificateur **n'apparaît sur aucun document** : attestations, grilles, cer
 En grisé : les vraies sessions déjà sur le planning, pour voir les salles libres.`,
   },
   {
+    id: 'event-room',
+    q: 'Évènement qui occupe une salle',
+    keys: ['evenement salle', 'evenement dans une salle', 'reserver une salle', 'salle occupee', 'repas salle', 'job dating salle', 'evenement planning salle', 'bloquer salle'],
+    bureau: true,
+    a: `Dans l'évènement (bouton **« Évènement »** du planning), mets dans **Lieu** le nom d'une **salle CF Réseaux** (proposée dans la liste) :
+- l'évènement apparaît **dans la case de la salle**, aux bons horaires (hachuré, couleur du type d'évènement), et plus à côté du jour ;
+- la salle est **occupée seulement à ses horaires** : une session peut être placée avant ou après, pas pendant (message de conflit dans les deux sens) ;
+- un évènement **ailleurs** (adresse, lieu extérieur) reste affiché à côté du jour, sans bloquer de salle.`,
+  },
+  {
     id: 'df-removed',
     q: 'Session supprimée ou annulée sur Digiforma',
     keys: ['session supprimee digiforma', 'session annulee digiforma', 'retiree digiforma', 'supprimer sur digiforma', 'session disparue', 'annulee sur digiforma'],

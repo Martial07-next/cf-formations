@@ -2854,3 +2854,9 @@ tr.trace-old td{opacity:.6}
 .fc-stat.zero{opacity:.55}
 @media (max-width:760px){.fc-steps{grid-template-columns:1fr}}
 .fg-card small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fg-card small svg{vertical-align:-1px}
+/* Évènement qui occupe une salle CF Réseaux : dans la case, comme une session */
+.room-event{--k:#475569;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;font:inherit;color:var(--ink);cursor:pointer;margin:0 0 6px;padding:7px 9px;border-radius:12px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--k) 10%,#fff) 0 8px,color-mix(in srgb,var(--k) 5%,#fff) 8px 16px);border:1px solid color-mix(in srgb,var(--k) 35%,#fff);border-left:4px solid var(--k)}
+.room-event:hover{box-shadow:var(--shadow-sm)}
+.room-event-top{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:color-mix(in srgb,var(--k) 80%,#000)}
+.room-event-title{font-weight:800;font-size:13px;line-height:1.25}
+.room-event small{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--muted)}

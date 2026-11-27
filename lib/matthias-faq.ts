@@ -169,13 +169,13 @@ Un conflit de salle est refusé avec les créneaux libres proposés.`,
   {
     id: 'pl-event',
     q: 'À quoi sert un évènement ?',
-    keys: ['evenement', 'event', 'repas', 'forum', 'caces', 'sst', 'recrutement', 'evenement exterieur'],
-    a: `Un **évènement** met sur le planning ce qui n'est pas une session en salle, **sans bloquer de salle** :
+    keys: ['evenement', 'event', 'repas', 'repas de groupe', 'ajouter un repas', 'forum', 'caces', 'sst', 'recrutement', 'evenement exterieur'],
+    a: `Un **évènement** met sur le planning ce qui n'est pas une session de formation :
 - Évènement extérieur, Repas de groupe, Passage CACES / SST, Session de recrutement, Forum, Autre ;
 - les stages POEC en entreprise apparaissent aussi comme évènements ;
 - **une formation un samedi** se crée en évènement.
 
-Bouton **« Évènement »** du planning > **« Nouvel évènement »** : type, titre, dates, heures (sinon « Journée »), lieu, participants, formateurs / salariés concernés. Il s'affiche en tête de la journée ; clic sur le jour pour le détail.`,
+Bouton **« Évènement »** du planning > **« Nouvel évènement »** : type, titre, dates, heures (sinon « Journée »), lieu, participants, formateurs / salariés concernés. Lieu = **une salle CF Réseaux** : il s'affiche **dans la case de la salle** et l'occupe à ses horaires ; ailleurs, il s'affiche en tête de la journée. Clic dessus pour le détail.`,
   },
   {
     id: 'pl-intra',

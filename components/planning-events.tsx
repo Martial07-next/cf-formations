@@ -342,7 +342,8 @@ export function EventForm({
           </label>
           <label>
             Lieu
-            <input name="location" defaultValue={event?.location || ''} placeholder="Salle ou adresse (optionnel)" list="event-rooms" />
+            <input name="location" defaultValue={event?.location || ''} placeholder="Salle CF Réseaux ou adresse (optionnel)" list="event-rooms" />
+            <span className="hint">Une salle CF Réseaux (liste) : l’évènement l’occupe à ses horaires et apparaît dans sa case du planning.</span>
             <datalist id="event-rooms">{roomNames.map((r) => <option key={r} value={r} />)}</datalist>
           </label>
         </div>

@@ -65,7 +65,38 @@ async function saveEmployees(supabase: Awaited<ReturnType<typeof createClient>>,
   return error ? error.message : null;
 }
 
-/** Évènements : purement informatifs, ils ne bloquent jamais une session. */
+/**
+ * Évènement dans une salle CF Réseaux (« Lieu » = nom de la salle) : il occupe
+ * la salle à ses horaires. Refusé s'il tombe pendant une session de cette salle.
+ * Ailleurs (adresse, lieu extérieur) : purement informatif.
+ */
+async function roomConflict(supabase: Awaited<ReturnType<typeof createClient>>, e: ReturnType<typeof readEvent>): Promise<string | null> {
+  if (!e.location) return null;
+  const { data: rooms } = await supabase.from('rooms').select('id, name, is_holding, status');
+  const { eventRoomId, eventSlot } = await import('@/lib/events');
+  const roomId = eventRoomId(e.location, (rooms as any[]) || []);
+  if (!roomId) return null;
+  const { data: sess } = await supabase
+    .from('sessions')
+    .select('id, title, start_at, end_at')
+    .eq('room_id', roomId)
+    .lte('start_at', `${e.end_date}T23:59:59`)
+    .gte('end_at', `${e.start_date}T00:00:00`);
+  if (!(sess as any[])?.length) return null;
+  const { data: days } = await supabase.from('session_days').select('session_id, day, start_time, end_time').in('session_id', (sess as any[]).map((x) => x.id));
+  const { sessionDaySlots } = await import('@/lib/session-slots');
+  const slot = eventSlot(e);
+  for (const x of sess as any[]) {
+    const hit = sessionDaySlots(x.start_at, x.end_at, ((days as any[]) || []).filter((d) => d.session_id === x.id)).find(
+      (d) => d.day >= e.start_date && d.day <= e.end_date && d.start < slot.end && d.end > slot.start
+    );
+    if (hit)
+      return `La salle est déjà prise par la session « ${x.title} » le ${hit.day.split('-').reverse().join('/')} (${hit.start.replace(':', 'h')}–${hit.end.replace(':', 'h')}). Choisis d’autres heures, un autre jour ou une autre salle.`;
+  }
+  return null;
+}
+
+/** Évènements : informatifs, sauf dans une salle CF Réseaux (la salle est alors occupée à leurs horaires). */
 export async function createEvent(formData: FormData): Promise<Result> {
   const profile = await requireManager();
   if (!profile) return FORBIDDEN;
@@ -73,6 +104,8 @@ export async function createEvent(formData: FormData): Promise<Result> {
   const invalid = validate(e);
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
+  const busy = await roomConflict(supabase, e);
+  if (busy) return { ok: false, error: busy };
   const { data, error } = await supabase.from('planning_events').insert({ ...e, created_by: profile.id }).select('id').single();
   if (error) return { ok: false, error: /poec_id/.test(error.message) ? 'Exécute d’abord la migration 49 (supabase/migration_phase49.sql) dans Supabase.' : error.message };
   refreshProgram(e);
@@ -89,6 +122,8 @@ export async function updateEvent(id: string, formData: FormData): Promise<Resul
   const invalid = validate(e);
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
+  const busy = await roomConflict(supabase, e);
+  if (busy) return { ok: false, error: busy };
   const { error } = await supabase.from('planning_events').update(e).eq('id', id);
   if (error) return { ok: false, error: error.message };
   refreshProgram(e);
