@@ -1,4 +1,4 @@
-import { readDfLinks, uncoveredTrainees } from '@/lib/digiforma-links';
+import { readDfLinks, uncoveredTrainees, isDfNone } from '@/lib/digiforma-links';
 
 /**
  * Relances côté équipe : sessions qui commencent d'ici la fin de la semaine
@@ -47,6 +47,7 @@ export async function sessionsWithoutDigiforma(supabase: any, ids: string[]): Pr
     }
   }
   for (const r of rows) {
+    if (isDfNone(r)) continue; // « Pas de lien pour cette session »
     const links = readDfLinks(r);
     if (!links.length) {
       out.set(r.id, 0);

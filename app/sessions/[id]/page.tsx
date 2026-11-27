@@ -3,7 +3,7 @@ import { withoutSessionOnly } from '@/lib/template-edit';
 import { PapersCarousel } from '@/components/papers-carousel';
 import { SessionDeparts } from '@/components/departs/session-departs';
 import { DEPART_SELECT, departureAllowed, type EarlyDeparture } from '@/lib/departs';
-import { readDfLinks, dfDoneMap, sameDfUrl } from '@/lib/digiforma-links';
+import { readDfLinks, dfDoneMap, sameDfUrl, isDfNone } from '@/lib/digiforma-links';
 import { createClient, getCurrentProfile, canManage } from '@/lib/supabase/server';
 import { loadStaff } from '@/lib/tracking';
 import { SessionTrackingBar, SessionHistory, type TraineeTracking } from '@/components/tracking/session-tracking';
@@ -393,6 +393,7 @@ export default async function SessionDetailPage({
     ? null
     : {
         links: dfLinks,
+        none: isDfNone(dfRow as any),
         done: dfDoneMap(dfLinks, dfDoneRow as any),
         trainees: validatedTrainees.map((t) => ({ id: t.id, name: t.name })),
         group: dfGroup,

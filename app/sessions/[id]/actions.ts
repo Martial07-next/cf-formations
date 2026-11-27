@@ -10,7 +10,7 @@ import { parseSessionForm, findSessionConflict } from '@/lib/session-form';
 import { findTraineeConflict, findOrCreateTrainee, resolveTraineesBulk, findTraineeConflictsBulk, sessionLinks, upsertSessionLinks } from '@/lib/trainee-conflict';
 
 import { graftOnCatalogHours } from '@/lib/graft';
-import { readDfLinks, type DfLink } from '@/lib/digiforma-links';
+import { readDfLinks, DF_NONE, type DfLink } from '@/lib/digiforma-links';
 
 export type ActionResult = { ok: true; notice?: string } | { ok: false; error: string };
 
@@ -743,6 +743,18 @@ export async function setDigiformaLinks(sessionId: string, input: DfLink[]): Pro
       if (e2) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
     } else return { ok: false, error: 'Plusieurs liens : exécute d’abord la migration 55 (supabase/migration_phase55.sql) dans Supabase.' };
   }
+  refreshSession(sessionId);
+  return { ok: true };
+}
+
+/** « Pas de lien Digiforma pour cette session » (none = true) ou annulation. */
+export async function setDigiformaNone(sessionId: string, none: boolean): Promise<ActionResult> {
+  if (!(await requireManager())) return FORBIDDEN;
+  const supabase = await createClient();
+  const value = none ? DF_NONE : null;
+  let { error } = await supabase.from('sessions').update({ digiforma_links: null, digiforma_docs_url: value }).eq('id', sessionId);
+  if (error) ({ error } = await supabase.from('sessions').update({ digiforma_docs_url: value }).eq('id', sessionId));
+  if (error) return { ok: false, error: 'Exécute d’abord la migration 36 (supabase/migration_phase36.sql) dans Supabase.' };
   refreshSession(sessionId);
   return { ok: true };
 }

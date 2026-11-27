@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { AlertTriangle, Copy, ExternalLink, Link2, Pencil, Plus, Trash2, Users } from 'lucide-react';
-import { digiformaCandidates, setDigiformaLinks, type DfCandidate } from '@/app/sessions/[id]/actions';
+import { AlertTriangle, Copy, ExternalLink, Link2, Link2Off, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { digiformaCandidates, setDigiformaLinks, setDigiformaNone, type DfCandidate } from '@/app/sessions/[id]/actions';
 import { setDigiformaLinkDone } from '@/app/dossier/actions';
 import { DF_AUDIENCES, linkTrainees, uncoveredTrainees, type DfAudience, type DfLink } from '@/lib/digiforma-links';
 
 export type DigiformaInfo = {
   links: DfLink[];
+  /** « Pas de lien Digiforma pour cette session » coché par l'équipe. */
+  none?: boolean;
   /** « Fait sur Digiforma », lien par lien. */
   done: Record<string, boolean>;
   trainees: { id: string; name: string }[];
@@ -54,6 +56,15 @@ export function DigiformaDocs({
   const missing = info.links.length ? uncoveredTrainees(info.links, ids, group) : [];
 
   if (!info.links.length && !canEdit) return null;
+
+  function markNone(v: boolean) {
+    setError(null);
+    startTransition(async () => {
+      const r = await setDigiformaNone(sessionId, v);
+      if (!r.ok) setError(r.error);
+      else setEditing(false);
+    });
+  }
 
   function toggle(link: DfLink, v: boolean) {
     const next = { ...done, [link.id]: v };
@@ -194,12 +205,22 @@ export function DigiformaDocs({
 
   return (
     <div className="digiforma-docs">
-      {!info.links.length ? (
+      {!info.links.length && info.none ? (
+        <>
+          <span className="hint">
+            <Link2Off size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Pas de lien Digiforma pour cette session : émargements et satisfaction se font sans Digiforma.
+          </span>
+          <button type="button" className="small ghost" onClick={startEdit} disabled={isPending}>Ajouter un lien quand même</button>
+        </>
+      ) : !info.links.length ? (
         <>
           <span className="hint">
             <Link2 size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Pas encore de lien Digiforma : ajoute-le pour que le formateur fasse les émargements et la satisfaction à chaud.
           </span>
           <button type="button" className="small" onClick={startEdit}>Ajouter le lien Digiforma</button>
+          <button type="button" className="small ghost" onClick={() => markNone(true)} disabled={isPending} title="Plus d’alerte « lien Digiforma manquant » pour cette session">
+            <Link2Off size={13} aria-hidden /> Pas de lien pour cette session
+          </button>
         </>
       ) : (
         <div className="df-links">

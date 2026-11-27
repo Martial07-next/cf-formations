@@ -1,3 +1,4 @@
+import { DF_NONE } from '@/lib/digiforma-links';
 import { habEnabled } from '@/lib/habilitation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sessionSlots, dossierProgress } from '@/lib/dossier';
@@ -81,7 +82,7 @@ export async function computeDossierTodo(
   // Fiches d'appréciation (migration 21) : ignorées si la migration manque.
   const faiSess = sess.map((x) => ({ id: x.id, fiche_appreciation: x.fiche_appreciation }));
   const faiTpl = tpls.map((t) => ({ id: t.id, fiche_appreciation: t.fiche_appreciation }));
-  const dfOn = new Set(sess.filter((x) => x.digiforma_docs_url).map((x) => x.id as string));
+  const dfOn = new Set(sess.filter((x) => x.digiforma_docs_url && x.digiforma_docs_url !== DF_NONE).map((x) => x.id as string));
   // Attestations de réussite (migration 39) : formations avec un modèle choisi.
   const arOn = new Set(tpls.filter((t) => reussiteModels(t.attestation_reussite).length).map((t) => t.id as string));
   // Certificats d'habilitation (migration 51) : formations avec des symboles (réglage ou intitulé).

@@ -109,6 +109,15 @@ Les suppressions (session, stagiaire, document, purge) sont **définitives** et 
 
 export const FAQ_PLUS: FaqEntry[] = [
   {
+    id: 'df-none',
+    q: 'Session sans lien Digiforma',
+    keys: ['pas de lien', 'pas de lien digiforma', 'sans lien digiforma', 'aucun lien', 'session sans digiforma', 'lien manquant alerte', 'pas sur digiforma', 'enlever alerte digiforma'],
+    bureau: true,
+    a: `Si une session n'a **pas de session Digiforma** : « Dossier de formation » > **« Pas de lien pour cette session »**.
+L'alerte **« Lien Digiforma manquant »** disparaît du planning et du tableau de bord, et le formateur n'a plus « C'est fait sur Digiforma » à cocher.
+Tu changes d'avis ? **« Ajouter un lien quand même »**, colle le lien et enregistre.`,
+  },
+  {
     id: 'certificateur-externe',
     q: 'Certificateur externe : le formateur est libre ce jour-là',
     keys: ['certificateur externe', 'certificateur', 'evaluateur externe', 'organisme certificateur', 'jury externe', 'formateur libre', 'evaluation externe', 'examen externe'],

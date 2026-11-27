@@ -14,6 +14,15 @@ export const DF_AUDIENCES: { value: DfAudience; label: string; poecOnly?: boolea
   { value: 'custom', label: 'Stagiaires choisis' },
 ];
 
+/**
+ * « Pas de lien Digiforma pour cette session » : valeur posée à la place du lien.
+ * Les alertes « lien manquant » la comptent comme renseignée ; aucun lien n'est affiché.
+ */
+export const DF_NONE = 'aucun-lien';
+export function isDfNone(row: { digiforma_links?: unknown; digiforma_docs_url?: string | null } | null | undefined) {
+  return String(row?.digiforma_docs_url || '').trim() === DF_NONE && !(Array.isArray(row?.digiforma_links) && row!.digiforma_links.length);
+}
+
 /** Liens enregistrés, sinon l'ancien lien unique (migration 55 absente ou ancienne session). */
 export function readDfLinks(row: { digiforma_links?: unknown; digiforma_docs_url?: string | null } | null | undefined): DfLink[] {
   const raw = row?.digiforma_links;
@@ -29,7 +38,7 @@ export function readDfLinks(row: { digiforma_links?: unknown; digiforma_docs_url
       }));
   }
   const url = String(row?.digiforma_docs_url || '').trim();
-  return url ? [{ id: 'main', label: 'Session Digiforma', url, audience: 'all' }] : [];
+  return url && url !== DF_NONE ? [{ id: 'main', label: 'Session Digiforma', url, audience: 'all' }] : [];
 }
 
 /** Stagiaires concernés par un lien. `group` : membres du groupe du parcours. */

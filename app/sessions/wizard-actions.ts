@@ -69,7 +69,7 @@ export async function wizardState(sessionId: string): Promise<{ ok: true; state:
       max_trainees: s.max_trainees,
       room: room && !room.is_holding ? room.name : null,
       trainer: one<any>((s as any).trainers)?.full_name || null,
-      digiforma_docs_url: df.error ? null : ((df.data as any)?.digiforma_docs_url ?? null),
+      digiforma_docs_url: df.error || (df.data as any)?.digiforma_docs_url === 'aucun-lien' ? null : ((df.data as any)?.digiforma_docs_url ?? null),
       hours: Math.round((perDay.reduce((n, d) => n + d.minutes, 0) / 60) * 10) / 10,
       days: perDay.map((d) => d.day),
       dayMinutes: Object.fromEntries(perDay.map((d) => [d.day, d.minutes])),
