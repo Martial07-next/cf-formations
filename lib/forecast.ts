@@ -221,3 +221,91 @@ export function spanInWeek(f: { start_date: string; end_date: string }, monday: 
 }
 
 export const forecastIso = { addD, mondayIso, diffD };
+
+/** Module Digiforma pas encore placé, avec la salle et le formateur proposés. */
+export type DfForecast = {
+  key: string;
+  title: string;
+  parent: string | null;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  trainees: number;
+  template_id: string | null;
+  /** Salle / formateur indiqués sur Digiforma et reconnus sur la plateforme. */
+  df_room_id: string | null;
+  df_trainer_id: string | null;
+  df_place: string | null;
+  room_id: string | null;
+  trainer_id: string | null;
+  why: string;
+};
+
+/**
+ * Pré-positionnement des sessions Digiforma à placer : pour chacune, la salle
+ * où elle peut aller (celle de Digiforma, sinon la salle habituelle de la
+ * formation, sinon une salle équipée ou libre assez grande), sans chevaucher
+ * les vraies sessions, les prévisions ni les autres modules déjà proposés.
+ */
+export function prepositionDigiforma(
+  mods: Omit<DfForecast, 'room_id' | 'trainer_id' | 'why'>[],
+  ctx: {
+    rooms: { id: string; name: string; capacity?: number | null }[];
+    busy: { room_id: string | null; start_date: string; end_date: string }[];
+    /** Salles et formateurs utilisés pour chaque formation (historique), du plus fréquent au moins fréquent. */
+    tplRooms: Record<string, string[]>;
+    tplTrainers: Record<string, string[]>;
+    /** Salles équipées pour une formation (Salles › formations). */
+    equipped: Record<string, string[]>;
+  }
+): DfForecast[] {
+  const taken = new Map<string, Set<string>>();
+  const occupy = (room: string | null, a: string, b: string) => {
+    if (!room) return;
+    const set = taken.get(room) || taken.set(room, new Set()).get(room)!;
+    for (const d of workDays(a, b)) set.add(d);
+  };
+  for (const b of ctx.busy) occupy(b.room_id, b.start_date, b.end_date);
+  const free = (room: string, a: string, b: string) => !workDays(a, b).some((d) => taken.get(room)?.has(d));
+  const name = (id: string) => ctx.rooms.find((r) => r.id === id)?.name || 'salle';
+  const exists = (id: string | null) => Boolean(id && ctx.rooms.some((r) => r.id === id));
+
+  return [...mods]
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .map((m) => {
+      const tpl = m.template_id;
+      const tries: { id: string; why: string }[] = [];
+      if (exists(m.df_room_id)) tries.push({ id: m.df_room_id!, why: 'Salle indiquée sur Digiforma' });
+      for (const r of (tpl && ctx.tplRooms[tpl]) || []) if (exists(r)) tries.push({ id: r, why: 'Salle habituelle de cette formation' });
+      for (const r of (tpl && ctx.equipped[tpl]) || []) if (exists(r)) tries.push({ id: r, why: 'Salle équipée pour cette formation' });
+      const big = ctx.rooms
+        .filter((r) => !r.capacity || r.capacity >= m.trainees)
+        .sort((a, b) => (a.capacity || 999) - (b.capacity || 999));
+      for (const r of big) tries.push({ id: r.id, why: `Salle libre ces jours-là${r.capacity ? ` (${r.capacity} places)` : ''}` });
+      let pick = tries.find((t) => free(t.id, m.start_date, m.end_date)) || null;
+      let why = pick?.why || 'Aucune salle libre ces jours-là : à arbitrer';
+      // Salle de Digiforma prise : on le dit.
+      if (pick && exists(m.df_room_id) && pick.id !== m.df_room_id) why = `${pick.why} (${name(m.df_room_id!)}, prévue sur Digiforma, est déjà prise)`;
+      if (pick) occupy(pick.id, m.start_date, m.end_date);
+      else pick = null;
+      const trainer = m.df_trainer_id || ((tpl && ctx.tplTrainers[tpl]) || [])[0] || null;
+      return { ...m, room_id: pick?.id || null, trainer_id: trainer, why: `${why}${trainer && !m.df_trainer_id ? ' · formateur habituel proposé' : ''}.` };
+    });
+}
+
+/** Valeurs les plus fréquentes d'abord (salles / formateurs par formation). */
+export function rankByUse(rows: { key: string | null; value: string | null }[]): Record<string, string[]> {
+  const m = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    if (!r.key || !r.value) continue;
+    const c = m.get(r.key) || m.set(r.key, new Map()).get(r.key)!;
+    c.set(r.value, (c.get(r.value) || 0) + 1);
+  }
+  return Object.fromEntries([...m].map(([k, c]) => [k, [...c].sort((a, b) => b[1] - a[1]).map(([v]) => v)]));
+}
+
+/** Jours ouvrés d'une période (lundi → vendredi, fériés exclus). */
+export function workingDaysOf(start: string, end: string) {
+  return workDays(start, end);
+}

@@ -232,6 +232,7 @@ export function Planning({
   alerts = null,
   toAssign = [],
   toAssignWeek = null,
+  autoPlace = null,
   toAssignPrograms = [],
   mine = null,
   nowKey = '',
@@ -279,6 +280,8 @@ export function Planning({
   toAssign?: ToAssign[];
   /** Lundi de la semaine des modules (vue semaine / jour) ; null en vue mois (regroupés par semaine). */
   toAssignWeek?: string | null;
+  /** Prévisionnel › « Positionner » une session Digiforma : fenêtre « Placer » ouverte d'office. */
+  autoPlace?: { key: string; roomId: string | null; trainerId: string | null } | null;
   /** Parcours de la plateforme (choix du parcours d'un module). */
   toAssignPrograms?: { id: string; title: string }[];
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
@@ -999,7 +1002,7 @@ export function Planning({
         <span className="legend-item"><CornerDownRight size={13} aria-hidden /> suite d’une formation sur plusieurs jours</span>
       </p>
 
-      {canEdit && toAssign.length > 0 && <ToAssignSection items={toAssign} week={toAssignWeek} programs={toAssignPrograms} rooms={rooms.filter((r) => !r.is_holding && r.status !== 'exterieur').map((r) => ({ id: r.id, name: r.name }))} trainers={trainers.filter((t) => (t.status || 'actif') !== 'inactif').map((t) => ({ id: t.id, name: t.full_name }))} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
+      {canEdit && toAssign.length > 0 && <ToAssignSection autoPlace={autoPlace} items={toAssign} week={toAssignWeek} programs={toAssignPrograms} rooms={rooms.filter((r) => !r.is_holding && r.status !== 'exterieur').map((r) => ({ id: r.id, name: r.name }))} trainers={trainers.filter((t) => (t.status || 'actif') !== 'inactif').map((t) => ({ id: t.id, name: t.full_name }))} catalog={templates.map((t: any) => ({ id: t.id, title: t.title, category: t.category ?? null, duration_hours: Number(t.duration_hours) || 0 }))} />}
 
       {canEdit && (
         <dialog
@@ -1276,6 +1279,8 @@ export type ToAssign = {
   trainerId?: string | null;
   /** Plusieurs modules de la même session Digiforma cette semaine : placés en une session à modules. */
   modules?: { name: string; start_at: string; end_at: string; trainees: number }[];
+  /** Clés des modules Digiforma regroupés dans cette carte. */
+  keys?: string[];
 };
 
 /**
@@ -1291,7 +1296,9 @@ export function ToAssignSection({
   week,
   rooms = [],
   trainers = [],
+  autoPlace = null,
 }: {
+  autoPlace?: { key: string; roomId: string | null; trainerId: string | null } | null;
   items: ToAssign[];
   catalog: { id: string; title: string; category: string | null; duration_hours: number }[];
   programs?: { id: string; title: string }[];
@@ -1321,6 +1328,16 @@ export function ToAssignSection({
   };
   // « Placer » : fenêtre pour vérifier formation, parcours, salle et formateur avant de créer la session.
   const [placing, setPlacing] = useState<ToAssign | null>(null);
+  // Depuis le prévisionnel : la session Digiforma choisie s'ouvre, avec la salle et le formateur retenus.
+  useEffect(() => {
+    if (!autoPlace) return;
+    const it = items.find((i) => !i.covered && (i.id === autoPlace.key || i.keys?.includes(autoPlace.key)));
+    if (it) setPlacing({ ...it, roomId: autoPlace.roomId || it.roomId, trainerId: autoPlace.trainerId || it.trainerId });
+    const p = new URLSearchParams(window.location.search);
+    ['placer', 'salle', 'formateur'].forEach((k) => p.delete(k));
+    router.replace(p.size ? `/?${p}` : '/', { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlace?.key]);
   // Assistant en 4 étapes : formation, session, documents, récapitulatif.
   const openPlace = (s: ToAssign) => setPlacing(s);
   const place = (s: ToAssign) => openPlace(s);

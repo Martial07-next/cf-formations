@@ -165,9 +165,10 @@ Le certificateur **n'apparaît sur aucun document** : attestations, grilles, cer
   {
     id: 'previsionnel',
     q: 'Planning prévisionnel (IA)',
-    keys: ['previsionnel', 'planning previsionnel', 'prevision', 'previsions', 'anticiper', 'prevoir', 'ia planning', 'intelligence artificielle', 'positionner prevision', 'reserver salle a l avance'],
+    keys: ['previsionnel', 'planning previsionnel', 'prepositionner', 'pre positionner', 'ou placer digiforma', 'quelle salle digiforma', 'prevision', 'previsions', 'anticiper', 'prevoir', 'ia planning', 'intelligence artificielle', 'positionner prevision', 'reserver salle a l avance'],
     bureau: true,
     a: `Planning > onglet **Prévisionnel** (bureau seulement, jamais vu par les formateurs) :
+- **Sessions Digiforma à placer** (8 prochaines semaines) : **pré-positionnées** dans une salle libre (celle de Digiforma, sinon la salle habituelle de la formation, une salle équipée ou une salle libre assez grande), avec le formateur. **« Positionner »** ouvre la fenêtre **« Placer »** de la session Digiforma avec la salle et le formateur choisis.
 - **« Générer avec l'IA »** : l'IA lit l'historique (rythme, jour, durée, salle, formateur) et propose les prochaines formations sur 8 semaines, 12 semaines ou 6 mois, avec un **pourcentage de confiance** et la raison. Ce sont des **estimations, rien n'est défini**.
 - **« Ajouter une prévision »** : à la main (formation, dates, salle, formateur).
 - Clic sur une prévision : la modifier, l'**ignorer** (l'IA ne la reproposera plus) ou **« Positionner sur le planning »** : l'assistant de création s'ouvre prérempli pour **configurer la session complètement** (formation, salle, formateur, modules, stagiaires). La prévision passe alors en « Positionnée ».

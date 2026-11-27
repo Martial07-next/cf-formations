@@ -37,9 +37,9 @@ const SESSION_SELECT =
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; view?: string; month?: string; day?: string; vue?: string; prevision?: string }>;
+  searchParams: Promise<{ week?: string; view?: string; month?: string; day?: string; vue?: string; prevision?: string; placer?: string; salle?: string; formateur?: string }>;
 }) {
-  const { week, view, month, day, vue, prevision } = await searchParams;
+  const { week, view, month, day, vue, prevision, placer, salle, formateur } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
   // Onglet « Prévisionnel » (bureau) : sa propre page, sans les lectures du planning.
@@ -363,6 +363,7 @@ export default async function Page({
               })),
               fake: [...fake.values()],
               match: matchModule(dfName, dfName, catalog),
+              keys: its.map((x) => x.id),
               modules: its.map((x) => ({ name: x.title, start_at: x.start_at, end_at: x.end_at, trainees: x.trainees })),
             };
           });
@@ -620,6 +621,7 @@ export default async function Page({
       {canManage(profile?.role) && <PlanningTabs active="planning" />}
       <Planning
         forecastPrefill={forecastPrefill}
+        autoPlace={placer && canManage(profile?.role) ? { key: placer, roomId: salle && /^[0-9a-f-]{36}$/i.test(salle) ? salle : null, trainerId: formateur && /^[0-9a-f-]{36}$/i.test(formateur) ? formateur : null } : null}
         view={currentView}
         canEdit={canManage(profile?.role)}
         myTrainerId={profile?.trainer_id || null}

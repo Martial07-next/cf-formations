@@ -3,22 +3,29 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarCheck2, ChevronLeft, ChevronRight, Info, Plus, Sparkles, Trash2, Wand2, X, EyeOff } from 'lucide-react';
+import { CalendarCheck2, ChevronLeft, ChevronRight, CornerDownRight, Info, Plus, Sparkles, Trash2, Wand2, X, EyeOff, Users } from 'lucide-react';
 import { addForecast, dropForecast, generateForecast, updateForecast, type ForecastInput } from '@/app/previsionnel/actions';
-import { forecastIso, spanInWeek, type Forecast } from '@/lib/forecast';
+import { forecastIso, workingDaysOf, type DfForecast, type Forecast } from '@/lib/forecast';
 import { askConfirm } from '@/lib/confirm-dialog';
 
 type Room = { id: string; name: string };
 type Trainer = { id: string; name: string; color: string | null };
 type Real = { id: string; title: string; status: string; room_id: string | null; start_date: string; end_date: string; trainer: string | null };
 
-const DAYS = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.'];
+const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 const fr = (iso: string) => new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const frLong = (iso: string) => new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const period = (f: { start_date: string; end_date: string }) => (f.start_date === f.end_date ? frLong(f.start_date) : `${frLong(f.start_date)} → ${frLong(f.end_date)}`);
 const firstName = (n: string) => n.split(/\s+/).find((w) => w && w !== w.toUpperCase()) || n;
+const on = (x: { start_date: string; end_date: string }, d: string) => x.start_date <= d && x.end_date >= d && workingDaysOf(x.start_date, x.end_date).includes(d);
+const placeHref = (d: DfForecast, room: string | null, trainer: string | null) =>
+  `/?week=${d.start_date}&placer=${encodeURIComponent(d.key)}${room ? `&salle=${room}` : ''}${trainer ? `&formateur=${trainer}` : ''}`;
 
-/** Onglet Prévisionnel : semaine par salle, prévisions de l'IA et ajoutées à la main. */
+/**
+ * Onglet Prévisionnel : jours à gauche, salles en haut (comme le planning).
+ * Sessions Digiforma à placer (pré-positionnées), prévisions de l'IA ou
+ * manuelles, et en grisé les vraies sessions.
+ */
 export function ForecastView({
   mondayIso,
   todayIso,
@@ -26,6 +33,8 @@ export function ForecastView({
   trainers,
   templates,
   forecasts,
+  digiforma,
+  dfWeeks,
   real,
   migrationMissing,
 }: {
@@ -35,6 +44,8 @@ export function ForecastView({
   trainers: Trainer[];
   templates: { id: string; title: string }[];
   forecasts: Forecast[];
+  digiforma: DfForecast[];
+  dfWeeks: number;
   real: Real[];
   migrationMissing: boolean;
 }) {
@@ -44,25 +55,40 @@ export function ForecastView({
   const [error, setError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState(12);
   const [edit, setEdit] = useState<Forecast | 'new' | null>(null);
+  const [dfOpen, setDfOpen] = useState<DfForecast | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const dfRef = useRef<HTMLDialogElement>(null);
   const days = [0, 1, 2, 3, 4].map((i) => forecastIso.addD(mondayIso, i));
+  const fridayIso = days[4];
   const go = (iso: string) => router.push(`/?vue=previsionnel&week=${iso}`, { scroll: false });
 
-  const inWeek = forecasts.filter((f) => spanInWeek(f, mondayIso));
+  const inWeek = <T extends { start_date: string; end_date: string }>(x: T) => x.start_date <= fridayIso && x.end_date >= mondayIso;
+  const fcWeek = forecasts.filter(inWeek);
+  const dfWeek = digiforma.filter(inWeek);
+  const realWeek = real.filter(inWeek);
+  const known = (id: string | null) => Boolean(id && rooms.some((r) => r.id === id));
+  const cols = useMemo(() => {
+    const list: { id: string | null; name: string }[] = rooms.map((r) => ({ id: r.id, name: r.name }));
+    if ([...fcWeek, ...dfWeek].some((f) => !known(f.room_id))) list.push({ id: null, name: 'Salle à trouver' });
+    return list;
+  }, [rooms, fcWeek, dfWeek]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inCol = (col: string | null, room: string | null) => (col ? room === col : !known(room));
   const roomName = (id: string | null) => rooms.find((r) => r.id === id)?.name || 'Salle à trouver';
   const trainerOf = (id: string | null) => trainers.find((t) => t.id === id) || null;
-  const rows = useMemo(() => {
-    const list: { id: string | null; name: string }[] = rooms.map((r) => ({ id: r.id, name: r.name }));
-    if (inWeek.some((f) => !f.room_id || !rooms.some((r) => r.id === f.room_id))) list.push({ id: null, name: 'Salle à trouver' });
-    return list;
-  }, [rooms, inWeek]);
-  const upcoming = forecasts.filter((f) => f.status === 'prevu' && f.end_date >= todayIso);
+  const upcoming = [
+    ...digiforma.filter((d) => d.end_date >= todayIso).map((d) => ({ kind: 'df' as const, d, start: d.start_date })),
+    ...forecasts.filter((f) => f.status === 'prevu' && f.end_date >= todayIso).map((f) => ({ kind: 'fc' as const, f, start: f.start_date })),
+  ].sort((a, b) => a.start.localeCompare(b.start));
   const placed = forecasts.filter((f) => f.status === 'place').length;
 
   function openEdit(f: Forecast | 'new') {
     setError(null);
     setEdit(f);
     dialogRef.current?.showModal();
+  }
+  function openDf(d: DfForecast) {
+    setDfOpen(d);
+    dfRef.current?.showModal();
   }
   function generate() {
     setError(null);
@@ -73,14 +99,6 @@ export function ForecastView({
       setNotice(r.count ? `L’IA a proposé ${r.count} formation${r.count > 1 ? 's' : ''} sur ${horizon} semaines.` : 'Aucune formation récurrente à prévoir sur cette période.');
       router.refresh();
     });
-  }
-
-  if (migrationMissing) {
-    return (
-      <section className="content">
-        <p className="alert alert-error">Exécute d’abord la migration 80 (supabase/migration_phase80.sql) dans Supabase pour utiliser le prévisionnel.</p>
-      </section>
-    );
   }
 
   return (
@@ -97,12 +115,13 @@ export function ForecastView({
         <div>
           <strong>Estimé à l’aide d’une intelligence artificielle · rien n’est défini</strong>
           <span>
-            L’IA lit l’historique des sessions (rythme, jour, durée, salle, formateur) et propose les prochaines formations. Ce sont des estimations pour
-            anticiper les salles et les formateurs : visibles seulement par le bureau, jamais envoyées aux formateurs ni aux stagiaires. Pour en faire une vraie
-            session : <b>« Positionner sur le planning »</b>, puis la configuration complète de la session.
+            Les <b>sessions Digiforma à placer</b> sont pré-positionnées dans une salle libre (celle de Digiforma, sinon la salle habituelle de la formation). L’IA
+            propose aussi les formations qui reviennent d’après l’historique. Ce sont des estimations, visibles seulement par le bureau. Pour en faire une vraie session :{' '}
+            <b>« Positionner sur le planning »</b>, puis la configuration complète de la session.
           </span>
         </div>
       </div>
+      {migrationMissing && <p className="alert alert-error">Prévisions de l’IA : exécute d’abord la migration 80 (supabase/migration_phase80.sql) dans Supabase. Les sessions Digiforma sont déjà pré-positionnées.</p>}
 
       <div className="toolbar">
         <div className="period">
@@ -116,112 +135,144 @@ export function ForecastView({
           <button type="button" className="small ghost" onClick={() => go(todayIso)}>Cette semaine</button>
         </div>
         <span className="spacer" />
-        <label className="forecast-horizon">
-          <span className="sr-only">Période</span>
-          <select value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} aria-label="Période à prévoir">
-            <option value={8}>8 semaines</option>
-            <option value={12}>12 semaines</option>
-            <option value={26}>6 mois</option>
-          </select>
-        </label>
-        <button type="button" className="small" onClick={generate} disabled={isPending}>
-          <Wand2 size={14} aria-hidden /> {isPending ? 'L’IA réfléchit…' : 'Générer avec l’IA'}
-        </button>
-        <button type="button" className="small primary" onClick={() => openEdit('new')}>
-          <Plus size={14} aria-hidden /> Ajouter une prévision
-        </button>
+        {!migrationMissing && (
+          <>
+            <label className="forecast-horizon">
+              <select value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} aria-label="Période à prévoir">
+                <option value={8}>8 semaines</option>
+                <option value={12}>12 semaines</option>
+                <option value={26}>6 mois</option>
+              </select>
+            </label>
+            <button type="button" className="small" onClick={generate} disabled={isPending}>
+              <Wand2 size={14} aria-hidden /> {isPending ? 'L’IA réfléchit…' : 'Générer avec l’IA'}
+            </button>
+            <button type="button" className="small primary" onClick={() => openEdit('new')}>
+              <Plus size={14} aria-hidden /> Ajouter une prévision
+            </button>
+          </>
+        )}
       </div>
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
       {error && <p role="alert" className="alert alert-error">{error}</p>}
 
       <div className="forecast-grid-wrap">
-        <div className="forecast-grid" role="table" aria-label={`Prévisionnel, semaine du ${fr(mondayIso)}`}>
-          <div className="fg-head" role="row">
-            <span className="fg-room" role="columnheader">Salle</span>
-            <div className="fg-days">
-              {days.map((d, i) => (
-                <span key={d} role="columnheader" className={d === todayIso ? 'today' : ''}>
-                  {DAYS[i]} <b>{fr(d)}</b>
-                </span>
+        <table className="fg-table" style={{ ['--n' as any]: cols.length }} aria-label={`Prévisionnel, semaine du ${fr(mondayIso)}`}>
+          <thead>
+            <tr>
+              <th className="fg-day-h">Jour</th>
+              {cols.map((c) => (
+                <th key={c.id || 'none'} className={c.id ? '' : 'fg-none'}>{c.name}</th>
               ))}
-            </div>
-          </div>
-          {rows.map((row) => {
-            const fcs = inWeek.filter((f) => (row.id ? f.room_id === row.id : !f.room_id || !rooms.some((r) => r.id === f.room_id)));
-            const rs = row.id ? real.filter((s) => s.room_id === row.id) : [];
-            return (
-              <div className="fg-row" role="row" key={row.id || 'none'}>
-                <span className="fg-room" role="rowheader">{row.name}</span>
-                <div className="fg-days fg-cells">
-                  {days.map((d) => (
-                    <span key={d} className="fg-cell" aria-hidden />
-                  ))}
-                  {rs.map((s) => {
-                    const sp = spanInWeek(s, mondayIso)!;
-                    if (!sp) return null;
-                    return (
-                      <Link key={s.id} href={`/sessions/${s.id}`} className="fg-real" style={{ gridColumn: `${sp.col + 1} / span ${sp.span}` }} title="Session réelle du planning">
-                        <span className="fg-title">{s.title}</span>
-                        <small>Planning réel{s.trainer ? ` · ${firstName(s.trainer)}` : ''}</small>
-                      </Link>
-                    );
-                  })}
-                  {fcs.map((f) => {
-                    const sp = spanInWeek(f, mondayIso);
-                    if (!sp) return null;
-                    const t = trainerOf(f.trainer_id);
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        className={`fg-fc ${f.status}${f.source === 'ia' ? ' ai' : ''}`}
-                        style={{ gridColumn: `${sp.col + 1} / span ${sp.span}`, ['--c' as any]: t?.color || undefined }}
-                        onClick={() => openEdit(f)}
-                        title={f.reason || 'Prévision ajoutée à la main'}
-                      >
-                        <span className="fg-title">{f.title}</span>
-                        <small>
-                          {f.status === 'place' ? '✓ Positionnée' : f.source === 'ia' ? `IA · ${f.confidence ?? '?'} %` : 'Ajoutée à la main'}
-                          {t ? ` · ${firstName(t.name)}` : ''}
-                        </small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d, i) => (
+              <tr key={d} className={d === todayIso ? 'today' : ''}>
+                <th scope="row" className="fg-day">
+                  <span>{DAYS[i]}</span>
+                  <b>{fr(d)}</b>
+                </th>
+                {cols.map((c) => {
+                  const rs = c.id ? realWeek.filter((s) => s.room_id === c.id && on(s, d)) : [];
+                  const dfs = dfWeek.filter((x) => inCol(c.id, x.room_id) && on(x, d));
+                  const fcs = fcWeek.filter((x) => inCol(c.id, x.room_id) && on(x, d));
+                  return (
+                    <td key={c.id || 'none'}>
+                      {dfs.map((x) => {
+                        const suite = x.start_date < d;
+                        const t = trainerOf(x.trainer_id);
+                        return (
+                          <button key={x.key} type="button" className="fg-card df" onClick={() => openDf(x)} title={x.why}>
+                            <span className="fg-title">{suite && <CornerDownRight size={11} aria-label="suite" />} {x.title}</span>
+                            <small>
+                              Digiforma · <Users size={10} aria-hidden /> {x.trainees}
+                              {t ? ` · ${firstName(t.name)}` : ''}
+                            </small>
+                          </button>
+                        );
+                      })}
+                      {fcs.map((f) => {
+                        const suite = f.start_date < d;
+                        const t = trainerOf(f.trainer_id);
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            className={`fg-card ${f.status}${f.source === 'ia' ? ' ai' : ' man'}`}
+                            style={{ ['--c' as any]: t?.color || undefined }}
+                            onClick={() => openEdit(f)}
+                            title={f.reason || 'Prévision ajoutée à la main'}
+                          >
+                            <span className="fg-title">{suite && <CornerDownRight size={11} aria-label="suite" />} {f.title}</span>
+                            <small>
+                              {f.status === 'place' ? '✓ Positionnée' : f.source === 'ia' ? `IA · ${f.confidence ?? '?'} %` : 'À la main'}
+                              {t ? ` · ${firstName(t.name)}` : ''}
+                            </small>
+                          </button>
+                        );
+                      })}
+                      {rs.map((s) => (
+                        <Link key={s.id} href={`/sessions/${s.id}`} className="fg-card real" title="Session réelle du planning">
+                          <span className="fg-title">{s.start_date < d && <CornerDownRight size={11} aria-label="suite" />} {s.title}</span>
+                          <small>Planning{s.trainer ? ` · ${firstName(s.trainer)}` : ''}</small>
+                        </Link>
+                      ))}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <p className="legend">
-        <span className="legend-item"><span className="fg-swatch ai" /> Prévision de l’IA (pourcentage = confiance)</span>
-        <span className="legend-item"><span className="fg-swatch man" /> Prévision ajoutée à la main</span>
-        <span className="legend-item"><span className="fg-swatch real" /> Session réelle (déjà sur le planning)</span>
-        {placed > 0 && <span className="legend-item"><CalendarCheck2 size={13} aria-hidden /> {placed} prévision{placed > 1 ? 's' : ''} déjà positionnée{placed > 1 ? 's' : ''}</span>}
+        <span className="legend-item"><span className="fg-swatch df" /> Session Digiforma à placer (salle proposée)</span>
+        <span className="legend-item"><span className="fg-swatch ai" /> Prévision de l’IA (% = confiance)</span>
+        <span className="legend-item"><span className="fg-swatch man" /> Ajoutée à la main</span>
+        <span className="legend-item"><span className="fg-swatch real" /> Déjà sur le planning</span>
+        {placed > 0 && <span className="legend-item"><CalendarCheck2 size={13} aria-hidden /> {placed} prévision{placed > 1 ? 's' : ''} positionnée{placed > 1 ? 's' : ''}</span>}
       </p>
 
-      <h2 className="sub-heading">À venir · {upcoming.length} prévision{upcoming.length > 1 ? 's' : ''}</h2>
+      <h2 className="sub-heading">À venir · {upcoming.length}</h2>
+      <p className="hint" style={{ marginTop: -6 }}>Sessions Digiforma à placer ({dfWeeks} prochaines semaines) et prévisions, par date.</p>
       {!upcoming.length ? (
-        <p className="empty">Aucune prévision. Clique sur « Générer avec l’IA » ou ajoute-en une à la main.</p>
+        <p className="empty">Rien à prévoir. Clique sur « Générer avec l’IA » ou ajoute une prévision à la main.</p>
       ) : (
         <ul className="forecast-list">
-          {upcoming.slice(0, 80).map((f) => (
-            <li key={f.id}>
-              <button type="button" className="fl-main" onClick={() => go(f.start_date)} title="Voir la semaine">
-                <span className="fl-date">{period(f)}</span>
-                <strong>{f.title}</strong>
-                <small>
-                  {roomName(f.room_id)}
-                  {trainerOf(f.trainer_id) ? ` · ${trainerOf(f.trainer_id)!.name}` : ''}
-                  {f.source === 'ia' ? ` · IA ${f.confidence ?? '?'} %` : ' · ajoutée à la main'}
-                </small>
-              </button>
-              <span className="fl-actions">
-                <button type="button" className="small ghost" onClick={() => openEdit(f)}>Détails</button>
-                <Link className="btn small primary" href={`/?week=${f.start_date}&prevision=${f.id}`}>Positionner</Link>
-              </span>
-            </li>
-          ))}
+          {upcoming.slice(0, 100).map((u) =>
+            u.kind === 'df' ? (
+              <li key={u.d.key} className="df">
+                <button type="button" className="fl-main" onClick={() => go(u.d.start_date)} title="Voir la semaine">
+                  <span className="fl-date">{period(u.d)}</span>
+                  <strong>{u.d.title}</strong>
+                  <small>
+                    <span className="fl-tag df">Digiforma</span> {roomName(u.d.room_id)}
+                    {trainerOf(u.d.trainer_id) ? ` · ${trainerOf(u.d.trainer_id)!.name}` : ''} · {u.d.trainees} stagiaire{u.d.trainees > 1 ? 's' : ''}
+                  </small>
+                </button>
+                <span className="fl-actions">
+                  <button type="button" className="small ghost" onClick={() => openDf(u.d)}>Détails</button>
+                  <Link className="btn small primary" href={placeHref(u.d, u.d.room_id, u.d.trainer_id)}>Positionner</Link>
+                </span>
+              </li>
+            ) : (
+              <li key={u.f.id}>
+                <button type="button" className="fl-main" onClick={() => go(u.f.start_date)} title="Voir la semaine">
+                  <span className="fl-date">{period(u.f)}</span>
+                  <strong>{u.f.title}</strong>
+                  <small>
+                    <span className={`fl-tag ${u.f.source === 'ia' ? 'ai' : 'man'}`}>{u.f.source === 'ia' ? `IA ${u.f.confidence ?? '?'} %` : 'À la main'}</span> {roomName(u.f.room_id)}
+                    {trainerOf(u.f.trainer_id) ? ` · ${trainerOf(u.f.trainer_id)!.name}` : ''}
+                  </small>
+                </button>
+                <span className="fl-actions">
+                  <button type="button" className="small ghost" onClick={() => openEdit(u.f)}>Détails</button>
+                  <Link className="btn small primary" href={`/?week=${u.f.start_date}&prevision=${u.f.id}`}>Positionner</Link>
+                </span>
+              </li>
+            )
+          )}
         </ul>
       )}
 
@@ -243,7 +294,72 @@ export function ForecastView({
           />
         )}
       </dialog>
+      <dialog ref={dfRef} className="modal forecast-modal" onClose={() => setDfOpen(null)} aria-labelledby="df-title">
+        {dfOpen && <DfDetails key={dfOpen.key} d={dfOpen} rooms={rooms} trainers={trainers} onClose={() => dfRef.current?.close()} />}
+      </dialog>
     </section>
+  );
+}
+
+/** Session Digiforma à placer : salle et formateur proposés, modifiables avant de la positionner. */
+function DfDetails({ d, rooms, trainers, onClose }: { d: DfForecast; rooms: Room[]; trainers: Trainer[]; onClose: () => void }) {
+  const [room, setRoom] = useState(d.room_id || '');
+  const [trainer, setTrainer] = useState(d.trainer_id || '');
+  return (
+    <>
+      <div className="modal-head">
+        <h2 id="df-title">Session Digiforma à placer</h2>
+        <button type="button" className="icon ghost" aria-label="Fermer" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+      <div className="modal-body">
+        <p className="df-head">
+          <strong>{d.title}</strong>
+          {d.parent && d.parent !== d.title && <span className="hint">Session Digiforma : {d.parent}</span>}
+          <span className="hint">
+            {period(d)} · {d.start_time.replace(':', 'h')} – {d.end_time.replace(':', 'h')} · {d.trainees} stagiaire{d.trainees > 1 ? 's' : ''}
+          </span>
+        </p>
+        <p className="forecast-why">
+          <Sparkles size={15} aria-hidden />
+          <span>
+            <b>Pré-positionnement proposé</b> : {d.why}
+            {d.df_place ? ` Sur Digiforma : ${d.df_place}.` : ''}
+          </span>
+        </p>
+        <div className="form-row">
+          <label className="field">
+            <span>Salle</span>
+            <select value={room} onChange={(e) => setRoom(e.target.value)}>
+              <option value="">À affecter</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}{r.id === d.room_id ? ' (proposée)' : ''}{r.id === d.df_room_id ? ' (Digiforma)' : ''}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Formateur</span>
+            <select value={trainer} onChange={(e) => setTrainer(e.target.value)}>
+              <option value="">À définir</option>
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}{t.id === d.df_trainer_id ? ' (Digiforma)' : ''}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="hint">
+          <Info size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> « Positionner sur le planning » ouvre la fenêtre « Placer » de la session Digiforma (formation, parcours, salle, formateur, documents) : la
+          session reste reliée à Digiforma (stagiaires et modules à jour).
+        </p>
+      </div>
+      <div className="modal-foot forecast-foot">
+        <span className="spacer" />
+        <Link className="btn small primary" href={placeHref(d, room || null, trainer || null)}>
+          <CalendarCheck2 size={14} aria-hidden /> Positionner sur le planning
+        </Link>
+      </div>
+    </>
   );
 }
 
