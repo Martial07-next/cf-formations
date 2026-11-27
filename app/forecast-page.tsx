@@ -120,7 +120,6 @@ export async function ForecastPage({ week }: { week?: string }) {
           templates={catalog}
           forecasts={forecasts}
           digiforma={dfForecasts}
-          dfWeeks={DF_WEEKS}
           migrationMissing={Boolean(fc.error)}
           real={realList}
         />

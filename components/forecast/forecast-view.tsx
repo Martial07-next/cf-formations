@@ -34,7 +34,6 @@ export function ForecastView({
   templates,
   forecasts,
   digiforma,
-  dfWeeks,
   real,
   migrationMissing,
 }: {
@@ -45,7 +44,6 @@ export function ForecastView({
   templates: { id: string; title: string }[];
   forecasts: Forecast[];
   digiforma: DfForecast[];
-  dfWeeks: number;
   real: Real[];
   migrationMissing: boolean;
 }) {
@@ -75,10 +73,17 @@ export function ForecastView({
   const inCol = (col: string | null, room: string | null) => (col ? room === col : !known(room));
   const roomName = (id: string | null) => rooms.find((r) => r.id === id)?.name || 'Salle à trouver';
   const trainerOf = (id: string | null) => trainers.find((t) => t.id === id) || null;
+  // Liste sous la grille : seulement la semaine affichée.
   const upcoming = [
-    ...digiforma.filter((d) => d.end_date >= todayIso).map((d) => ({ kind: 'df' as const, d, start: d.start_date })),
-    ...forecasts.filter((f) => f.status === 'prevu' && f.end_date >= todayIso).map((f) => ({ kind: 'fc' as const, f, start: f.start_date })),
+    ...dfWeek.map((d) => ({ kind: 'df' as const, d, start: d.start_date })),
+    ...fcWeek.filter((f) => f.status === 'prevu').map((f) => ({ kind: 'fc' as const, f, start: f.start_date })),
   ].sort((a, b) => a.start.localeCompare(b.start));
+  const stats = {
+    df: dfWeek.length,
+    ai: fcWeek.filter((f) => f.status === 'prevu' && f.source === 'ia').length,
+    man: fcWeek.filter((f) => f.status === 'prevu' && f.source !== 'ia').length,
+    noRoom: [...dfWeek, ...fcWeek.filter((f) => f.status === 'prevu')].filter((x) => !known(x.room_id)).length,
+  };
   const placed = forecasts.filter((f) => f.status === 'place').length;
 
   function openEdit(f: Forecast | 'new') {
@@ -103,24 +108,35 @@ export function ForecastView({
 
   return (
     <section className="content forecast">
-      <header>
+      <header className="fc-header">
         <div>
           <p className="eyebrow">Planning</p>
           <h1>Planning prévisionnel</h1>
         </div>
+        <span className="fc-ai-badge" title="Estimé à l’aide d’une intelligence artificielle : rien n’est défini">
+          <Sparkles size={14} aria-hidden /> Estimé par IA · non définitif
+        </span>
       </header>
 
-      <div className="forecast-ai" role="note">
-        <Sparkles size={18} aria-hidden />
-        <div>
-          <strong>Estimé à l’aide d’une intelligence artificielle · rien n’est défini</strong>
-          <span>
-            Les <b>sessions Digiforma à placer</b> sont pré-positionnées dans une salle libre (celle de Digiforma, sinon la salle habituelle de la formation). L’IA
-            propose aussi les formations qui reviennent d’après l’historique. Ce sont des estimations, visibles seulement par le bureau. Pour en faire une vraie session :{' '}
-            <b>« Positionner sur le planning »</b>, puis la configuration complète de la session.
-          </span>
-        </div>
-      </div>
+      <details className="fc-help">
+        <summary>
+          <Info size={14} aria-hidden /> Comment ça marche ? <span className="hint">Visible seulement par le bureau</span>
+        </summary>
+        <ol className="fc-steps">
+          <li>
+            <span className="fc-step df">1</span>
+            <span><b>Sessions Digiforma à placer</b> : pré-positionnées dans une salle libre (celle de Digiforma, sinon la salle habituelle de la formation).</span>
+          </li>
+          <li>
+            <span className="fc-step ai">2</span>
+            <span><b>Prévisions de l’IA</b> : formations qui reviennent d’après l’historique (rythme, jour, salle, formateur), avec un % de confiance.</span>
+          </li>
+          <li>
+            <span className="fc-step ok">3</span>
+            <span><b>« Positionner sur le planning »</b> : ouvre la configuration complète de la vraie session. Rien n’est réservé avant.</span>
+          </li>
+        </ol>
+      </details>
       {migrationMissing && <p className="alert alert-error">Prévisions de l’IA : exécute d’abord la migration 80 (supabase/migration_phase80.sql) dans Supabase. Les sessions Digiforma sont déjà pré-positionnées.</p>}
 
       <div className="toolbar">
@@ -152,6 +168,12 @@ export function ForecastView({
             </button>
           </>
         )}
+      </div>
+      <div className="fc-stats" aria-label="Cette semaine">
+        <span className={`fc-stat df${stats.df ? '' : ' zero'}`}><b>{stats.df}</b> Digiforma à placer</span>
+        <span className={`fc-stat ai${stats.ai ? '' : ' zero'}`}><b>{stats.ai}</b> prévision{stats.ai > 1 ? 's' : ''} de l’IA</span>
+        <span className={`fc-stat man${stats.man ? '' : ' zero'}`}><b>{stats.man}</b> ajoutée{stats.man > 1 ? 's' : ''} à la main</span>
+        {stats.noRoom > 0 && <span className="fc-stat warn"><b>{stats.noRoom}</b> salle{stats.noRoom > 1 ? 's' : ''} à trouver</span>}
       </div>
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
       {error && <p role="alert" className="alert alert-error">{error}</p>}
@@ -234,10 +256,9 @@ export function ForecastView({
         {placed > 0 && <span className="legend-item"><CalendarCheck2 size={13} aria-hidden /> {placed} prévision{placed > 1 ? 's' : ''} positionnée{placed > 1 ? 's' : ''}</span>}
       </p>
 
-      <h2 className="sub-heading">À venir · {upcoming.length}</h2>
-      <p className="hint" style={{ marginTop: -6 }}>Sessions Digiforma à placer ({dfWeeks} prochaines semaines) et prévisions, par date.</p>
+      <h2 className="sub-heading">Cette semaine · {upcoming.length} à positionner</h2>
       {!upcoming.length ? (
-        <p className="empty">Rien à prévoir. Clique sur « Générer avec l’IA » ou ajoute une prévision à la main.</p>
+        <p className="empty">Rien à positionner cette semaine. Change de semaine, clique sur « Générer avec l’IA » ou ajoute une prévision à la main.</p>
       ) : (
         <ul className="forecast-list">
           {upcoming.slice(0, 100).map((u) =>
