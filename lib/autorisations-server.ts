@@ -89,7 +89,7 @@ export async function loadAutorContext(token: string): Promise<AutorContext> {
             id: d.id, title: d.title, description: d.description, version: d.version, url: urls[d.id] || null,
           })),
           loans: ((loanRows as any[]) || []).filter((l) => l.trainee_id === e.id).map((l) => ({ id: l.id, vestes: l.vestes, pantalons: l.pantalons, baudriers: l.baudriers || 0 })),
-          imageRefused: lastImage ? !lastImage.accepted : false,
+          imageRefused: lastImage ? !lastImage.accepted || Boolean((lastImage.data as any)?.revoked_at) : false,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr')),

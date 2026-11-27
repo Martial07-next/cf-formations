@@ -2660,3 +2660,20 @@ dialog.place-modal.pw{width:min(780px,calc(100vw - 24px))}
 .cert-fix-wide{grid-column:1 / -1}
 .cert-fix > p{grid-column:1 / -1}
 @media (max-width:640px){.cert-fix{grid-template-columns:1fr}}
+
+/* Registre de traçabilité (prêts, droit à l'image, journal) */
+.stat-btn{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.stat-btn:hover{border-color:var(--line-strong);transform:translateY(-1px)}
+.stat-btn.on{border-color:var(--cf-red,#c8102e);box-shadow:0 0 0 2px rgba(200,16,46,.12)}
+.stat-btn.warn strong{color:var(--cf-red-ink)}
+.trace-tabs{display:inline-flex;gap:4px;background:var(--bg,#f4f4f5);border-radius:999px;padding:3px}
+.trace-tabs button{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;border-radius:999px;padding:7px 14px;font:inherit;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;min-height:34px}
+.trace-tabs button.on{background:var(--surface);color:var(--ink,inherit);box-shadow:var(--shadow-sm)}
+tr.trace-late td{background:#fff7f6}
+tr.trace-old td{opacity:.6}
+.trace-late-tag{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11.5px;font-weight:800;color:var(--cf-red-ink)}
+.trace-history summary{cursor:pointer;font-weight:700;font-size:13.5px;color:var(--muted)}
+.trace-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font-size:13px}
+.trace-list li{padding:6px 10px;border-left:3px solid var(--line-strong);background:var(--surface)}
+.trace-when{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:700}
+@media (max-width:640px){.trace-tabs{width:100%}.trace-tabs button{flex:1;justify-content:center;padding:7px 8px}}

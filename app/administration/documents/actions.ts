@@ -109,8 +109,13 @@ export async function documentFileUrl(id: string): Promise<{ ok: true; url: stri
 export async function deleteDocSignature(id: string): Promise<Result> {
   if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
-  const { data, error } = await supabase.from('document_signatures').delete().eq('id', id).select('trainee_id, session_id').maybeSingle();
+  const { data, error } = await supabase.from('document_signatures').delete().eq('id', id).select('trainee_id, employee_id, session_id, version, signed_at, signable_documents(title)').maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (data) {
+    const doc: any = Array.isArray((data as any).signable_documents) ? (data as any).signable_documents[0] : (data as any).signable_documents;
+    const { logTrace } = await import('@/lib/trace-server');
+    await logTrace({ entity: 'document', action: 'supprime', recordId: id, traineeId: data.trainee_id, employeeId: (data as any).employee_id, sessionId: data.session_id, channel: 'bureau', detail: `${doc?.title || 'Document'} (version ${data.version}) signé le ${String(data.signed_at).slice(0, 10).split('-').reverse().join('/')} · sera redemandé` });
+  }
   if (data?.trainee_id) revalidatePath(`/stagiaires/${data.trainee_id}`);
   if (data?.session_id) revalidatePath(`/sessions/${data.session_id}`);
   refresh();

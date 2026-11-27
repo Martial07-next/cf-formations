@@ -120,7 +120,7 @@ export function SessionAutorisations({
       ...kinds.filter((k) => !currentAuth(r.auths, k)).map((k) => AUTH_KIND[k].short),
       ...missingDocs(customDocs, r.docSigs || [], sessionId).map((d) => d.title),
     ],
-    imageRefused: r.auths.some((a) => a.kind === 'image' && !a.accepted && currentAuth(r.auths, 'image')?.id === a.id),
+    imageRefused: r.auths.some((a) => a.kind === 'image' && (!a.accepted || Boolean((a.data as any)?.revoked_at)) && currentAuth(r.auths, 'image')?.id === a.id),
   }));
   const todo = status.filter((s) => s.missing.length);
   const ok = status.filter((s) => !s.missing.length);

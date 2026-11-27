@@ -18,6 +18,7 @@ import {
   Menu,
   Route,
   ClipboardList,
+  ShieldCheck,
   IdCard,
   Receipt,
   Lightbulb,
@@ -58,6 +59,7 @@ function groupsFor(profile: Profile): NavGroup[] {
   if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound });
   if (staff) suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
   if (staff) suivi.push({ href: '/suivi', label: 'Suivi interne', icon: ClipboardList });
+  if (staff) suivi.push({ href: '/tracabilite', label: 'Traçabilité', icon: ShieldCheck });
   // Facturation : accès coché sur le compte (et lecture pour l'administrateur).
   if (profile?.can_invoice || role === 'admin') suivi.push({ href: '/facturation', label: 'Facturation', icon: Receipt });
   if (suivi.length) groups.push({ id: 'suivi', label: 'Suivi', links: suivi });

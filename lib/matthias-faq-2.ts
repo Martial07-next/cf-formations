@@ -109,6 +109,18 @@ Les suppressions (session, stagiaire, document, purge) sont **définitives** et 
 
 export const FAQ_PLUS: FaqEntry[] = [
   {
+    id: 'tracabilite',
+    q: 'Traçabilité : droits à l’image, vêtements et baudriers prêtés',
+    keys: ['tracabilite', 'tracabilite droit a l image', 'tracabilite vetements', 'registre', 'registre des prets', 'qui a prete', 'vetements pas rendus', 'baudriers pas rendus', 'pret en retard', 'droit a l image registre', 'retirer accord', 'retrait droit image', 'journal', 'preuve signature', 'historique autorisations', 'export prets'],
+    bureau: true,
+    a: `Menu **Suivi > Traçabilité** :
+- **Prêts** : tout ce qui est prêté (vestes, pantalons, baudriers), qui l'a prêté, la signature, le retour (qui l'a reçu, ce qui manque) et les prêts **en retard** (formation terminée, pas rendu).
+- **Droit à l'image** : la décision en vigueur de chaque stagiaire et salarié (accord, refus, **accord retiré**), avec l'historique des signatures.
+- **Journal** : chaque action, avec qui, quand, comment (tablette, QR code, lien), l'appareil, l'adresse IP et l'empreinte de la signature. Il ne se modifie pas, même une suppression y reste.
+**Exporter (Excel)** télécharge le tableau affiché.
+Un stagiaire ne veut plus de photos : fiche du stagiaire > Autorisations > **« Retirer l'accord »** (avec le motif). La signature d'origine est gardée.`,
+  },
+  {
     id: 'df-none',
     q: 'Session sans lien Digiforma',
     keys: ['pas de lien', 'pas de lien digiforma', 'sans lien digiforma', 'aucun lien', 'session sans digiforma', 'lien manquant alerte', 'pas sur digiforma', 'enlever alerte digiforma'],

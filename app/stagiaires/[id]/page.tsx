@@ -77,6 +77,10 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
     supabase.from('trainees').select('address').eq('id', id).maybeSingle(),
   ]);
   const { data: loanRows } = await supabase.from('clothing_loans').select(LOAN_SELECT).eq('trainee_id', id);
+  // Registre de traçabilité (migration 79) : lisible par l'équipe seulement.
+  const { data: traceRows, error: traceError } = canManage(profile?.role)
+    ? await supabase.from('trace_log').select('*').eq('trainee_id', id).order('created_at', { ascending: false }).limit(200)
+    : { data: null, error: true };
   // Documents ajoutés par l'administrateur (règlement intérieur…), migration 28.
   const [allDocs, docSigs] = await Promise.all([loadDocs(supabase as any), loadDocSignatures(supabase as any, 'trainee_id', [id])]);
   const traineeDocs = customDocsOf(allDocs, 'stagiaire');
@@ -116,6 +120,7 @@ export default async function TraineeDetailPage({ params }: { params: Promise<{ 
             sessionTitles={sessionTitles}
             canManage={canManage(profile?.role)}
             cachet={((settings as any)?.cachet_image as string) || null}
+            history={traceError ? null : ((traceRows as any[]) || [])}
           />
         )}
 

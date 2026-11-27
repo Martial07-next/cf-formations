@@ -10,6 +10,7 @@ import { validSignature } from '@/lib/emargement';
 import { authMissing, isAuthKind, validAuthData, AUTH_KIND, type AuthKind } from '@/lib/autorisations';
 import { loadAutorContext } from '@/lib/autorisations-server';
 import { staffOf } from '@/lib/session-staff';
+import { logTrace } from '@/lib/trace-server';
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -84,9 +85,20 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
   if (!rows.length && !trainee.loans.length && !trainee.docs.length) return { ok: true, count: 0 };
 
   const admin = createAdminClient();
+  const trace: Parameters<typeof logTrace>[0] & any[] = [];
+  const base = { anonymous: true, traineeId, sessionId: ctx.sessionId, channel: 'qr' as const, signature: payload.signature };
   if (rows.length) {
-    const { error } = await admin.from('trainee_authorizations').insert(rows);
+    const { data: saved, error } = await admin.from('trainee_authorizations').insert(rows).select('id, kind, accepted');
     if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
+    for (const r of (saved as any[]) || []) {
+      trace.push({
+        ...base,
+        entity: r.kind === 'image' ? 'image' : 'livret',
+        action: r.kind === 'image' ? (r.accepted ? 'accord' : 'refus') : 'signe',
+        recordId: r.id,
+        detail: `${AUTH_KIND[r.kind as AuthKind]?.short || r.kind} · fait à ${city}`,
+      });
+    }
   }
   // Documents ajoutés (règlement intérieur…) : même signature.
   if (trainee.docs.length) {
@@ -97,6 +109,7 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
       }))
     );
     if (docError) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
+    for (const d of trainee.docs) trace.push({ ...base, entity: 'document', action: 'signe', recordId: d.id, detail: `${d.title} (version ${d.version}) · fait à ${city}` });
   }
   // Vêtements TST prêtés : même signature.
   if (trainee.loans.length) {
@@ -105,7 +118,9 @@ export async function signAuthorizations(token: string, traineeId: string, paylo
       .update({ address: loanAddress, city, signature: payload.signature, signed_at: new Date().toISOString() })
       .in('id', trainee.loans.map((l) => l.id))
       .is('signed_at', null);
+    for (const l of trainee.loans) trace.push({ ...base, entity: 'pret', action: 'signe', recordId: l.id, detail: `Prêt signé · fait à ${city}` });
   }
+  await logTrace(trace);
 
   // Adresse / entreprise : reprises dans la fiche du stagiaire.
   const address = rows.map((r) => (r.data as any).address).find(Boolean) || loanAddress;
@@ -129,10 +144,33 @@ export async function markReturned(id: string, returned: boolean): Promise<Resul
     .from('trainee_authorizations')
     .update(returned ? { returned_at: new Date().toISOString(), returned_by: profile.id } : { returned_at: null, returned_by: null })
     .eq('id', id)
-    .select('trainee_id, session_id')
+    .select('trainee_id, session_id, kind')
     .maybeSingle();
   if (error || !data) return { ok: false, error: error?.message || 'Autorisation introuvable.' };
+  await logTrace({ entity: data.kind === 'image' ? 'image' : 'livret', action: returned ? 'restitue' : 'annule_retour', recordId: id, traineeId: data.trainee_id, sessionId: data.session_id, channel: 'bureau' });
   refreshTrainee(data.trainee_id, data.session_id);
+  return { ok: true };
+}
+
+/**
+ * Droit à l'image : le stagiaire retire son accord (mail, téléphone…). La
+ * signature d'origine est gardée ; l'accord est marqué « retiré » avec la date,
+ * qui l'a noté et le motif, et la photo ne peut plus être utilisée.
+ */
+export async function revokeImage(id: string, note: string): Promise<Result> {
+  const profile = await requireManager();
+  if (!profile) return FORBIDDEN;
+  const supabase = await createClient();
+  const { data: a } = await supabase.from('trainee_authorizations').select('id, trainee_id, session_id, kind, accepted, data').eq('id', id).maybeSingle();
+  if (!a || a.kind !== 'image') return { ok: false, error: 'Autorisation introuvable.' };
+  if (!a.accepted) return { ok: false, error: 'Le stagiaire n’avait pas donné son accord.' };
+  const motif = String(note || '').trim().slice(0, 300);
+  const data = { ...((a.data as any) || {}), revoked_at: new Date().toISOString(), revoked_by: profile.full_name || null, revoked_note: motif || null };
+  const { error } = await supabase.from('trainee_authorizations').update({ data }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  await logTrace({ entity: 'image', action: 'retire', recordId: id, traineeId: a.trainee_id, sessionId: a.session_id, channel: 'bureau', detail: motif || 'Accord retiré à la demande du stagiaire' });
+  refreshTrainee(a.trainee_id, a.session_id);
+  revalidatePath('/tracabilite');
   return { ok: true };
 }
 
@@ -140,8 +178,13 @@ export async function markReturned(id: string, returned: boolean): Promise<Resul
 export async function deleteAuthorization(id: string): Promise<Result> {
   if (!(await requireManager())) return FORBIDDEN;
   const supabase = await createClient();
-  const { data, error } = await supabase.from('trainee_authorizations').delete().eq('id', id).select('trainee_id, session_id').maybeSingle();
+  const { data, error } = await supabase.from('trainee_authorizations').delete().eq('id', id).select('trainee_id, session_id, kind, accepted, signed_at, city, data').maybeSingle();
   if (error || !data) return { ok: false, error: error?.message || 'Autorisation introuvable.' };
+  await logTrace({
+    entity: data.kind === 'image' ? 'image' : 'livret', action: 'supprime', recordId: id, traineeId: data.trainee_id, sessionId: data.session_id, channel: 'bureau',
+    detail: `${AUTH_KIND[data.kind as AuthKind]?.short || data.kind}${data.kind === 'image' ? (data.accepted ? ' (accord)' : ' (refus)') : ''} signé le ${String(data.signed_at).slice(0, 10).split('-').reverse().join('/')} · sera redemandé`,
+    snapshot: data as any,
+  });
   refreshTrainee(data.trainee_id, data.session_id);
   return { ok: true };
 }

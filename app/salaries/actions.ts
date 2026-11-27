@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logTrace } from '@/lib/trace-server';
 import { requireAdmin, FORBIDDEN } from '@/lib/auth';
 import { validSignature } from '@/lib/emargement';
 import { cleanMaterial, validEmployeeToken, EMPLOYEE_DOC_SELECT, type EmployeeDoc } from '@/lib/salaries';
@@ -61,8 +62,10 @@ export async function updateEmployee(id: string, fd: FormData): Promise<Result> 
 export async function deleteEmployee(id: string): Promise<Result> {
   if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
+  const { data: gone } = await supabase.from('employees').select('full_name').eq('id', id).maybeSingle();
   const { error } = await supabase.from('employees').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
+  await logTrace({ entity: 'salarie_materiel', action: 'supprime', personName: gone?.full_name || null, detail: 'Salarié supprimé avec ses documents', channel: 'bureau' });
   refresh();
   return { ok: true };
 }
@@ -73,8 +76,9 @@ export async function addMaterial(employeeId: string, fd: FormData): Promise<Res
   const material = cleanMaterial(Object.fromEntries(fd.entries()));
   if (!Object.keys(material).length) return { ok: false, error: 'Coche au moins un équipement.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('employee_documents').insert({ employee_id: employeeId, kind: 'materiel', data: material });
+  const { data: doc, error } = await supabase.from('employee_documents').insert({ employee_id: employeeId, kind: 'materiel', data: material }).select('id').single();
   if (error) return { ok: false, error: error.message };
+  await logTrace({ entity: 'salarie_materiel', action: 'cree', recordId: doc.id, employeeId, channel: 'bureau', detail: Object.entries(material).map(([k, v]) => `${k} : ${v}`).join(', '), snapshot: material as any });
   refresh();
   return { ok: true };
 }
@@ -87,6 +91,7 @@ export async function requestImage(employeeId: string): Promise<Result> {
   if (pending?.length) return { ok: false, error: 'Un droit à l’image est déjà en attente de signature.' };
   const { error } = await supabase.from('employee_documents').insert({ employee_id: employeeId, kind: 'image' });
   if (error) return { ok: false, error: error.message };
+  await logTrace({ entity: 'salarie_image', action: 'demande', employeeId, channel: 'bureau' });
   refresh();
   return { ok: true };
 }
@@ -103,6 +108,8 @@ export async function recordReturn(docId: string, signature: string): Promise<Re
     .eq('id', docId)
     .eq('kind', 'materiel');
   if (error) return { ok: false, error: error.message };
+  const { data: d } = await supabase.from('employee_documents').select('employee_id').eq('id', docId).maybeSingle();
+  await logTrace({ entity: 'salarie_materiel', action: 'restitue', recordId: docId, employeeId: d?.employee_id || null, channel: 'tablette', signature });
   refresh();
   return { ok: true };
 }
@@ -110,8 +117,10 @@ export async function recordReturn(docId: string, signature: string): Promise<Re
 export async function deleteEmployeeDoc(docId: string): Promise<Result> {
   if (!(await requireAdmin())) return FORBIDDEN;
   const supabase = await createClient();
+  const { data: d } = await supabase.from('employee_documents').select('employee_id, kind, accepted, signed_at, data, returned_at').eq('id', docId).maybeSingle();
   const { error } = await supabase.from('employee_documents').delete().eq('id', docId);
   if (error) return { ok: false, error: error.message };
+  if (d) await logTrace({ entity: d.kind === 'image' ? 'salarie_image' : 'salarie_materiel', action: 'supprime', recordId: docId, employeeId: d.employee_id, channel: 'bureau', detail: d.signed_at ? `signé le ${String(d.signed_at).slice(0, 10).split('-').reverse().join('/')}` : 'non signé', snapshot: d as any });
   refresh();
   return { ok: true };
 }
@@ -166,6 +175,17 @@ export async function signEmployeeDocs(
     if (error) return { ok: false, error: 'Enregistrement impossible, réessaie.' };
   }
   await admin.from('employees').update({ address }).eq('id', emp.id);
+  const base = { anonymous: true, employeeId: emp.id, channel: 'lien' as const, signature: payload.signature };
+  await logTrace([
+    ...pending.map((d) => ({
+      ...base,
+      entity: (d.kind === 'image' ? 'salarie_image' : 'salarie_materiel') as 'salarie_image' | 'salarie_materiel',
+      action: d.kind === 'image' ? (payload.imageAccepted !== false ? 'accord' : 'refus') : 'signe',
+      recordId: d.id,
+      detail: `fait à ${city}`,
+    })),
+    ...custom.map((d) => ({ ...base, entity: 'document' as const, action: 'signe', recordId: d.id, detail: `${d.title} (version ${d.version}) · fait à ${city}` })),
+  ]);
   revalidatePath(`/salarie/${link}`);
   refresh();
   return { ok: true };

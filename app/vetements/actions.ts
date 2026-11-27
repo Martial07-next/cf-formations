@@ -5,7 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireManager, FORBIDDEN } from '@/lib/auth';
 import { staffOf } from '@/lib/session-staff';
 import { validSignature } from '@/lib/emargement';
-import { clampQty, LOAN_SELECT, type ClothingLoan } from '@/lib/vetements';
+import { clampQty, LOAN_SELECT, loanText, missingText, type ClothingLoan } from '@/lib/vetements';
+import { logTrace } from '@/lib/trace-server';
+import { getCurrentProfile } from '@/lib/supabase/server';
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -55,9 +57,11 @@ async function createLoan(traineeId: string, sessionId: string | null, qty: Qty,
     if (!enrolled) return { ok: false, error: 'Ce stagiaire n’est pas inscrit à la session.' };
   }
   const now = new Date().toISOString();
+  const me = await getCurrentProfile();
   const { data, error } = await admin
     .from('clothing_loans')
     .insert({
+      lent_by: me?.id || null,
       trainee_id: traineeId,
       session_id: sessionId,
       vestes,
@@ -70,6 +74,11 @@ async function createLoan(traineeId: string, sessionId: string | null, qty: Qty,
     .single();
   if (error) return { ok: false, error: /baudriers|clothing_loans_some/i.test(error.message) ? 'Exécute d’abord la migration 74 (supabase/migration_phase74.sql) dans Supabase.' : MIGRATION };
   if (sign) await admin.from('trainees').update({ address: sign.address.trim().slice(0, 300) }).eq('id', traineeId);
+  const what = loanText({ vestes, pantalons, baudriers } as ClothingLoan);
+  await logTrace([
+    { entity: 'pret', action: 'prete', recordId: data.id, traineeId, sessionId, detail: what, snapshot: { vestes, pantalons, baudriers } },
+    ...(sign ? [{ entity: 'pret' as const, action: 'signe', recordId: data.id, traineeId, sessionId, channel: 'tablette' as const, detail: `${what} · fait à ${sign.city.trim()}`, signature: sign.signature }] : []),
+  ]);
   refresh({ trainee_id: traineeId, session_id: sessionId });
   return { ok: true, id: data.id };
 }
@@ -104,6 +113,7 @@ export async function signLoan(id: string, sign: SignInput): Promise<Result> {
     .eq('id', id);
   if (error) return { ok: false, error: error.message };
   await admin.from('trainees').update({ address: sign.address.trim().slice(0, 300) }).eq('id', loan.trainee_id);
+  await logTrace({ entity: 'pret', action: 'signe', recordId: id, traineeId: loan.trainee_id, sessionId: loan.session_id, channel: 'tablette', detail: `${loanText(loan)} · fait à ${sign.city.trim()}`, signature: sign.signature });
   refresh(loan);
   return { ok: true };
 }
@@ -121,9 +131,11 @@ export async function returnClothes(id: string, ret: { vestes: number; pantalons
   const vestes = Math.min(loan.vestes, clampQty(ret.vestes));
   const pantalons = Math.min(loan.pantalons, clampQty(ret.pantalons));
   const baudriers = Math.min(loan.baudriers || 0, clampQty(ret.baudriers));
+  const me = await getCurrentProfile();
   const { error } = await admin
     .from('clothing_loans')
     .update({
+      returned_by: me?.id || null,
       returned_vestes: vestes,
       returned_pantalons: pantalons,
       ...(loan.baudriers ? { returned_baudriers: baudriers } : {}),
@@ -133,6 +145,13 @@ export async function returnClothes(id: string, ret: { vestes: number; pantalons
     })
     .eq('id', id);
   if (error) return { ok: false, error: error.message };
+  const after = { ...loan, returned_at: 'x', returned_vestes: vestes, returned_pantalons: pantalons, returned_baudriers: baudriers } as ClothingLoan;
+  const manque = missingText(after);
+  await logTrace({
+    entity: 'pret', action: manque ? 'restitue_incomplet' : 'restitue', recordId: id, traineeId: loan.trainee_id, sessionId: loan.session_id, channel: 'tablette',
+    detail: [`Rendu : ${loanText({ vestes, pantalons, baudriers } as ClothingLoan)}`, manque, String(ret.note || '').trim()].filter(Boolean).join(' · '),
+    signature: ret.signature,
+  });
   refresh(loan);
   return { ok: true };
 }
@@ -143,6 +162,7 @@ export async function deleteLoan(id: string): Promise<Result> {
   if (!loan) return { ok: false, error: 'Prêt introuvable.' };
   const { error } = await admin.from('clothing_loans').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
+  await logTrace({ entity: 'pret', action: 'supprime', recordId: id, traineeId: loan.trainee_id, sessionId: loan.session_id, detail: `${loanText(loan)}${loan.signed_at ? ' · prêt signé' : ' · non signé'}${loan.returned_at ? ' · déjà rendu' : ''}`, snapshot: loan as any });
   refresh(loan);
   return { ok: true };
 }
@@ -160,6 +180,7 @@ export async function loanSignToken(id: string): Promise<Result<{ token: string 
   const token = randomBytes(24).toString('base64url');
   const { error } = await admin.from('clothing_loans').update({ sign_token: token }).eq('id', id);
   if (error) return { ok: false, error: QR_MIGRATION };
+  await logTrace({ entity: 'pret', action: 'qr', recordId: id, traineeId: loan.trainee_id, sessionId: loan.session_id, detail: loanText(loan) });
   return { ok: true, token };
 }
 
@@ -207,6 +228,7 @@ export async function signLoanByToken(token: string, sign: SignInput): Promise<R
     .is('signed_at', null);
   if (error) return { ok: false, error: error.message };
   await admin.from('trainees').update({ address: sign.address.trim().slice(0, 300) }).eq('id', loan.trainee_id);
+  await logTrace({ entity: 'pret', action: 'signe', anonymous: true, recordId: loan.id, traineeId: loan.trainee_id, sessionId: loan.session_id, channel: 'qr', detail: `${loanText(loan)} · fait à ${sign.city.trim()}`, signature: sign.signature });
   refresh(loan);
   return { ok: true };
 }
