@@ -5,6 +5,8 @@ import { companyKey } from '@/lib/company';
 import { congesConfigured, syncCongesIfStale } from '@/lib/conges-sync';
 import { applyHolidayShiftsIfStale } from '@/lib/holiday-shifts';
 import { Planning } from '@/components/planning';
+import { ForecastPage } from '@/app/forecast-page';
+import { PlanningTabs } from '@/components/forecast/planning-tabs';
 import { DigiformaAutoSync } from '@/components/digiforma-auto-sync';
 import { compareRooms } from '@/lib/buildings';
 import { loadDayTrainers } from '@/lib/day-trainers';
@@ -35,11 +37,32 @@ const SESSION_SELECT =
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; view?: string; month?: string; day?: string }>;
+  searchParams: Promise<{ week?: string; view?: string; month?: string; day?: string; vue?: string; prevision?: string }>;
 }) {
-  const { week, view, month, day } = await searchParams;
+  const { week, view, month, day, vue, prevision } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  // Onglet « Prévisionnel » (bureau) : sa propre page, sans les lectures du planning.
+  if (vue === 'previsionnel' && canManage(profile?.role)) return <ForecastPage week={week} />;
+  // « Positionner sur le planning » depuis le prévisionnel : l'assistant de session s'ouvre prérempli.
+  let forecastPrefill: { id: string; defaults: Record<string, any> } | null = null;
+  if (prevision && /^[0-9a-f-]{36}$/i.test(prevision) && canManage(profile?.role)) {
+    const { data: f } = await supabase.from('forecast_sessions').select('*').eq('id', prevision).maybeSingle();
+    if (f && (f as any).status !== 'place')
+      forecastPrefill = {
+        id: (f as any).id,
+        defaults: {
+          title: (f as any).title,
+          template_id: (f as any).template_id,
+          room_id: (f as any).room_id || undefined,
+          trainer_id: (f as any).trainer_id,
+          start_date: (f as any).start_date,
+          end_date: (f as any).end_date,
+          start_time: (f as any).start_time,
+          end_time: (f as any).end_time,
+        },
+      };
+  }
   // Congés de la plateforme de congés : mis à jour en arrière-plan (au plus toutes les 10 min).
   // Jours fériés (décisions de CF Congés) : sessions décalées avec la même synchronisation.
   after(async () => {
@@ -593,7 +616,10 @@ export default async function Page({
   return (
     <main>
       <DigiformaAutoSync showStatus={canManage(profile?.role)} />
+      <div className="planning-stack">
+      {canManage(profile?.role) && <PlanningTabs active="planning" />}
       <Planning
+        forecastPrefill={forecastPrefill}
         view={currentView}
         canEdit={canManage(profile?.role)}
         myTrainerId={profile?.trainer_id || null}
@@ -636,6 +662,7 @@ export default async function Page({
         toAssignPrograms={toAssignPrograms}
         toAssignWeek={currentView === 'month' ? null : isoDate(weekStart)}
       />
+      </div>
     </main>
   );
 }

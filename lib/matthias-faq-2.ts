@@ -163,6 +163,17 @@ Le certificateur **n'apparaît sur aucun document** : attestations, grilles, cer
   },
   // ---------------------------------------------------------------- Digiforma avancé
   {
+    id: 'previsionnel',
+    q: 'Planning prévisionnel (IA)',
+    keys: ['previsionnel', 'planning previsionnel', 'prevision', 'previsions', 'anticiper', 'prevoir', 'ia planning', 'intelligence artificielle', 'positionner prevision', 'reserver salle a l avance'],
+    bureau: true,
+    a: `Planning > onglet **Prévisionnel** (bureau seulement, jamais vu par les formateurs) :
+- **« Générer avec l'IA »** : l'IA lit l'historique (rythme, jour, durée, salle, formateur) et propose les prochaines formations sur 8 semaines, 12 semaines ou 6 mois, avec un **pourcentage de confiance** et la raison. Ce sont des **estimations, rien n'est défini**.
+- **« Ajouter une prévision »** : à la main (formation, dates, salle, formateur).
+- Clic sur une prévision : la modifier, l'**ignorer** (l'IA ne la reproposera plus) ou **« Positionner sur le planning »** : l'assistant de création s'ouvre prérempli pour **configurer la session complètement** (formation, salle, formateur, modules, stagiaires). La prévision passe alors en « Positionnée ».
+En grisé : les vraies sessions déjà sur le planning, pour voir les salles libres.`,
+  },
+  {
     id: 'df-removed',
     q: 'Session supprimée ou annulée sur Digiforma',
     keys: ['session supprimee digiforma', 'session annulee digiforma', 'retiree digiforma', 'supprimer sur digiforma', 'session disparue', 'annulee sur digiforma'],

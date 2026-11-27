@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, Plus, Search, Clock, Users, CornerDownRight,
 import { dossierBadgeLabel, type DossierBadge } from '@/lib/billing';
 import { PHASE_LABEL, dayPhase, type SessionPhase } from '@/lib/session-phase';
 import { createSession } from '@/app/sessions/actions';
+import { markForecastPlaced } from '@/app/previsionnel/actions';
 import { type FormTemplate, type SessionFormDefaults } from '@/components/session-form';
 import { SessionWizard } from '@/components/session-wizard';
 import { SESSION_STATUSES, SESSION_STATUS_LABEL } from '@/lib/status';
@@ -234,6 +235,7 @@ export function Planning({
   toAssignPrograms = [],
   mine = null,
   nowKey = '',
+  forecastPrefill = null,
   renderedAt = 0,
 }: {
   view: 'day' | 'week' | 'month';
@@ -281,6 +283,8 @@ export function Planning({
   toAssignPrograms?: { id: string; title: string }[];
   /** Heure de Paris « 2026-10-19T09:30 » (en cours / terminée). */
   nowKey?: string;
+  /** Prévision à positionner : l'assistant de session s'ouvre prérempli (configuration complète). */
+  forecastPrefill?: { id: string; defaults: SessionFormDefaults } | null;
   /** Formateur : ses formations, affichées en premier. */
   mine?: React.ReactNode;
   /** Heure du rendu serveur : une page restaurée (retour arrière) trop ancienne est rechargée. */
@@ -558,6 +562,17 @@ export function Planning({
     router.replace(p.size ? `/?${p}` : '/', { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantsCreate]);
+  // Prévisionnel › « Positionner sur le planning » : configuration complète de la session, préremplie.
+  const forecastId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!forecastPrefill || !canEdit) return;
+    forecastId.current = forecastPrefill.id;
+    openForm(forecastPrefill.defaults);
+    const p = new URLSearchParams(searchParams);
+    p.delete('prevision');
+    router.replace(p.size ? `/?${p}` : '/', { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forecastPrefill?.id]);
 
 
   // Samedi : affiché seulement si un évènement (formation du samedi) y est programmé.
@@ -1007,7 +1022,15 @@ export function Planning({
             absences={absences}
             defaults={formDefaults}
             onClose={() => dialogRef.current?.close()}
-            onCreated={(id) => (createdId.current = id)}
+            onCreated={(id) => {
+              createdId.current = id;
+              // Prévision positionnée : elle passe en « positionnée » dans le prévisionnel.
+              if (forecastId.current) {
+                const fid = forecastId.current;
+                forecastId.current = null;
+                markForecastPlaced(fid, id);
+              }
+            }}
           />
         </dialog>
       )}
