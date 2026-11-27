@@ -95,6 +95,7 @@ function SessionCard({
   dossier = null,
   replacement = null,
   external = null,
+  started = false,
   reserved = 0,
   pendingSeats = 0,
   missingTitles = 0,
@@ -120,6 +121,8 @@ function SessionCard({
   replacement?: { full_name: string; color: string | null } | null;
   /** Certificateur externe ce jour-là (le formateur est libre). */
   external?: string | null;
+  /** Session commencée : les stagiaires en attente ne viendront pas, on ne les affiche plus. */
+  started?: boolean;
   /** Places réservées par entreprise, sans nom. */
   reserved?: number;
   /** Places d'entreprise en attente : ajoutées aux stagiaires en attente. */
@@ -149,7 +152,7 @@ function SessionCard({
         <span className="sc-count" title={`Stagiaires validés${reserved ? ` + ${reserved} place${reserved > 1 ? 's' : ''} réservée${reserved > 1 ? 's' : ''} sans nom` : ''} / places`}>
           <Users size={11} aria-hidden /> {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
         </span>
-        {waitingCount(s) + pendingSeats > 0 && (
+        {!started && waitingCount(s) + pendingSeats > 0 && (
           <span className="sc-waiting" title={`${waitingCount(s)} stagiaire${waitingCount(s) > 1 ? 's' : ''} en attente de validation${pendingSeats ? ` + ${pendingSeats} place${pendingSeats > 1 ? 's' : ''} d’entreprise en attente` : ''}`}>
             <Hourglass size={10} aria-hidden /> {waitingCount(s) + pendingSeats} en attente
           </span>
@@ -614,6 +617,7 @@ export function Planning({
         poec={poecTitles[s.id] || null}
         by={createdBy[s.id] || null}
         external={externalOn(dayTrainers, s, dIso)}
+        started={Boolean(nowKey) && s.start_at.slice(0, 16) <= nowKey}
         replacement={dayTrainers[s.id]?.[dIso]?.trainer_id ? trainers.find((t) => t.id === dayTrainers[s.id][dIso].trainer_id) || null : null}
       />
     );
@@ -954,7 +958,7 @@ export function Planning({
                           </span>
                           <span className="chip-trainer">
                             {room}{trainer ? ` · ${trainer}` : ''} · {count}{s.max_trainees != null ? `/${s.max_trainees}` : ''}
-                            {waitingCount(s) + (reservedPending[s.id] || 0) > 0 && <b className="chip-waiting" title="Stagiaires et places d’entreprise en attente"> · {waitingCount(s) + (reservedPending[s.id] || 0)} en attente</b>}
+                            {!(nowKey && s.start_at.slice(0, 16) <= nowKey) && waitingCount(s) + (reservedPending[s.id] || 0) > 0 && <b className="chip-waiting" title="Stagiaires et places d’entreprise en attente"> · {waitingCount(s) + (reservedPending[s.id] || 0)} en attente</b>}
                             {(missingTitles[s.id] || 0) > 0 && <b className="chip-titles" title="Titres d’habilitation demandés (recyclage) pas encore fournis"> · ⚠ {missingTitles[s.id]} titre{missingTitles[s.id] > 1 ? 's' : ''}</b>}
                           </span>
                           {createdBy[s.id] && <span className="chip-by">Créée par {createdBy[s.id]}</span>}

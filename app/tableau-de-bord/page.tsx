@@ -14,7 +14,6 @@ import {
   PenLine,
   Plus,
   Receipt,
-  RefreshCcw,
   Route,
   UserPlus,
 } from 'lucide-react';
@@ -336,59 +335,69 @@ export default async function DashboardPage() {
           </Link>
         )}
 
-        <div className="dash-grid">
-          {trainerId && (
-            <>
+        {/* Grille alignée : une section par rôle, cartes de même hauteur sur chaque ligne. */}
+        {trainerId && (
+          <section className="dash-section">
+            {staff && <h2 className="dash-section-title">Mes formations</h2>}
+            <div className="dash-grid" style={{ ['--cols' as any]: myLeaves.length ? 4 : 3 }}>
               <Card icon={<CalendarClock size={17} aria-hidden />} title="Aujourd’hui" items={myToday} empty="Pas de formation aujourd’hui." tone="dark" />
               <Card icon={<FileSignature size={17} aria-hidden />} title="Documents à remplir" items={myTodo} empty="Tous tes dossiers sont à jour." tone={myTodo.length ? 'warn' : undefined} />
               <Card icon={<CalendarDays size={17} aria-hidden />} title="Mes prochaines formations" items={myWeek} empty="Rien de prévu dans les 7 prochains jours." />
               {myLeaves.length > 0 && <Card icon={<CalendarOff size={17} aria-hidden />} title="Mes congés (30 jours)" items={myLeaves} empty="" />}
-            </>
-          )}
+            </div>
+          </section>
+        )}
 
-          {staff && (
-            <>
-              <Card icon={<AlertTriangle size={17} aria-hidden />} title={`À préparer (${ALERT_PERIOD})`} items={toPrepare} empty="Toutes les sessions à venir sont prêtes." tone={toPrepare.some((i) => i.badge?.tone === 'urgent') ? 'urgent' : toPrepare.length ? 'warn' : undefined} />
-              {!trainerId && <Card icon={<CalendarClock size={17} aria-hidden />} title="Formations du jour" items={todayAll} empty="Aucune formation aujourd’hui." tone="dark" />}
-              <Card icon={<ClipboardList size={17} aria-hidden />} title="Dossiers en attente du formateur" items={waitTrainer} empty="Aucun dossier en attente." tone={waitTrainer.length ? 'warn' : undefined} hint="Sessions terminées dont le formateur n’a pas tout rempli." />
-              <Card icon={<FileSignature size={17} aria-hidden />} title="Dossiers à boucler (bureau)" items={officeTodo} empty="Rien à boucler." />
-              <Card
-                icon={<Route size={17} aria-hidden />}
-                title="Parcours POEC et personnalisés en cours"
-                items={poecItems}
-                empty="Aucun parcours en cours."
-                footer={
-                  <span className="dash-card-links">
-                    <Link href="/poec?nouveau=1"><Plus size={13} aria-hidden /> Parcours POEC</Link>
-                    <Link href="/poec?nouveau=1&type=personnalise"><Plus size={13} aria-hidden /> Parcours personnalisé</Link>
-                    {poecItems.length > 0 && <span className="hint">Session personnalisée : ouvre le parcours › « Session personnalisée »</span>}
-                  </span>
-                }
-              />
-            </>
-          )}
+        {(staff || billing) && (
+          <section className="dash-section">
+            {trainerId && <h2 className="dash-section-title">Bureau</h2>}
+            <div className="dash-grid" style={{ ['--cols' as any]: 3 }}>
+              {staff && (
+                <>
+                  <Card icon={<AlertTriangle size={17} aria-hidden />} title="À préparer" hint={`Sessions qui commencent ${ALERT_PERIOD}.`} items={toPrepare} empty="Toutes les sessions à venir sont prêtes." tone={toPrepare.some((i) => i.badge?.tone === 'urgent') ? 'urgent' : toPrepare.length ? 'warn' : undefined} />
+                  {!trainerId && <Card icon={<CalendarClock size={17} aria-hidden />} title="Formations du jour" items={todayAll} empty="Aucune formation aujourd’hui." tone="dark" />}
+                  <Card icon={<ClipboardList size={17} aria-hidden />} title="Dossiers en attente du formateur" items={waitTrainer} empty="Aucun dossier en attente." tone={waitTrainer.length ? 'warn' : undefined} hint="Sessions terminées dont le formateur n’a pas tout rempli." />
+                  <Card icon={<FileSignature size={17} aria-hidden />} title="Dossiers à boucler (bureau)" items={officeTodo} empty="Rien à boucler." />
+                </>
+              )}
+              {isAdmin && (
+                <Card
+                  icon={<UserPlus size={17} aria-hidden />}
+                  title="Administration"
+                  tone={syncs.length ? 'urgent' : undefined}
+                  items={[
+                    { href: '/administration', title: 'Demandes d’accès', badge: accessCount ? { text: `${accessCount} en attente`, tone: 'warn' } : { text: 'Aucune', tone: 'ok' } },
+                    { href: '/ameliorations', title: 'Remarques dev', badge: devCount ? { text: `${devCount} à traiter`, tone: 'warn' } : { text: 'Aucune', tone: 'ok' } },
+                    // Synchronisations : affichées seulement en cas d'erreur.
+                    ...syncs,
+                  ]}
+                  empty=""
+                />
+              )}
+              {staff && (
+                <Card
+                  icon={<Route size={17} aria-hidden />}
+                  title="Parcours POEC et personnalisés"
+                  items={poecItems}
+                  empty="Aucun parcours en cours."
+                  footer={
+                    <span className="dash-card-links">
+                      <Link href="/poec?nouveau=1"><Plus size={13} aria-hidden /> Parcours POEC</Link>
+                      <Link href="/poec?nouveau=1&type=personnalise"><Plus size={13} aria-hidden /> Parcours personnalisé</Link>
+                    </span>
+                  }
+                />
+              )}
+              {billing && <Card icon={<Receipt size={17} aria-hidden />} title="À facturer" items={toBill} empty="Toutes les sessions terminées sont facturées." tone={toBill.length ? 'warn' : undefined} />}
+            </div>
+          </section>
+        )}
 
-          {billing && <Card icon={<Receipt size={17} aria-hidden />} title="À facturer" items={toBill} empty="Toutes les sessions terminées sont facturées." tone={toBill.length ? 'warn' : undefined} />}
-
-          {isAdmin && (
-            <>
-              <Card
-                icon={<UserPlus size={17} aria-hidden />}
-                title="Administration"
-                items={[
-                  { href: '/administration', title: 'Demandes d’accès', badge: accessCount ? { text: `${accessCount} en attente`, tone: 'warn' } : { text: 'Aucune', tone: 'ok' } },
-                  { href: '/ameliorations', title: 'Remarques dev', badge: devCount ? { text: `${devCount} à traiter`, tone: 'warn' } : { text: 'Aucune', tone: 'ok' } },
-                ]}
-                empty=""
-              />
-              {syncs.length > 0 && <Card icon={<RefreshCcw size={17} aria-hidden />} title="Synchronisation en erreur" items={syncs} empty="" tone="urgent" />}
-            </>
-          )}
-
-          {!trainerId && !staff && !billing && (
+        {!trainerId && !staff && !billing && (
+          <div className="dash-grid" style={{ ['--cols' as any]: 3 }}>
             <Card icon={<Lightbulb size={17} aria-hidden />} title="Bienvenue" items={[{ href: '/', title: 'Ouvrir le planning', meta: 'Toutes les formations, salle par salle' }]} empty="" />
-          )}
-        </div>
+          </div>
+        )}
 
         {(trainerId || staff) && (
           <p className="hint dash-foot">
