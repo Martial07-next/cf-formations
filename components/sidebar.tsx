@@ -31,69 +31,77 @@ import { logout } from '@/app/login/actions';
 import { ROLE_LABELS, canManage, type Role } from '@/lib/roles';
 
 type Profile = { full_name: string; role: string; trainer_id?: string | null; can_invoice?: boolean; can_dev?: boolean; pending_requests?: number; dev_open?: number } | null;
-type NavLink = { href: string; label: string; icon: typeof CalendarDays };
+type NavLink = { href: string; label: string; icon: typeof CalendarDays; desc?: string };
 
 type NavGroup = { id: string; label: string | null; links: NavLink[] };
 
 /**
- * Menu par rôle, en groupes courts : l'essentiel toujours visible en haut,
- * le reste dans des groupes repliables (Suivi, Catalogue, Administration).
- * Les parcours POEC / personnalisés se créent et s'ouvrent depuis le tableau de bord.
+ * Menu rangé par ce qu'on vient faire :
+ *  · en haut, le quotidien (tableau de bord, À faire, planning) ;
+ *  · Formations : sessions, stagiaires, parcours ;
+ *  · Suivi : facturation, relances, équipe, traçabilité ;
+ *  · Réglages (replié par défaut) : catalogue, formateurs, salles, salariés, administration.
+ * Chaque lien a une courte explication (survol).
  */
 function groupsFor(profile: Profile): NavGroup[] {
   const role = profile?.role;
   const staff = canManage(role);
+  const isAdmin = role === 'admin';
   const groups: NavGroup[] = [
     {
       id: 'main',
       label: null,
       links: [
-        { href: '/tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard },
-        ...(staff ? [{ href: '/a-faire', label: 'À faire', icon: ListTodo }] : []),
-        { href: '/', label: 'Planning', icon: CalendarDays },
-        { href: '/sessions', label: 'Sessions', icon: ListChecks },
-        ...(profile?.trainer_id ? [{ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History }] : []),
+        { href: '/tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard, desc: 'Ma journée et ce qui arrive' },
+        ...(staff ? [{ href: '/a-faire', label: 'À faire', icon: ListTodo, desc: 'Tout ce qui attend le bureau, du plus urgent au moins urgent' }] : []),
+        { href: '/', label: 'Planning', icon: CalendarDays, desc: 'Les formations semaine par semaine, salle par salle' },
+        ...(!staff ? [{ href: '/sessions', label: 'Sessions', icon: ListChecks, desc: 'Liste de toutes les sessions' }] : []),
+        ...(profile?.trainer_id ? [{ href: `/formateurs/${profile.trainer_id}`, label: 'Mon historique', icon: History, desc: 'Mes formations passées et à venir' }] : []),
       ],
     },
   ];
 
-  const suivi: NavLink[] = [];
-  if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound });
-  if (staff) suivi.push({ href: '/equipe', label: 'Équipes & suivi', icon: UsersRound });
-  if (staff) suivi.push({ href: '/suivi', label: 'Suivi interne', icon: ClipboardList });
-  if (staff) suivi.push({ href: '/tracabilite', label: 'Traçabilité', icon: ShieldCheck });
-  // Facturation : accès coché sur le compte (et lecture pour l'administrateur).
-  if (profile?.can_invoice || role === 'admin') suivi.push({ href: '/facturation', label: 'Facturation', icon: Receipt });
-  if (suivi.length) groups.push({ id: 'suivi', label: 'Suivi', links: suivi });
-
   if (staff) {
     groups.push({
-      id: 'catalogue',
-      label: 'Catalogue',
+      id: 'formations',
+      label: 'Formations',
       links: [
-        { href: '/modeles', label: 'Formations', icon: FolderOpen },
-        { href: '/stagiaires', label: 'Stagiaires', icon: Users },
-        // Formateurs et salles : administrateur seulement (inutiles au bureau).
-        ...(role === 'admin' ? [{ href: '/formateurs', label: 'Formateurs', icon: GraduationCap }] : []),
-        ...(role === 'admin' ? [{ href: '/salles', label: 'Salles', icon: DoorOpen }] : []),
+        { href: '/sessions', label: 'Sessions', icon: ListChecks, desc: 'Liste de toutes les sessions, avec recherche et filtres' },
+        { href: '/stagiaires', label: 'Stagiaires', icon: Users, desc: 'Fiches stagiaires : formations, autorisations, prêts' },
+        { href: '/poec', label: 'Parcours', icon: Route, desc: 'Parcours POEC et personnalisés' },
       ],
     });
   }
-  const admin: NavLink[] = [];
-  if (role === 'admin') {
-    admin.push({ href: '/administration', label: 'Administration', icon: Settings });
-    admin.push({ href: '/salaries', label: 'Salariés', icon: IdCard });
+
+  const suivi: NavLink[] = [];
+  // Facturation : accès coché sur le compte (et lecture pour l'administrateur).
+  if (profile?.can_invoice || isAdmin) suivi.push({ href: '/facturation', label: 'Facturation', icon: Receipt, desc: 'Sessions terminées à facturer' });
+  if (staff) suivi.push({ href: '/suivi', label: 'Relances', icon: ClipboardList, desc: 'Stagiaires en attente à relancer, sessions suivies par chacun' });
+  if (role === 'referent') suivi.push({ href: '/equipe', label: 'Mon équipe', icon: UsersRound, desc: 'Les formateurs de mon équipe' });
+  if (staff) suivi.push({ href: '/equipe', label: 'Formateurs & équipes', icon: UsersRound, desc: 'Charge et suivi des formateurs' });
+  if (staff) suivi.push({ href: '/tracabilite', label: 'Traçabilité', icon: ShieldCheck, desc: 'Prêts, droits à l’image et journal des signatures' });
+  if (suivi.length) groups.push({ id: 'suivi', label: 'Suivi', links: suivi });
+
+  const settings: NavLink[] = [];
+  if (staff) settings.push({ href: '/modeles', label: 'Catalogue des formations', icon: FolderOpen, desc: 'Formations proposées : durée, documents, réglages' });
+  if (isAdmin) {
+    settings.push({ href: '/formateurs', label: 'Formateurs', icon: GraduationCap, desc: 'Coordonnées, habilitations, disponibilités' });
+    settings.push({ href: '/salles', label: 'Salles', icon: DoorOpen, desc: 'Salles et lieux de formation' });
+    settings.push({ href: '/salaries', label: 'Salariés', icon: IdCard, desc: 'Salariés CF Réseaux : matériel, droit à l’image' });
+    settings.push({ href: '/administration', label: 'Administration', icon: Settings, desc: 'Comptes, paramètres, intégrations' });
   }
   // Remarques d'amélioration : accès dev et administrateur.
-  if (profile?.can_dev || role === 'admin') admin.push({ href: '/ameliorations', label: 'Améliorations', icon: Lightbulb });
-  if (admin.length) groups.push({ id: 'admin', label: role === 'admin' ? 'Administration' : 'Dev', links: admin });
+  if (profile?.can_dev || isAdmin) settings.push({ href: '/ameliorations', label: 'Améliorations', icon: Lightbulb, desc: 'Remarques et idées pour la plateforme' });
+  if (settings.length) groups.push({ id: 'reglages', label: isAdmin || staff ? 'Réglages' : 'Dev', links: settings });
   return groups;
 }
 
 /** Pages accessibles sans être dans le menu (ex. parcours, ouverts depuis le tableau de bord). */
-const HIDDEN_ACTIVE: Record<string, string> = { '/poec': '/tableau-de-bord' };
+const HIDDEN_ACTIVE: Record<string, string> = {};
 
-const CLOSED_KEY = 'cf_nav_closed';
+const CLOSED_KEY = 'cf_nav_closed_v2';
+/** Groupes repliés au premier affichage (avant tout choix mémorisé). */
+const DEFAULT_CLOSED = ['reglages'];
 
 function initials(name: string) {
   return name
@@ -155,10 +163,11 @@ function NavContent({ active, profile, searchId }: { active: string; profile: Pr
   const groups = groupsFor(profile);
   const total = groups.reduce((n, g) => n + g.links.length, 0);
   // Groupes repliés, mémorisés sur cet ordinateur ; celui de la page ouverte reste déplié.
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [closed, setClosed] = useState<Set<string>>(new Set(DEFAULT_CLOSED));
   useEffect(() => {
     try {
-      setClosed(new Set(JSON.parse(localStorage.getItem(CLOSED_KEY) || '[]')));
+      const saved = localStorage.getItem(CLOSED_KEY);
+      setClosed(new Set(saved ? JSON.parse(saved) : DEFAULT_CLOSED));
     } catch {}
   }, []);
   const toggle = (id: string) =>
@@ -175,7 +184,7 @@ function NavContent({ active, profile, searchId }: { active: string; profile: Pr
   const [query, setQuery] = useState('');
   const q = plain(query.trim());
   const shown = groups
-    .map((g) => ({ ...g, links: q ? g.links.filter((l) => plain(l.label).includes(q)) : g.links }))
+    .map((g) => ({ ...g, links: q ? g.links.filter((l) => plain(`${l.label} ${l.desc || ''}`).includes(q)) : g.links }))
     .filter((g) => g.links.length);
   const router = useRouter();
 
@@ -226,7 +235,7 @@ function NavContent({ active, profile, searchId }: { active: string; profile: Pr
                   const isActive = l.href === active;
                   const n = badgeOf(l.href, profile, todo);
                   return (
-                    <Link key={l.href} href={l.href} className={isActive ? 'active' : ''} aria-current={isActive ? 'page' : undefined} onClick={() => setQuery('')}>
+                    <Link key={l.href} href={l.href} className={isActive ? 'active' : ''} aria-current={isActive ? 'page' : undefined} title={l.desc} onClick={() => setQuery('')}>
                       <Icon size={17} aria-hidden />
                       {l.label}
                       {n > 0 && <span className="nav-badge">{n}</span>}

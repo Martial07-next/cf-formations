@@ -69,7 +69,7 @@ export default async function ModelesPage() {
         <header>
           <div>
             <p className="eyebrow">Ressources</p>
-            <h1>Formations disponibles</h1>
+            <h1>Catalogue des formations</h1>
             <p>Range tes formations dans des dossiers et sous-dossiers, dans l’ordre que tu veux (flèches ↑ ↓). Elles se choisissent ensuite à la création d’une session.</p>
           </div>
         </header>

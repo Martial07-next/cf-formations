@@ -13,7 +13,7 @@ const LABELS: [RegExp, string][] = [
   [/^\/stagiaires\/[^/?]+/, 'Retour au stagiaire'],
   [/^\/stagiaires/, 'Retour aux stagiaires'],
   [/^\/facturation/, 'Retour à la facturation'],
-  [/^\/suivi/, 'Retour au suivi interne'],
+  [/^\/suivi/, 'Retour aux relances'],
   [/^\/tracabilite/, 'Retour à la traçabilité'],
   [/^\/poec/, 'Retour au parcours'],
   [/^\/formateurs/, 'Retour au formateur'],

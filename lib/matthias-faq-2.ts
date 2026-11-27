@@ -79,7 +79,7 @@ L'attestation d'un stagiaire est prête quand le formateur a donné son **avis**
     bureau: true,
     a: `Sur la fiche de la session (cadre **Stagiaires**) ou à l'étape « Stagiaires » de la création :
 - **recherche** dans la base (Entrée = ajoute le premier), **liste collée** depuis Excel, **places réservées** pour une entreprise sans les noms ;
-- **valider / mettre en attente** d'un clic ; les stagiaires en attente sont signalés sur le planning et dans « Suivi interne » ;
+- **valider / mettre en attente** d'un clic ; les stagiaires en attente sont signalés sur le planning et dans **Suivi > Relances** ;
 - choix des **modules suivis** par chaque stagiaire ; **greffe** d'une personne hors groupe d'un parcours.
 Les stagiaires de Digiforma arrivent tout seuls (prospects en attente compris).
 Une fois la session commencée, la liste est **figée** (le bureau peut encore la modifier le **premier jour**, l'administrateur toujours).`,
@@ -108,6 +108,17 @@ Les suppressions (session, stagiaire, document, purge) sont **définitives** et 
 ];
 
 export const FAQ_PLUS: FaqEntry[] = [
+  {
+    id: 'menu',
+    q: 'Où trouver quoi dans le menu ?',
+    keys: ['menu', 'ou trouver', 'je me perds', 'je suis perdu', 'ou aller', 'ou est', 'navigation', 'reglages', 'ranger menu'],
+    a: `Le menu est rangé par ce que tu viens faire :
+- **En haut** : **Tableau de bord** (ta journée), **À faire** (ce qui attend le bureau), **Planning**.
+- **Formations** : Sessions, Stagiaires, Parcours (POEC et personnalisés).
+- **Suivi** : Facturation, Relances (stagiaires en attente), Formateurs & équipes, Traçabilité (prêts, droit à l'image).
+- **Réglages** (replié) : Catalogue des formations, Formateurs, Salles, Salariés, Administration, Améliorations.
+Survole un lien pour voir à quoi il sert, ou tape **Ctrl K** puis un mot (ex. « prêts ») pour y aller directement.`,
+  },
   {
     id: 'a-faire',
     q: 'Page « À faire » et clôture des sessions',
@@ -422,7 +433,7 @@ Les doublons (même nom ou même e-mail) sont reconnus automatiquement, accents 
     id: 'bu-trainee-page',
     q: 'La fiche d’un stagiaire',
     keys: ['fiche stagiaire', 'historique stagiaire', 'page stagiaire', 'infos stagiaire', 'adresse stagiaire', 'heures stagiaire', 'formations suivies'],
-    a: `Menu **Stagiaires** > clic sur un nom :
+    a: `Menu **Formations > Stagiaires** > clic sur un nom :
 - formations **suivies et à venir** avec les heures (modules suivis seulement) ;
 - **autorisations** signées (droit à l'image, livret), **documents signés**, **prêts de matériel** (et « Prêter du matériel ») ;
 - coordonnées (entreprise ou Particulier, e-mail, adresse) modifiables par le bureau.`,
@@ -441,13 +452,13 @@ La plateforme évite déjà les doublons (même e-mail, même nom sans accents, 
     q: 'Suivi interne et relances',
     keys: ['suivi interne', 'relance', 'relancer', 'relances', 'qui relance', 'stagiaires en attente relance', 'gestionnaire'],
     bureau: true,
-    a: `Menu **Suivi interne** : les **stagiaires en attente** à relancer (qui relance, combien de fois, quand) et les **sessions à venir**, par personne de l'équipe (toi par défaut). Sous chaque session : « Créée par … · Gestionnaire : … ».`,
+    a: `Menu **Suivi > Relances** : les **stagiaires en attente** à relancer (qui relance, combien de fois, quand) et les **sessions à venir**, par personne de l'équipe (toi par défaut). Sous chaque session : « Créée par … · Gestionnaire : … ».`,
   },
   {
     id: 'bu-equipe',
     q: 'Équipes & suivi (référent cadre)',
     keys: ['equipe', 'mon equipe', 'equipes et suivi', 'referent cadre', 'heures du mois', 'formateurs suivis'],
-    a: `Menu **Équipes & suivi** (bureau) ou **Mon équipe** (référent cadre) : les formateurs suivis, leurs **heures du mois** (hors brouillons), leurs **sessions à venir** et celles **en attente de confirmation**.`,
+    a: `Menu **Suivi > Formateurs & équipes** (bureau) ou **Mon équipe** (référent cadre) : les formateurs suivis, leurs **heures du mois** (hors brouillons), leurs **sessions à venir** et celles **en attente de confirmation**.`,
   },
   {
     id: 'bu-poec',
@@ -485,7 +496,7 @@ La plateforme évite déjà les doublons (même e-mail, même nom sans accents, 
     id: 'bu-salaries',
     q: 'Documents des salariés (droit à l’image, matériel)',
     keys: ['salaries', 'salarie', 'employe', 'documents salaries', 'materiel salarie', 'image salarie', 'remise materiel'],
-    a: `Menu **Salariés** (administrateur) : pour chaque salarié de CF Réseaux, **droit à l'image** et **remise de matériel**, signés en ligne par un lien / QR code, avec le **retour** du matériel signé. Administration > **Documents à signer** regroupe tous les documents signés (stagiaires et salariés).`,
+    a: `Menu **Réglages > Salariés** (administrateur) : pour chaque salarié de CF Réseaux, **droit à l'image** et **remise de matériel**, signés en ligne par un lien / QR code, avec le **retour** du matériel signé. Administration > **Documents à signer** regroupe tous les documents signés (stagiaires et salariés).`,
   },
   {
     id: 'bu-export',
@@ -509,7 +520,7 @@ Un clic sur une ligne ouvre la session au bon endroit.`,
     id: 'bu-ameliorations',
     q: 'La page Améliorations',
     keys: ['ameliorations', 'page ameliorations', 'suggestion', 'remarque', 'signaler', 'retour utilisateur'],
-    a: `Menu **Améliorations** (administrateur et accès Dev) : les remarques et idées d'amélioration de la plateforme, avec leur suivi. Pour un souci urgent : préviens **Martial** directement.`,
+    a: `Menu **Réglages > Améliorations** (administrateur et accès Dev) : les remarques et idées d'amélioration de la plateforme, avec leur suivi. Pour un souci urgent : préviens **Martial** directement.`,
   },
   {
     id: 'bu-lieu',
@@ -524,7 +535,7 @@ Pour un autre endroit (open space, autre site du client) : crée la formation en
     id: 'ad-rooms',
     q: 'Ajouter ou modifier une salle, un formateur',
     keys: ['ajouter une salle', 'modifier une salle', 'nouvelle salle', 'page salles', 'capacite salle', 'equipement salle', 'atelier', 'ajouter un formateur', 'fiche formateur', 'couleur formateur', 'specialites'],
-    a: `Menu **Catalogue > Salles** et **Catalogue > Formateurs** (administrateur) :
+    a: `Menu **Réglages > Salles** et **Réglages > Formateurs** (administrateur) :
 - **salle** : nom, capacité, bâtiment / adresse, équipements, ateliers, formations qu'on y fait, disponibilité (« indisponible » = pas proposée) ;
 - **formateur** : coordonnées, couleur sur le planning, spécialités, statut ; les **formations qu'il peut animer** se règlent dans le catalogue (formateurs habilités) ;
 - pour qu'un formateur se connecte : **Administration > Utilisateurs** (compte lié au formateur).

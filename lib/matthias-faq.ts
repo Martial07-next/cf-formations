@@ -354,7 +354,7 @@ Tous les réglages d'une formation du catalogue (durée, modules, documents, obj
     q: 'Configurer une formation dans le catalogue',
     keys: ['catalogue', 'formation catalogue', 'formations disponibles', 'configuration intelligente', 'modeles', 'duree recyclage', 'cocher grille'],
     bureau: true,
-    a: `Menu **Catalogue > Formations** > la formation > Modifier :
+    a: `Menu **Réglages > Catalogue des formations** > la formation > Modifier :
 - durée (et durée du recyclage), modules, formateurs habilités, supports, documents du dossier ;
 - objectifs et compétences (attestations), fiche d'appréciation et codification, titre d'habilitation exigé, symboles, attestations de réussite, recyclage ;
 - autorisations stagiaire, départ anticipé, **cases des grilles IRVE / Maintenance**.
@@ -367,7 +367,7 @@ La **configuration intelligente** lit l'intitulé et propose les réglages (« A
     bureau: true,
     a: `Sur la fiche de la session (ou à l'étape « Stagiaires » de la création) :
 - **recherche** dans la base, **liste collée** (copier-coller de noms), **places réservées** pour une entreprise (même sans les noms) ;
-- **valider / mettre en attente** d'un clic ; les stagiaires en attente sont signalés sur le planning et dans « Suivi interne » ;
+- **valider / mettre en attente** d'un clic ; les stagiaires en attente sont signalés sur le planning et dans **Suivi > Relances** ;
 - module suivi par chaque stagiaire ; **greffe** d'une personne hors groupe d'un parcours.`,
   },
   {
@@ -389,7 +389,7 @@ L'attestation d'un stagiaire est prête quand le formateur a donné son **avis**
     q: 'La liste des sessions et le suivi des dossiers',
     keys: ['liste des sessions', 'sessions', 'dossier incomplet', 'facturation', 'export', 'suivi interne', 'relance'],
     a: `Menu **Sessions** : onglets En cours / À venir / Terminées, case **« Dossier incomplet »**, et « N documents à compléter · facturation à faire » sur chaque ligne ; export en tableur.
-**Suivi interne** : relances des stagiaires en attente et sessions à venir, par personne de l'équipe. **Facturation** : si l'accès est coché sur ton compte.`,
+**Suivi > Relances** : relances des stagiaires en attente et sessions à venir, par personne de l'équipe. **Facturation** : si l'accès est coché sur ton compte.`,
   },
 
   // ---------------------------------------------------------------- Comptes, divers

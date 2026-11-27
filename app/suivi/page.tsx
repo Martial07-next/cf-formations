@@ -5,7 +5,7 @@ import { loadStaff, internalStaff } from '@/lib/tracking';
 import { FollowupCell } from '@/components/tracking/session-tracking';
 import { formatSessionPeriod } from '@/lib/week';
 
-export const metadata = { title: 'Suivi interne · CF Réseaux' };
+export const metadata = { title: 'Relances · CF Réseaux' };
 
 const one = (v: any) => (Array.isArray(v) ? v[0] : v);
 
@@ -56,8 +56,8 @@ export default async function SuiviPage({ searchParams }: { searchParams: Promis
       <section className="content">
         <header>
           <div>
-            <p className="eyebrow">Organisation interne</p>
-            <h1>Suivi interne</h1>
+            <p className="eyebrow">Suivi</p>
+            <h1>Relances</h1>
             <p>Qui relance qui, et quelles sessions chacun gère. Vue : <strong>{label}</strong></p>
           </div>
           <form className="toolbar" style={{ margin: 0 }}>
